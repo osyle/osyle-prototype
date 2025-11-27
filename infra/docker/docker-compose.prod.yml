@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ../../services/backend
+      dockerfile: Dockerfile.prod
+    image: osyle/backend:latest
+    container_name: osyle-backend
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ../../services/frontend
+      dockerfile: Dockerfile.prod
+    image: osyle/frontend:latest
+    container_name: osyle-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
