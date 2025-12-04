@@ -1,34 +1,92 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { Amplify } from 'aws-amplify'
+import { getCurrentUser, fetchAuthSession } from 'aws-amplify/auth'
+import { useEffect, useState } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+
+import Home from './pages/Home'
+import LoginScreen from './pages/Login'
+
+// AWS Amplify configuration
+Amplify.configure({
+  Auth: {
+    Cognito: {
+      userPoolId: process.env.REACT_APP_USER_POOL_ID || '',
+      userPoolClientId: process.env.REACT_APP_USER_POOL_CLIENT_ID || '',
+      loginWith: {
+        oauth: {
+          domain: process.env.REACT_APP_OAUTH_DOMAIN || '',
+          scopes: ['openid', 'email', 'profile'],
+          redirectSignIn: [
+            process.env.REACT_APP_REDIRECT_SIGNIN || 'http://localhost:3000/',
+          ],
+          redirectSignOut: [
+            process.env.REACT_APP_REDIRECT_SIGNOUT ||
+              'http://localhost:3000/login',
+          ],
+          responseType: 'code',
+        },
+      },
+    },
+  },
+})
+
+interface User {
+  username: string
+  email?: string
+}
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    checkAuth()
+  }, [])
+
+  const checkAuth = async () => {
+    try {
+      const currentUser = await getCurrentUser()
+      const session = await fetchAuthSession()
+      const email = session.tokens?.idToken?.payload.email as string | undefined
+
+      // Check if email is @osyle.com
+      if (email && email.endsWith('@osyle.com')) {
+        setUser({
+          username: currentUser.username,
+          email,
+        })
+      } else {
+        alert('Only @osyle.com accounts are allowed')
+        setUser(null)
+      }
+    } catch {
+      setUser(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ backgroundColor: '#EDEBE9' }}
+      >
+        <div className="w-12 h-12 border-4 border-gray-300 border-t-gray-800 rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount(count => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/login"
+          element={user ? <Navigate to="/" /> : <LoginScreen />}
+        />
+        <Route path="/" element={user ? <Home /> : <Navigate to="/login" />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
