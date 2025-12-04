@@ -1,15 +1,16 @@
 import js from '@eslint/js'
-import globals from 'globals'
-import tseslint from 'typescript-eslint'
+import { defineConfig } from 'eslint/config'
+import prettier from 'eslint-config-prettier'
+import pluginImport from 'eslint-plugin-import'
 import pluginReact from 'eslint-plugin-react'
 import pluginReactHooks from 'eslint-plugin-react-hooks'
-import pluginImport from 'eslint-plugin-import'
-import prettier from 'eslint-config-prettier'
-import { defineConfig } from 'eslint/config'
+import globals from 'globals'
+import tseslint from 'typescript-eslint'
 
 export default defineConfig([
   {
     files: ['**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    ignores: ['postcss.config.cjs', 'tailwind.config.cjs'],
     languageOptions: {
       globals: globals.browser,
       parserOptions: {
