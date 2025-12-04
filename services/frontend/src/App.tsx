@@ -3,26 +3,22 @@ import { getCurrentUser, fetchAuthSession } from 'aws-amplify/auth'
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 
+import { config } from './config/env'
 import Home from './pages/Home'
 import LoginScreen from './pages/Login'
 
-// AWS Amplify configuration
+// AWS Amplify configuration using centralized config
 Amplify.configure({
   Auth: {
     Cognito: {
-      userPoolId: process.env.REACT_APP_USER_POOL_ID || '',
-      userPoolClientId: process.env.REACT_APP_USER_POOL_CLIENT_ID || '',
+      userPoolId: config.aws.userPoolId,
+      userPoolClientId: config.aws.userPoolClientId,
       loginWith: {
         oauth: {
-          domain: process.env.REACT_APP_OAUTH_DOMAIN || '',
+          domain: config.aws.oauthDomain,
           scopes: ['openid', 'email', 'profile'],
-          redirectSignIn: [
-            process.env.REACT_APP_REDIRECT_SIGNIN || 'http://localhost:3000/',
-          ],
-          redirectSignOut: [
-            process.env.REACT_APP_REDIRECT_SIGNOUT ||
-              'http://localhost:3000/login',
-          ],
+          redirectSignIn: [config.aws.redirectSignIn],
+          redirectSignOut: [config.aws.redirectSignOut],
           responseType: 'code',
         },
       },
@@ -47,9 +43,10 @@ function App() {
     try {
       const currentUser = await getCurrentUser()
       const session = await fetchAuthSession()
-      const email = session.tokens?.idToken?.payload.email as string | undefined
+      const email = session.tokens?.idToken?.payload['email'] as
+        | string
+        | undefined
 
-      // Check if email is @osyle.com
       if (email && email.endsWith('@osyle.com')) {
         setUser({
           username: currentUser.username,
