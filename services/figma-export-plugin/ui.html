@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Export JSON + PNG</title>
+  </head>
+  <body>
+    <p>Downloading files...</p>
+
+    <script>
+      // Listen for messages from plugin code
+      onmessage = (event) => {
+        const msg = event.data.pluginMessage;
+        if (msg.type === "download") {
+          const link = document.createElement("a");
+          link.href = msg.fileUrl;
+          link.download = msg.fileName.replace(/[\\/:*?"<>|]/g, "_"); // sanitize
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(msg.fileUrl);
+        }
+      };
+    </script>
+  </body>
+</html>
