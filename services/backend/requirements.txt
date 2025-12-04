@@ -1,7 +1,11 @@
 anthropic
-fastapi[all]
-uvicorn[standard]
 boto3
-pydantic
 python-dotenv
 python-multipart
+fastapi==0.104.1
+fastapi[all]
+mangum==0.17.0
+pydantic==2.5.0
+python-jose[cryptography]==3.3.0
+requests==2.31.0
+uvicorn[standard]
