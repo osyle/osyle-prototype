@@ -3,3 +3,13 @@
 .venv
 __pycache__/
 *.pyc
+
+# Lambda zips
+
+infra/lambda/*.zip
+infra/lambda/**/*.zip
+
+# Lambda build artifacts
+
+services/backend/package/
+services/backend/deployment.zip
