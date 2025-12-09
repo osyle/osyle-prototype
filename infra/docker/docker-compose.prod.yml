@@ -7,6 +7,29 @@ services:
     container_name: osyle-backend
     ports:
       - "8000:8000"
+    environment:
+      # AWS Configuration (use IAM role in production, or set credentials)
+      - AWS_REGION=us-east-1
+
+      # S3 Configuration
+      - S3_BUCKET=osyle-shared-assets-dev
+      - PRESIGNED_EXPIRATION=3600
+
+      # DynamoDB Tables
+      - USERS_TABLE=OsyleUsers
+      - TASTES_TABLE=OsyleTastes
+      - RESOURCES_TABLE=OsyleResources
+      - PROJECTS_TABLE=OsyleProjects
+
+      # NOTE: DO NOT set DYNAMODB_ENDPOINT_URL or S3_ENDPOINT_URL in production
+      # These should only be used for local development
+
+      # API Configuration
+      - ALLOWED_ORIGINS=*
+
+      # If not using IAM role, set these (better to use IAM role though):
+      # - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      # - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
 
   frontend:
     build:

@@ -9,6 +9,18 @@ services:
       - ../../services/backend:/app
     ports:
       - "8000:8000"
+    environment:
+      - AWS_REGION=us-east-1
+      - DYNAMODB_ENDPOINT_URL=http://dynamodb-local:8000
+      - S3_BUCKET=osyle-shared-assets-dev
+      - USERS_TABLE=OsyleUsers
+      - TASTES_TABLE=OsyleTastes
+      - RESOURCES_TABLE=OsyleResources
+      - PROJECTS_TABLE=OsyleProjects
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    depends_on:
+      - dynamodb-local
 
   frontend:
     build:
@@ -22,3 +34,11 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: osyle-dynamodb-local
+    ports:
+      - "8001:8000"
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-inMemory"]
+    working_dir: /home/dynamodblocal

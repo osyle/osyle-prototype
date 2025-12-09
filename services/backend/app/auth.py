@@ -1,30 +1,27 @@
-from fastapi import FastAPI, Depends, HTTPException, Header
-from fastapi.middleware.cors import CORSMiddleware
-from mangum import Mangum
+"""
+Authentication helpers for Osyle API
+Extracts and validates user information from Cognito JWT tokens
+"""
+from fastapi import Depends, HTTPException, Header
+from typing import Optional
 import jwt
 import requests
 from functools import lru_cache
-from typing import Optional
 import json
 
-# Import new routers
-from app.routers import tastes, projects
 
-app = FastAPI(title="Osyle API", version="1.0.0")
+# ============================================================================
+# COGNITO CONFIGURATION
+# ============================================================================
 
-# CORS configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Configure with specific origins in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# AWS Cognito configuration
 REGION = "us-east-1"
 USER_POOL_ID = "us-east-1_KZwi3uUTn"
 COGNITO_ISSUER = f"https://cognito-idp.{REGION}.amazonaws.com/{USER_POOL_ID}"
+
+
+# ============================================================================
+# JWT KEY MANAGEMENT
+# ============================================================================
 
 @lru_cache()
 def get_jwks():
@@ -35,10 +32,27 @@ def get_jwks():
         response.raise_for_status()
         return response.json()
     except Exception as e:
+        print(f"Error fetching JWKS: {e}")
         return None
 
+
+# ============================================================================
+# TOKEN VERIFICATION
+# ============================================================================
+
 def verify_token(authorization: Optional[str] = Header(None)) -> dict:
-    """Verify JWT token from Cognito"""
+    """
+    Verify JWT token from Cognito and extract user information
+    
+    Args:
+        authorization: Authorization header (Bearer token)
+    
+    Returns:
+        Dictionary containing user information (user_id, email, name, etc.)
+    
+    Raises:
+        HTTPException: If token is invalid or missing
+    """
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing authorization header")
     
@@ -100,40 +114,29 @@ def verify_token(authorization: Optional[str] = Header(None)) -> dict:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Authentication failed: {str(e)}")
 
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {"message": "Osyle API is running", "version": "1.0.0"}
 
-@app.get("/api/health")
-async def health():
-    """Health check endpoint"""
-    return {"status": "healthy", "service": "osyle-api"}
+# ============================================================================
+# USER EXTRACTION DEPENDENCIES
+# ============================================================================
 
-@app.get("/api/protected")
-async def protected_route(user: dict = Depends(verify_token)):
-    """Protected endpoint - requires valid JWT"""
+def get_current_user(token_payload: dict = Depends(verify_token)) -> dict:
+    """
+    FastAPI dependency to get current authenticated user
+    
+    Returns:
+        Dictionary with user_id, email, name, picture
+    """
     return {
-        "message": "Access granted to protected resource",
-        "user": {
-            "email": user.get("email"),
-            "sub": user.get("sub"),
-        }
+        "user_id": token_payload.get("sub"),  # Cognito sub is the stable user ID
+        "email": token_payload.get("email"),
+        "name": token_payload.get("name"),
+        "picture": token_payload.get("picture")
     }
 
-@app.get("/api/user/profile")
-async def user_profile(user: dict = Depends(verify_token)):
-    """Get user profile"""
-    return {
-        "email": user.get("email"),
-        "email_verified": user.get("email_verified"),
-        "sub": user.get("sub"),
-        "cognito_username": user.get("cognito:username"),
-    }
 
-# Mount new routers
-app.include_router(tastes.router)
-app.include_router(projects.router)
-
-# Lambda handler
-handler = Mangum(app)
+def get_user_id(user: dict = Depends(get_current_user)) -> str:
+    """
+    FastAPI dependency to get just the user_id
+    Useful for simple endpoints that only need the ID
+    """
+    return user["user_id"]
