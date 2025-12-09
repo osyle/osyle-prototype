@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react'
 import React, { useState, useMemo, useEffect, useRef } from 'react'
+import { api } from '../services/api'
 
 // Types for our data structure
 interface TasteResource {
@@ -463,9 +464,40 @@ export default function Home() {
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
+  // ===== NEW: API Testing State =====
+  const [apiStatus, setApiStatus] = useState<
+    'checking' | 'connected' | 'error'
+  >('checking')
+
   useEffect(() => {
     loadUserInfo()
+    testApiConnection() // NEW: Test API on mount
   }, [])
+
+  // ===== NEW: Test API Connection =====
+  const testApiConnection = async () => {
+    try {
+      await api.healthCheck()
+      setApiStatus('connected')
+      console.log('API connection successful')
+    } catch (error) {
+      console.error('API connection failed:', error)
+      setApiStatus('error')
+    }
+  }
+
+  // ===== NEW: Test Protected Endpoint =====
+  const testProtectedEndpoint = async () => {
+    try {
+      const data = await api.getProtectedData()
+      alert('API Success:\n' + JSON.stringify(data, null, 2))
+    } catch (error) {
+      alert(
+        'API Error: ' +
+          (error instanceof Error ? error.message : 'Unknown error'),
+      )
+    }
+  }
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -1131,6 +1163,7 @@ export default function Home() {
       )
     }
   }
+
   return (
     <div
       className="min-h-screen min-w-screen flex flex-col"
@@ -1142,6 +1175,73 @@ export default function Home() {
         onClose={() => setIsCreateTasteModalOpen(false)}
         onConfirm={handleCreateTaste}
       />
+
+      {/* API Test Controls - Floating top right */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 80,
+          right: 20,
+          zIndex: 999,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+        }}
+      >
+        {/* API Status */}
+        <div
+          style={{
+            padding: '8px 12px',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '8px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <div
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor:
+                apiStatus === 'connected'
+                  ? '#10B981'
+                  : apiStatus === 'error'
+                    ? '#EF4444'
+                    : '#F59E0B',
+            }}
+          />
+          <span style={{ fontSize: '12px', color: '#3B3B3B' }}>
+            {apiStatus === 'connected'
+              ? 'API OK'
+              : apiStatus === 'error'
+                ? 'API Error'
+                : 'Testing...'}
+          </span>
+        </div>
+
+        {/* Test Button */}
+        <button
+          onClick={testProtectedEndpoint}
+          style={{
+            padding: '10px 16px',
+            backgroundColor: '#F5C563',
+            color: '#1F1F20',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '13px',
+            fontWeight: '500',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Test API
+        </button>
+      </div>
+
       {/* Top Navigation - Fixed */}
       <div className="flex items-center justify-between px-8 py-4">
         {/* Left - Toggle */}
@@ -1298,7 +1398,6 @@ export default function Home() {
                   <button
                     onClick={() => {
                       setShowProfileMenu(false)
-                      // Add your settings navigation here
                       console.log('Navigate to settings')
                     }}
                     className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors"
@@ -1317,7 +1416,6 @@ export default function Home() {
                   <button
                     onClick={() => {
                       setShowProfileMenu(false)
-                      // Add your help/support navigation here
                       console.log('Navigate to help')
                     }}
                     className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors"
