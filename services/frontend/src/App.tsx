@@ -74,6 +74,8 @@ function App() {
     )
   }
 
+  // return <Home />
+
   return (
     <BrowserRouter>
       <Routes>
