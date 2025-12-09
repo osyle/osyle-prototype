@@ -24,7 +24,7 @@
     "noUnusedParameters": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
-    "exactOptionalPropertyTypes": true,
+    "exactOptionalPropertyTypes": false,
 
     /* Company Quality Rules */
     "noFallthroughCasesInSwitch": true,
