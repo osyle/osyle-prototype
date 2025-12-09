@@ -1,3 +1,4 @@
+import { signOut, fetchAuthSession, getCurrentUser } from 'aws-amplify/auth'
 import {
   ChevronDown,
   Plus,
@@ -8,7 +9,7 @@ import {
   Maximize2,
   X,
 } from 'lucide-react'
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 
 // Types for our data structure
 interface TasteResource {
@@ -449,6 +450,117 @@ export default function Home() {
   )
   const [isCreateTasteModalOpen, setIsCreateTasteModalOpen] = useState(false)
   const [tastes, setTastes] = useState<Taste[]>(mockUserTastes)
+
+  const [userInfo, setUserInfo] = useState<{
+    username: string
+    email: string
+    name?: string
+    givenName?: string
+    familyName?: string
+    picture?: string
+    initials: string
+  } | null>(null)
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    loadUserInfo()
+  }, [])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false)
+      }
+    }
+
+    if (showProfileMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showProfileMenu])
+
+  const getInitials = (name?: string, email?: string): string => {
+    if (name) {
+      const parts = name
+        .trim()
+        .split(' ')
+        .filter(part => part.length > 0)
+      if (parts.length >= 2) {
+        // First and last name initials
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      }
+      if (parts.length === 1 && parts[0].length > 0) {
+        // Only one name, take first letter twice or first two letters
+        return (
+          parts[0][0].toUpperCase() +
+          (parts[0][1]?.toUpperCase() || parts[0][0].toUpperCase())
+        )
+      }
+    }
+
+    if (email) {
+      const emailParts = email.split('@')[0]
+      const nameParts = emailParts
+        .split(/[._-]/)
+        .filter(part => part.length > 0)
+      if (nameParts.length >= 2) {
+        return (nameParts[0][0] + nameParts[1][0]).toUpperCase()
+      }
+      return emailParts.substring(0, 2).toUpperCase()
+    }
+
+    return '??'
+  }
+
+  const loadUserInfo = async () => {
+    try {
+      const user = await getCurrentUser()
+      const session = await fetchAuthSession()
+      const payload = session.tokens?.idToken?.payload
+
+      const email = payload?.['email'] as string
+      const name = payload?.['name'] as string | undefined
+      const givenName = payload?.['given_name'] as string | undefined
+      const familyName = payload?.['family_name'] as string | undefined
+      const picture = payload?.['picture'] as string | undefined
+
+      const initials = getInitials(name, email)
+
+      setUserInfo({
+        username: user.username,
+        email,
+        ...(name !== undefined && { name }),
+        ...(givenName !== undefined && { givenName }),
+        ...(familyName !== undefined && { familyName }),
+        ...(picture !== undefined && { picture }),
+        initials,
+      })
+
+      console.log('User info loaded:', {
+        email,
+        name,
+        initials,
+        picture,
+        fullPayload: payload,
+      })
+    } catch (error) {
+      console.error('Error loading user info:', error)
+    }
+  }
+
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      window.location.href = '/login'
+    } catch (error) {
+      console.error('Sign out error:', error)
+    }
+  }
 
   // Get selected taste
   const selectedTaste = useMemo(() => {
@@ -1102,12 +1214,151 @@ export default function Home() {
           >
             25%
           </div>
-          <button
-            className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm transition-all hover:scale-105"
-            style={{ backgroundColor: '#3B3B3B', color: '#FFFFFF' }}
-          >
-            NI
-          </button>
+
+          {/* Profile Dropdown */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm transition-all hover:scale-105"
+              style={{ backgroundColor: '#3B3B3B', color: '#FFFFFF' }}
+              title={
+                userInfo ? `${userInfo.name || userInfo.email}` : 'Profile'
+              }
+            >
+              {userInfo?.picture ? (
+                <img
+                  src={userInfo.picture}
+                  alt={userInfo.name || userInfo.email}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    borderRadius: '50%',
+                  }}
+                />
+              ) : (
+                userInfo?.initials || 'NI'
+              )}
+            </button>
+
+            {/* Dropdown Menu */}
+            {showProfileMenu && userInfo && (
+              <div
+                className="absolute right-0 mt-2 w-64 rounded-2xl overflow-hidden"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                  zIndex: 1000,
+                }}
+              >
+                {/* User Info Header */}
+                <div
+                  className="p-4"
+                  style={{ borderBottom: '1px solid #E8E1DD' }}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <div
+                      className="w-12 h-12 rounded-full flex items-center justify-center font-semibold"
+                      style={{ backgroundColor: '#3B3B3B', color: '#FFFFFF' }}
+                    >
+                      {userInfo.picture ? (
+                        <img
+                          src={userInfo.picture}
+                          alt={userInfo.name || userInfo.email}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            borderRadius: '50%',
+                          }}
+                        />
+                      ) : (
+                        userInfo.initials
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div
+                        className="text-sm font-medium mb-0.5 truncate"
+                        style={{ color: '#3B3B3B' }}
+                      >
+                        {userInfo.name || 'User'}
+                      </div>
+                      <div
+                        className="text-xs truncate"
+                        style={{ color: '#929397' }}
+                      >
+                        {userInfo.email}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Menu Items */}
+                <div className="py-2">
+                  <button
+                    onClick={() => {
+                      setShowProfileMenu(false)
+                      // Add your settings navigation here
+                      console.log('Navigate to settings')
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors"
+                    style={{ color: '#3B3B3B' }}
+                    onMouseEnter={e =>
+                      (e.currentTarget.style.backgroundColor = '#F7F5F3')
+                    }
+                    onMouseLeave={e =>
+                      (e.currentTarget.style.backgroundColor = 'transparent')
+                    }
+                  >
+                    <span style={{ fontSize: '16px' }}>⚙️</span>
+                    <span>Settings</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowProfileMenu(false)
+                      // Add your help/support navigation here
+                      console.log('Navigate to help')
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors"
+                    style={{ color: '#3B3B3B' }}
+                    onMouseEnter={e =>
+                      (e.currentTarget.style.backgroundColor = '#F7F5F3')
+                    }
+                    onMouseLeave={e =>
+                      (e.currentTarget.style.backgroundColor = 'transparent')
+                    }
+                  >
+                    <span style={{ fontSize: '16px' }}>❓</span>
+                    <span>Help & Support</span>
+                  </button>
+
+                  <div
+                    style={{
+                      height: '1px',
+                      backgroundColor: '#E8E1DD',
+                      margin: '8px 0',
+                    }}
+                  ></div>
+
+                  <button
+                    onClick={handleSignOut}
+                    className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors"
+                    style={{ color: '#3B3B3B' }}
+                    onMouseEnter={e =>
+                      (e.currentTarget.style.backgroundColor = '#FEE2E2')
+                    }
+                    onMouseLeave={e =>
+                      (e.currentTarget.style.backgroundColor = 'transparent')
+                    }
+                  >
+                    <span style={{ fontSize: '16px' }}>🚪</span>
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
