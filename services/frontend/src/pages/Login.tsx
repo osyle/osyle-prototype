@@ -1,11 +1,13 @@
 import { signInWithRedirect } from 'aws-amplify/auth'
-import { Mail, ArrowRight } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { useState } from 'react'
+
+import OsyleLogo from '../assets/img/osyle-logo.png'
 
 export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false)
-  const [email, setEmail] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  // const [email, setEmail] = useState('')
+  const [, setError] = useState<string | null>(null)
 
   const handleGoogleLogin = async () => {
     setIsLoading(true)
@@ -21,7 +23,7 @@ export default function LoginScreen() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center"
+      className="min-h-screen min-w-screen flex items-center justify-center"
       style={{ backgroundColor: '#EDEBE9' }}
     >
       {/* Floating orbs for visual interest */}
@@ -41,17 +43,14 @@ export default function LoginScreen() {
       <div className="relative z-10 w-full max-w-md px-8">
         {/* Logo/Brand */}
         <div className="text-center mb-12">
-          <div
-            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-6 transition-all hover:scale-105"
-            style={{
-              backgroundColor: '#3B3B3B',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-            }}
-          >
-            <span className="text-2xl font-bold" style={{ color: '#FFFFFF' }}>
-              O
-            </span>
+          <div className="mb-6">
+            <img
+              src={OsyleLogo}
+              alt="Osyle logo"
+              className="w-20 h-20 object-contain mx-auto"
+            />
           </div>
+
           <h1 className="text-4xl font-light mb-2" style={{ color: '#3B3B3B' }}>
             Welcome to Osyle
           </h1>
@@ -69,7 +68,7 @@ export default function LoginScreen() {
           }}
         >
           {/* Email Input */}
-          <div className="mb-6">
+          {/*<div className="mb-6">
             <label
               className="block text-sm font-medium mb-2"
               style={{ color: '#3B3B3B' }}
@@ -101,10 +100,10 @@ export default function LoginScreen() {
                 style={{ color: '#929397' }}
               />
             </div>
-          </div>
+          </div>*}
 
           {/* Divider */}
-          <div className="flex items-center gap-4 my-6">
+          {/*<div className="flex items-center gap-4 my-6">
             <div
               className="flex-1 h-px"
               style={{ backgroundColor: '#E8E1DD' }}
@@ -116,17 +115,17 @@ export default function LoginScreen() {
               className="flex-1 h-px"
               style={{ backgroundColor: '#E8E1DD' }}
             />
-          </div>
+          </div>*}
 
           {/* Error Message */}
-          {error && (
+          {/*{error && (
             <div
               className="mb-4 p-3 rounded-lg text-sm"
               style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}
             >
               {error}
             </div>
-          )}
+          )}*}
 
           {/* Google SSO Button */}
           <button
@@ -190,14 +189,14 @@ export default function LoginScreen() {
         </div>
 
         {/* Footer */}
-        <div className="text-center mt-8">
+        {/*<div className="text-center mt-8">
           <p className="text-xs" style={{ color: '#929397' }}>
             Protected by AWS Cognito ·{' '}
             <a href="#" className="underline hover:no-underline">
               Privacy Policy
             </a>
           </p>
-        </div>
+        </div>*/}
       </div>
     </div>
   )
