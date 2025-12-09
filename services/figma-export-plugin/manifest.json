@@ -1,8 +1,12 @@
 {
-  "name": "Export JSON + PNG",
-  "id": "export-json-png-plugin",
+  "name": "Osyle Exporter",
+  "id": "1580266048308150079",
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",
-  "editorType": ["figma"]
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["https://cdnjs.cloudflare.com"]
+  }
 }
