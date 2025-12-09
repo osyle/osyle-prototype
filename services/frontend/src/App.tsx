@@ -1,7 +1,13 @@
 import { Amplify } from 'aws-amplify'
 import { getCurrentUser, fetchAuthSession } from 'aws-amplify/auth'
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+} from 'react-router-dom'
 
 import { config } from './config/env'
 import Home from './pages/Home'
@@ -31,15 +37,37 @@ interface User {
   email?: string
 }
 
-function App() {
+// Create an auth context to share across the app
+export const AuthContext = {
+  checkAuth: async (): Promise<User | null> => {
+    try {
+      const currentUser = await getCurrentUser()
+      const session = await fetchAuthSession()
+      const email = session.tokens?.idToken?.payload['email'] as
+        | string
+        | undefined
+
+      if (email && email.endsWith('@osyle.com')) {
+        return {
+          username: currentUser.username,
+          email,
+        }
+      } else {
+        return null
+      }
+    } catch {
+      return null
+    }
+  },
+}
+
+function AppContent() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    checkAuth()
-  }, [])
+  const navigate = useNavigate()
 
   const checkAuth = async () => {
+    setLoading(true)
     try {
       const currentUser = await getCurrentUser()
       const session = await fetchAuthSession()
@@ -53,7 +81,9 @@ function App() {
           email,
         })
       } else {
-        alert('Only @osyle.com accounts are allowed')
+        if (email) {
+          alert('Only @osyle.com accounts are allowed')
+        }
         setUser(null)
       }
     } catch {
@@ -62,6 +92,32 @@ function App() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    checkAuth()
+
+    // Listen for storage events (sign out in another tab)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key?.includes('amplify') || e.key?.includes('cognito')) {
+        checkAuth()
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+
+    // Listen for custom sign-out event
+    const handleSignOut = () => {
+      setUser(null)
+      navigate('/login')
+    }
+
+    window.addEventListener('auth-signout', handleSignOut)
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('auth-signout', handleSignOut)
+    }
+  }, [navigate])
 
   if (loading) {
     return (
@@ -74,17 +130,24 @@ function App() {
     )
   }
 
-  // return <Home />
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={user ? <Navigate to="/" replace /> : <LoginScreen />}
+      />
+      <Route
+        path="/"
+        element={user ? <Home /> : <Navigate to="/login" replace />}
+      />
+    </Routes>
+  )
+}
 
+function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route
-          path="/login"
-          element={user ? <Navigate to="/" /> : <LoginScreen />}
-        />
-        <Route path="/" element={user ? <Home /> : <Navigate to="/login" />} />
-      </Routes>
+      <AppContent />
     </BrowserRouter>
   )
 }

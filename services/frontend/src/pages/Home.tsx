@@ -1,150 +1,85 @@
 import { signOut, fetchAuthSession, getCurrentUser } from 'aws-amplify/auth'
-import {
-  ChevronDown,
-  Plus,
-  Link,
-  Palette,
-  Settings,
-  Smartphone,
-  Maximize2,
-  X,
-} from 'lucide-react'
+import { ChevronDown, Plus, Link, Palette, X } from 'lucide-react'
 import React, { useState, useMemo, useEffect, useRef } from 'react'
+import api from '../api'
 
-// Types for our data structure
-interface TasteResource {
-  id: string
+// ============================================================================
+// TYPES
+// ============================================================================
+
+interface UserInfo {
   name: string
-  imageUrl: string // URL to image.png
-  figmaJson: string // Path to figma.json
+  email: string
+  initials: string
+  picture?: string
 }
 
-interface Taste {
-  id: string
-  title: string
-  resources: TasteResource[]
+interface ResourceDisplay {
+  resource_id: string
+  name: string
+  imageUrl: string | null
+  has_image: boolean
+  has_figma: boolean
 }
 
-// Mock current user
-const currentUser = {
-  id: 'user-1',
-  name: 'Niko Anderson',
-  email: 'niko@example.com',
+interface TasteDisplay {
+  taste_id: string
+  name: string
+  resources: ResourceDisplay[]
 }
 
-// Mock data - 5 fake tastes with resources
-const mockUserTastes: Taste[] = [
-  {
-    id: 'taste-1',
-    title: 'Minimalist Nordic',
-    resources: [
-      {
-        id: 'res-1',
-        name: 'Clean Layout',
-        imageUrl: 'https://placehold.co/200x200/E8EBED/1F1F20?text=1',
-        figmaJson: '/figma/nordic-1.json',
-      },
-      {
-        id: 'res-2',
-        name: 'Typography Study',
-        imageUrl: 'https://placehold.co/200x200/FF7262/FFFFFF?text=2',
-        figmaJson: '/figma/nordic-2.json',
-      },
-      {
-        id: 'res-3',
-        name: 'Color Palette',
-        imageUrl: 'https://placehold.co/200x200/A8B5C8/1F1F20?text=3',
-        figmaJson: '/figma/nordic-3.json',
-      },
-    ],
-  },
-  {
-    id: 'taste-2',
-    title: 'Bold & Vibrant',
-    resources: [
-      {
-        id: 'res-4',
-        name: 'Hero Section',
-        imageUrl: 'https://placehold.co/200x200/F5C563/1F1F20?text=4',
-        figmaJson: '/figma/bold-1.json',
-      },
-      {
-        id: 'res-5',
-        name: 'Card Design',
-        imageUrl: 'https://placehold.co/200x200/9ABAAA/FFFFFF?text=5',
-        figmaJson: '/figma/bold-2.json',
-      },
-    ],
-  },
-  {
-    id: 'taste-3',
-    title: 'Dark Mode Pro',
-    resources: [
-      {
-        id: 'res-6',
-        name: 'Dashboard',
-        imageUrl: 'https://placehold.co/200x200/1F1F20/FFFFFF?text=6',
-        figmaJson: '/figma/dark-1.json',
-      },
-      {
-        id: 'res-7',
-        name: 'Components',
-        imageUrl: 'https://placehold.co/200x200/3B3B3B/FFFFFF?text=7',
-        figmaJson: '/figma/dark-2.json',
-      },
-      {
-        id: 'res-8',
-        name: 'Icons',
-        imageUrl: 'https://placehold.co/200x200/4F515A/FFFFFF?text=8',
-        figmaJson: '/figma/dark-3.json',
-      },
-      {
-        id: 'res-9',
-        name: 'Animations',
-        imageUrl: 'https://placehold.co/200x200/929397/FFFFFF?text=9',
-        figmaJson: '/figma/dark-4.json',
-      },
-    ],
-  },
-  {
-    id: 'taste-4',
-    title: 'Playful Illustrations',
-    resources: [
-      {
-        id: 'res-10',
-        name: 'Characters',
-        imageUrl: 'https://placehold.co/200x200/C8B5A5/1F1F20?text=10',
-        figmaJson: '/figma/playful-1.json',
-      },
-    ],
-  },
-  {
-    id: 'taste-5',
-    title: 'Corporate Clean',
-    resources: [
-      {
-        id: 'res-11',
-        name: 'Header',
-        imageUrl: 'https://placehold.co/200x200/B8C5D8/1F1F20?text=11',
-        figmaJson: '/figma/corp-1.json',
-      },
-      {
-        id: 'res-12',
-        name: 'Footer',
-        imageUrl: 'https://placehold.co/200x200/B5B8C8/1F1F20?text=12',
-        figmaJson: '/figma/corp-2.json',
-      },
-    ],
-  },
-]
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
 
-// TasteCard component
-const TasteCard: React.FC<{
-  taste: Taste
+/**
+ * Get initials from a name (first letter capitalized)
+ */
+function getInitials(name: string): string {
+  return name.charAt(0).toUpperCase()
+}
+
+/**
+ * Select up to 3 resources for display, prioritizing those with images
+ */
+function selectDisplayResources(
+  resources: ResourceDisplay[],
+): ResourceDisplay[] {
+  // Separate resources with and without images
+  const withImages = resources.filter(r => r.has_image && r.imageUrl)
+  const withoutImages = resources.filter(r => !r.has_image || !r.imageUrl)
+
+  // Prioritize resources with images
+  const selected: ResourceDisplay[] = []
+
+  // First add up to 3 with images
+  selected.push(...withImages.slice(0, 3))
+
+  // If we have less than 3, fill with resources without images
+  if (selected.length < 3) {
+    selected.push(...withoutImages.slice(0, 3 - selected.length))
+  }
+
+  return selected
+}
+
+// ============================================================================
+// TASTE CARD COMPONENT
+// ============================================================================
+
+interface TasteCardProps {
+  taste: TasteDisplay
   isSelected: boolean
   onClick: () => void
-}> = ({ taste, isSelected, onClick }) => {
+}
+
+const TasteCard: React.FC<TasteCardProps> = ({
+  taste,
+  isSelected,
+  onClick,
+}) => {
   const [isHovered, setIsHovered] = useState(false)
+  const displayResources = selectDisplayResources(taste.resources)
 
   return (
     <div
@@ -156,13 +91,16 @@ const TasteCard: React.FC<{
         transform: isHovered ? 'scale(1.02)' : 'scale(1)',
       }}
     >
-      {/* Blue border when selected */}
+      {/* Blue border when selected - fixed to not overflow */}
       {isSelected && (
         <div
-          className="absolute inset-0 rounded-xl transition-all duration-300"
+          className="absolute rounded-xl transition-all duration-300 pointer-events-none"
           style={{
             border: '3px solid #4A90E2',
-            margin: '-8px',
+            top: '-6px',
+            left: '-6px',
+            right: '-6px',
+            bottom: '-6px',
           }}
         />
       )}
@@ -180,19 +118,36 @@ const TasteCard: React.FC<{
             className="text-sm font-medium mb-3"
             style={{ color: '#3B3B3B' }}
           >
-            {taste.title}
+            {taste.name}
           </div>
           <div className="flex items-center">
-            {taste.resources.slice(0, 3).map((resource, index) => (
+            {displayResources.map((resource, index) => (
               <div
-                key={resource.id}
-                className="w-12 h-12 rounded-full bg-cover bg-center border-2 border-white"
+                key={resource.resource_id}
+                className="w-12 h-12 rounded-full border-2 border-white flex items-center justify-center overflow-hidden"
                 style={{
                   marginLeft: index === 0 ? 0 : -16,
-                  backgroundImage: `url(${resource.imageUrl})`,
-                  zIndex: taste.resources.length - index,
+                  zIndex: displayResources.length - index,
+                  backgroundColor: resource.has_image
+                    ? 'transparent'
+                    : '#F4F4F4',
                 }}
-              />
+              >
+                {resource.has_image && resource.imageUrl ? (
+                  <img
+                    src={resource.imageUrl}
+                    alt={resource.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span
+                    className="text-sm font-medium"
+                    style={{ color: '#4F515A' }}
+                  >
+                    {getInitials(resource.name)}
+                  </span>
+                )}
+              </div>
             ))}
             {taste.resources.length > 3 && (
               <div
@@ -219,8 +174,15 @@ const TasteCard: React.FC<{
   )
 }
 
-// CreateNewCard component
-const CreateNewCard: React.FC<{ onClick: () => void }> = ({ onClick }) => {
+// ============================================================================
+// CREATE NEW CARD COMPONENT
+// ============================================================================
+
+interface CreateNewCardProps {
+  onClick: () => void
+}
+
+const CreateNewCard: React.FC<CreateNewCardProps> = ({ onClick }) => {
   return (
     <div
       className="h-full rounded-xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-105 cursor-pointer"
@@ -245,12 +207,399 @@ const CreateNewCard: React.FC<{ onClick: () => void }> = ({ onClick }) => {
   )
 }
 
-// StyleCard component for resources
-const StyleCard: React.FC<{
-  resource: TasteResource
+// ============================================================================
+// CREATE RESOURCE MODAL COMPONENT
+// ============================================================================
+
+interface CreateResourceModalProps {
+  isOpen: boolean
+  onClose: () => void
+  // eslint-disable-next-line no-unused-vars
+  onConfirm: (resourceName: string) => void
+  isLoading: boolean
+  fileCount: number
+}
+
+const CreateResourceModal: React.FC<CreateResourceModalProps> = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  isLoading,
+  fileCount,
+}) => {
+  const [resourceName, setResourceName] = useState('')
+
+  useEffect(() => {
+    if (isOpen) {
+      setResourceName('')
+    }
+  }, [isOpen])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (resourceName.trim()) {
+      onConfirm(resourceName.trim())
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+      onClick={onClose}
+    >
+      <div
+        className="rounded-2xl p-6 w-full max-w-md"
+        style={{
+          backgroundColor: '#FFFFFF',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium" style={{ color: '#3B3B3B' }}>
+            Name Your Resource
+          </h3>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-105"
+            style={{ backgroundColor: '#F4F4F4' }}
+            disabled={isLoading}
+          >
+            <X size={18} style={{ color: '#929397' }} />
+          </button>
+        </div>
+
+        <p className="text-sm mb-4" style={{ color: '#929397' }}>
+          {fileCount} file{fileCount !== 1 ? 's' : ''} will be uploaded to this
+          resource
+        </p>
+
+        <form onSubmit={handleSubmit}>
+          <div className="mb-6">
+            <label
+              className="block text-sm font-medium mb-2"
+              style={{ color: '#3B3B3B' }}
+            >
+              Resource Name
+            </label>
+            <input
+              type="text"
+              value={resourceName}
+              onChange={e => setResourceName(e.target.value)}
+              placeholder="e.g., Hero Design v1"
+              className="w-full px-4 py-3 rounded-xl focus:outline-none transition-all"
+              style={{
+                backgroundColor: '#F7F5F3',
+                color: '#3B3B3B',
+                border: '2px solid transparent',
+              }}
+              onFocus={e => {
+                e.target.style.borderColor = '#F5C563'
+              }}
+              onBlur={e => {
+                e.target.style.borderColor = 'transparent'
+              }}
+              disabled={isLoading}
+              autoFocus
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105"
+              style={{
+                backgroundColor: '#F4F4F4',
+                color: '#3B3B3B',
+              }}
+              disabled={isLoading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105 disabled:opacity-50"
+              style={{
+                backgroundColor: '#F5C563',
+                color: '#1F1F20',
+                boxShadow: '0 2px 12px rgba(245, 197, 99, 0.3)',
+              }}
+              disabled={isLoading || !resourceName.trim()}
+            >
+              {isLoading ? 'Creating...' : 'Continue'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// CREATE PROJECT MODAL COMPONENT
+// ============================================================================
+
+interface CreateProjectModalProps {
+  isOpen: boolean
+  onClose: () => void
+  // eslint-disable-next-line no-unused-vars
+  onConfirm: (projectName: string) => void
+  isLoading: boolean
+}
+
+const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  isLoading,
+}) => {
+  const [projectName, setProjectName] = useState('')
+
+  useEffect(() => {
+    if (isOpen) {
+      setProjectName('')
+    }
+  }, [isOpen])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (projectName.trim()) {
+      onConfirm(projectName.trim())
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+      onClick={onClose}
+    >
+      <div
+        className="rounded-2xl p-6 w-full max-w-md"
+        style={{
+          backgroundColor: '#FFFFFF',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium" style={{ color: '#3B3B3B' }}>
+            Name Your Project
+          </h3>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-105"
+            style={{ backgroundColor: '#F4F4F4' }}
+            disabled={isLoading}
+          >
+            <X size={18} style={{ color: '#929397' }} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="mb-6">
+            <label
+              className="block text-sm font-medium mb-2"
+              style={{ color: '#3B3B3B' }}
+            >
+              Project Name
+            </label>
+            <input
+              type="text"
+              value={projectName}
+              onChange={e => setProjectName(e.target.value)}
+              placeholder="e.g., Q1 Landing Page"
+              className="w-full px-4 py-3 rounded-xl focus:outline-none transition-all"
+              style={{
+                backgroundColor: '#F7F5F3',
+                color: '#3B3B3B',
+                border: '2px solid transparent',
+              }}
+              onFocus={e => {
+                e.target.style.borderColor = '#F5C563'
+              }}
+              onBlur={e => {
+                e.target.style.borderColor = 'transparent'
+              }}
+              disabled={isLoading}
+              autoFocus
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105"
+              style={{
+                backgroundColor: '#F4F4F4',
+                color: '#3B3B3B',
+              }}
+              disabled={isLoading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105 disabled:opacity-50"
+              style={{
+                backgroundColor: '#F5C563',
+                color: '#1F1F20',
+                boxShadow: '0 2px 12px rgba(245, 197, 99, 0.3)',
+              }}
+              disabled={isLoading || !projectName.trim()}
+            >
+              {isLoading ? 'Creating...' : 'Create Project'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+interface CreateTasteModalProps {
+  isOpen: boolean
+  onClose: () => void
+  // eslint-disable-next-line no-unused-vars
+  onConfirm: (tasteName: string) => void
+  isLoading: boolean
+}
+
+const CreateTasteModal: React.FC<CreateTasteModalProps> = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  isLoading,
+}) => {
+  const [tasteName, setTasteName] = useState('')
+
+  useEffect(() => {
+    if (isOpen) {
+      setTasteName('')
+    }
+  }, [isOpen])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (tasteName.trim()) {
+      onConfirm(tasteName.trim())
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+      onClick={onClose}
+    >
+      <div
+        className="rounded-2xl p-6 w-full max-w-md"
+        style={{
+          backgroundColor: '#FFFFFF',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium" style={{ color: '#3B3B3B' }}>
+            Create New Taste
+          </h3>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-105"
+            style={{ backgroundColor: '#F4F4F4' }}
+            disabled={isLoading}
+          >
+            <X size={18} style={{ color: '#929397' }} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="mb-6">
+            <label
+              className="block text-sm font-medium mb-2"
+              style={{ color: '#3B3B3B' }}
+            >
+              Taste Name
+            </label>
+            <input
+              type="text"
+              value={tasteName}
+              onChange={e => setTasteName(e.target.value)}
+              placeholder="e.g., Minimalist Nordic"
+              className="w-full px-4 py-3 rounded-xl focus:outline-none transition-all"
+              style={{
+                backgroundColor: '#F7F5F3',
+                color: '#3B3B3B',
+                border: '2px solid transparent',
+              }}
+              onFocus={e => {
+                e.target.style.borderColor = '#F5C563'
+              }}
+              onBlur={e => {
+                e.target.style.borderColor = 'transparent'
+              }}
+              disabled={isLoading}
+              autoFocus
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105"
+              style={{
+                backgroundColor: '#F4F4F4',
+                color: '#3B3B3B',
+              }}
+              disabled={isLoading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105 disabled:opacity-50"
+              style={{
+                backgroundColor: '#F5C563',
+                color: '#1F1F20',
+                boxShadow: '0 2px 12px rgba(245, 197, 99, 0.3)',
+              }}
+              disabled={isLoading || !tasteName.trim()}
+            >
+              {isLoading ? 'Creating...' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// STYLE CARD COMPONENT (Resources)
+// ============================================================================
+
+interface StyleCardProps {
+  resource: ResourceDisplay
   isSelected: boolean
   onClick: () => void
-}> = ({ resource, isSelected, onClick }) => {
+}
+
+const StyleCard: React.FC<StyleCardProps> = ({
+  resource,
+  isSelected,
+  onClick,
+}) => {
   const [isHovered, setIsHovered] = useState(false)
 
   return (
@@ -298,24 +647,28 @@ const StyleCard: React.FC<{
 
           {/* Preview area with image */}
           <div
-            className="flex-1 rounded-xl mb-4 bg-cover bg-center"
-            style={{
-              backgroundColor: 'rgba(255,255,255,0.6)',
-              backgroundImage: `url(${resource.imageUrl})`,
-            }}
-          ></div>
+            className="flex-1 rounded-xl flex items-center justify-center overflow-hidden mb-4"
+            style={{ backgroundColor: '#FFFFFF' }}
+          >
+            {resource.has_image && resource.imageUrl ? (
+              <img
+                src={resource.imageUrl}
+                alt={resource.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="text-4xl font-bold" style={{ color: '#E8EBED' }}>
+                {getInitials(resource.name)}
+              </div>
+            )}
+          </div>
 
-          {/* Text at bottom */}
-          <div className="text-center">
-            <div
-              className="text-sm font-medium mb-1"
-              style={{ color: '#3B3B3B' }}
-            >
-              {resource.name}
-            </div>
-            <div className="text-xs" style={{ color: '#929397' }}>
-              By {currentUser.name}
-            </div>
+          {/* Resource name */}
+          <div
+            className="text-xs font-medium text-center truncate"
+            style={{ color: '#3B3B3B' }}
+          >
+            {resource.name}
           </div>
         </div>
       </div>
@@ -323,298 +676,456 @@ const StyleCard: React.FC<{
   )
 }
 
-// CreateTasteModal component
-const CreateTasteModal: React.FC<{
-  isOpen: boolean
-  onClose: () => void
-  // eslint-disable-next-line no-unused-vars
-  onConfirm: (title: string) => void
-}> = ({ isOpen, onClose, onConfirm }) => {
-  const [title, setTitle] = useState('')
-
-  if (!isOpen) return null
-
-  const handleConfirm = () => {
-    if (title.trim()) {
-      onConfirm(title.trim())
-      setTitle('')
-    }
-  }
-
-  const handleCancel = () => {
-    setTitle('')
-    onClose()
-  }
-
-  return (
-    <div
-      className="fixed inset-0 flex items-center justify-center z-50"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-      onClick={handleCancel}
-    >
-      <div
-        className="rounded-2xl p-6 relative"
-        style={{
-          backgroundColor: '#FFFFFF',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.16)',
-          width: '400px',
-        }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Close button */}
-        <button
-          onClick={handleCancel}
-          className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-105"
-          style={{ backgroundColor: '#F4F4F4' }}
-        >
-          <X size={16} style={{ color: '#4F515A' }} />
-        </button>
-
-        {/* Title */}
-        <h2 className="text-2xl font-medium mb-6" style={{ color: '#3B3B3B' }}>
-          Create New Taste
-        </h2>
-
-        {/* Input */}
-        <div className="mb-6">
-          <label
-            className="block text-sm font-medium mb-2"
-            style={{ color: '#4F515A' }}
-          >
-            Title
-          </label>
-          <input
-            type="text"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                handleConfirm()
-              }
-            }}
-            placeholder="Enter taste title..."
-            className="w-full px-4 py-3 rounded-lg focus:outline-none"
-            style={{
-              backgroundColor: '#F7F5F3',
-              border: 'none',
-              color: '#3B3B3B',
-              fontSize: '14px',
-            }}
-            autoFocus
-          />
-        </div>
-
-        {/* Buttons */}
-        <div className="flex gap-3 justify-end">
-          <button
-            onClick={handleCancel}
-            className="px-5 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105"
-            style={{
-              backgroundColor: '#F4F4F4',
-              color: '#4F515A',
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={!title.trim()}
-            className="px-5 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105"
-            style={{
-              backgroundColor: title.trim() ? '#F5C563' : '#E8E8E8',
-              color: title.trim() ? '#1F1F20' : '#929397',
-              boxShadow: title.trim()
-                ? '0 2px 12px rgba(245, 197, 99, 0.3)'
-                : 'none',
-              cursor: title.trim() ? 'pointer' : 'not-allowed',
-            }}
-          >
-            Confirm
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
+// ============================================================================
+// MAIN HOME COMPONENT
+// ============================================================================
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState('left')
-  const [expandedStage, setExpandedStage] = useState<number | null>(1)
+  // ============================================================================
+  // STATE MANAGEMENT
+  // ============================================================================
+
+  // User state
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
+
+  // UI state
   const [toggleOn, setToggleOn] = useState(false)
-  const [isDragging, setIsDragging] = useState(false)
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
-  const [ideaText, setIdeaText] = useState('')
+  const [activeTab, setActiveTab] = useState<'left' | 'middle' | 'right'>(
+    'left',
+  )
+
+  // Data state
+  const [tastes, setTastes] = useState<TasteDisplay[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Accordion state
+  const [expandedStage, setExpandedStage] = useState<number | null>(1)
   const [selectedTasteId, setSelectedTasteId] = useState<string | null>(null)
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(
     null,
   )
-  const [isCreateTasteModalOpen, setIsCreateTasteModalOpen] = useState(false)
-  const [tastes, setTastes] = useState<Taste[]>(mockUserTastes)
 
-  const [userInfo, setUserInfo] = useState<{
-    username: string
-    email: string
-    name?: string
-    givenName?: string
-    familyName?: string
-    picture?: string
-    initials: string
-  } | null>(null)
-  const [showProfileMenu, setShowProfileMenu] = useState(false)
+  // Modal state
+  const [isCreateTasteModalOpen, setIsCreateTasteModalOpen] = useState(false)
+  const [isCreatingTaste, setIsCreatingTaste] = useState(false)
+
+  const [isCreateResourceModalOpen, setIsCreateResourceModalOpen] =
+    useState(false)
+  const [isCreatingResource, setIsCreatingResource] = useState(false)
+
+  const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] =
+    useState(false)
+  const [isCreatingProject, setIsCreatingProject] = useState(false)
+
+  // Stage 3 state
+  const [ideaText, setIdeaText] = useState('')
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
+  const [isDragging, setIsDragging] = useState(false)
+
+  // Refs
   const menuRef = useRef<HTMLDivElement>(null)
 
+  // ============================================================================
+  // COMPUTED VALUES
+  // ============================================================================
+
+  const selectedTaste = useMemo(
+    () => tastes.find(t => t.taste_id === selectedTasteId),
+    [tastes, selectedTasteId],
+  )
+
+  // ============================================================================
+  // EFFECTS
+  // ============================================================================
+
+  // Load user info
   useEffect(() => {
+    async function loadUserInfo() {
+      try {
+        await getCurrentUser() // Verify user is authenticated
+        const session = await fetchAuthSession()
+        const email = session.tokens?.idToken?.payload['email'] as
+          | string
+          | undefined
+        const name = session.tokens?.idToken?.payload['name'] as
+          | string
+          | undefined
+        const picture = session.tokens?.idToken?.payload['picture'] as
+          | string
+          | undefined
+
+        if (email) {
+          const nameParts = (name || email.split('@')[0]).split(' ')
+          const initials =
+            nameParts.length > 1
+              ? `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase()
+              : nameParts[0].slice(0, 2).toUpperCase()
+
+          setUserInfo({
+            name: name || email.split('@')[0],
+            email,
+            initials,
+            picture,
+          })
+        }
+      } catch (err) {
+        console.error('Failed to load user info:', err)
+      }
+    }
+
     loadUserInfo()
   }, [])
 
-  // Close dropdown when clicking outside
+  // Load tastes from database
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    async function loadTastes() {
+      try {
+        setLoading(true)
+        setError(null)
+
+        const apiTastes = await api.tastes.list()
+
+        // Transform API tastes to display format with resources
+        const displayTastes: TasteDisplay[] = await Promise.all(
+          apiTastes.map(async taste => {
+            try {
+              // Fetch resources for this taste
+              const resources = await api.resources.list(taste.taste_id)
+
+              // Transform resources to display format with download URLs
+              const displayResources: ResourceDisplay[] = await Promise.all(
+                resources.map(async resource => {
+                  let imageUrl: string | null = null
+
+                  // If resource has an image, get the download URL
+                  if (resource.has_image) {
+                    try {
+                      const resourceWithUrls = await api.resources.get(
+                        taste.taste_id,
+                        resource.resource_id,
+                        true, // include download URLs
+                      )
+                      imageUrl =
+                        resourceWithUrls.download_urls?.image_get_url || null
+                    } catch (err) {
+                      console.error(
+                        `Failed to get image URL for resource ${resource.resource_id}:`,
+                        err,
+                      )
+                    }
+                  }
+
+                  return {
+                    resource_id: resource.resource_id,
+                    name: resource.name,
+                    imageUrl,
+                    has_image: resource.has_image,
+                    has_figma: resource.has_figma,
+                  }
+                }),
+              )
+
+              return {
+                taste_id: taste.taste_id,
+                name: taste.name,
+                resources: displayResources,
+              }
+            } catch (err) {
+              console.error(
+                `Failed to load resources for taste ${taste.taste_id}:`,
+                err,
+              )
+              return {
+                taste_id: taste.taste_id,
+                name: taste.name,
+                resources: [],
+              }
+            }
+          }),
+        )
+
+        setTastes(displayTastes)
+      } catch (err) {
+        console.error('Failed to load tastes:', err)
+        setError('Failed to load tastes. Please refresh the page.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadTastes()
+  }, [])
+
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setShowProfileMenu(false)
       }
     }
 
-    if (showProfileMenu) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-
+    document.addEventListener('mousedown', handleClickOutside)
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showProfileMenu])
+  }, [])
 
-  const getInitials = (name?: string, email?: string): string => {
-    if (name) {
-      const parts = name
-        .trim()
-        .split(' ')
-        .filter(part => part.length > 0)
-      if (parts.length >= 2) {
-        // First and last name initials
-        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-      }
-      if (parts.length === 1 && parts[0].length > 0) {
-        // Only one name, take first letter twice or first two letters
-        return (
-          parts[0][0].toUpperCase() +
-          (parts[0][1]?.toUpperCase() || parts[0][0].toUpperCase())
-        )
-      }
-    }
-
-    if (email) {
-      const emailParts = email.split('@')[0]
-      const nameParts = emailParts
-        .split(/[._-]/)
-        .filter(part => part.length > 0)
-      if (nameParts.length >= 2) {
-        return (nameParts[0][0] + nameParts[1][0]).toUpperCase()
-      }
-      return emailParts.substring(0, 2).toUpperCase()
-    }
-
-    return '??'
-  }
-
-  const loadUserInfo = async () => {
-    try {
-      const user = await getCurrentUser()
-      const session = await fetchAuthSession()
-      const payload = session.tokens?.idToken?.payload
-
-      const email = payload?.['email'] as string
-      const name = payload?.['name'] as string | undefined
-      const givenName = payload?.['given_name'] as string | undefined
-      const familyName = payload?.['family_name'] as string | undefined
-      const picture = payload?.['picture'] as string | undefined
-
-      const initials = getInitials(name, email)
-
-      setUserInfo({
-        username: user.username,
-        email,
-        ...(name !== undefined && { name }),
-        ...(givenName !== undefined && { givenName }),
-        ...(familyName !== undefined && { familyName }),
-        ...(picture !== undefined && { picture }),
-        initials,
-      })
-
-      console.log('User info loaded:', {
-        email,
-        name,
-        initials,
-        picture,
-        fullPayload: payload,
-      })
-    } catch (error) {
-      console.error('Error loading user info:', error)
-    }
-  }
+  // ============================================================================
+  // EVENT HANDLERS
+  // ============================================================================
 
   const handleSignOut = async () => {
     try {
       await signOut()
-      window.location.href = '/login'
+      // Dispatch custom event to notify App.tsx
+      window.dispatchEvent(new Event('auth-signout'))
     } catch (error) {
-      console.error('Sign out error:', error)
+      console.error('Error signing out:', error)
     }
   }
 
-  // Get selected taste
-  const selectedTaste = useMemo(() => {
-    return tastes.find(t => t.id === selectedTasteId)
-  }, [selectedTasteId, tastes])
+  const handleCreateTaste = async (name: string) => {
+    try {
+      setIsCreatingTaste(true)
 
-  // Auto-expand stages based on selections
-  useEffect(() => {
-    if (selectedTasteId) {
-      const taste = tastes.find(t => t.id === selectedTasteId)
-      if (taste) {
-        if (taste.resources.length === 0) {
-          // Skip stage 2, go to stage 3
-          setExpandedStage(3)
-        } else {
-          // Go to stage 2
-          setExpandedStage(2)
+      // Create taste in database
+      const newTaste = await api.tastes.create(name, {})
+
+      // Add to local state
+      const displayTaste: TasteDisplay = {
+        taste_id: newTaste.taste_id,
+        name: newTaste.name,
+        resources: [],
+      }
+
+      setTastes([...tastes, displayTaste])
+
+      // Select the new taste
+      setSelectedTasteId(newTaste.taste_id)
+      setSelectedResourceId(null)
+
+      // Since it has no resources, expand stage 3 directly
+      setExpandedStage(3)
+
+      // Close modal
+      setIsCreateTasteModalOpen(false)
+
+      // Scroll to the new taste
+      setTimeout(() => {
+        const scrollContainer = document.querySelector(
+          '[data-taste-scroll]',
+        ) as HTMLElement
+        if (scrollContainer) {
+          scrollContainer.scrollLeft = scrollContainer.scrollWidth
+        }
+      }, 100)
+    } catch (err) {
+      console.error('Failed to create taste:', err)
+      alert('Failed to create taste. Please try again.')
+    } finally {
+      setIsCreatingTaste(false)
+    }
+  }
+
+  const handleCreateResource = async (resourceName: string) => {
+    if (!selectedTasteId) return
+
+    try {
+      setIsCreatingResource(true)
+
+      // Create resource and get upload URLs
+      const { resource, upload_urls } = await api.resources.create(
+        selectedTasteId,
+        resourceName,
+        {},
+      )
+
+      // Separate files by type
+      const imageFile = uploadedFiles.find(
+        f =>
+          f.type.startsWith('image/') || f.name.toLowerCase().endsWith('.png'),
+      )
+      const figmaFile = uploadedFiles.find(
+        f =>
+          f.type === 'application/json' ||
+          f.name.toLowerCase().endsWith('.json'),
+      )
+
+      // Upload files if they exist
+      let hasFigma = false
+      let hasImage = false
+
+      if (figmaFile && upload_urls.figma_put_url) {
+        try {
+          const figmaText = await figmaFile.text()
+          const figmaJson = JSON.parse(figmaText)
+          await api.resources.uploadFiles(
+            { figma_put_url: upload_urls.figma_put_url },
+            figmaJson,
+            undefined,
+          )
+          hasFigma = true
+        } catch (err) {
+          console.error('Failed to upload figma file:', err)
         }
       }
-    }
-  }, [selectedTasteId, tastes])
 
-  useEffect(() => {
-    if (selectedResourceId) {
-      setExpandedStage(3)
-    }
-  }, [selectedResourceId])
-
-  // Handle create new taste
-  const handleCreateTaste = (title: string) => {
-    const newTaste: Taste = {
-      id: `taste-${Date.now()}`,
-      title,
-      resources: [],
-    }
-    setTastes(prev => [...prev, newTaste])
-    setIsCreateTasteModalOpen(false)
-    setSelectedTasteId(newTaste.id)
-    setSelectedResourceId(null)
-
-    // Scroll to the new taste (in a real app, you'd use a ref)
-    setTimeout(() => {
-      const scrollContainer = document.querySelector(
-        '[data-taste-scroll]',
-      ) as HTMLElement
-      if (scrollContainer) {
-        scrollContainer.scrollLeft = scrollContainer.scrollWidth
+      if (imageFile && upload_urls.image_put_url) {
+        try {
+          await api.resources.uploadFiles(
+            { image_put_url: upload_urls.image_put_url },
+            undefined,
+            imageFile as File,
+          )
+          hasImage = true
+        } catch (err) {
+          console.error('Failed to upload image file:', err)
+        }
       }
-    }, 100)
+
+      // Mark files as uploaded
+      if (hasFigma || hasImage) {
+        await api.resources.markUploaded(
+          selectedTasteId,
+          resource.resource_id,
+          hasFigma,
+          hasImage,
+        )
+      }
+
+      // Update local taste with new resource
+      const imageUrl =
+        hasImage && upload_urls.image_put_url
+          ? await api.resources
+              .get(selectedTasteId, resource.resource_id, true)
+              .then(r => r.download_urls?.image_get_url || null)
+          : null
+
+      const displayResource: ResourceDisplay = {
+        resource_id: resource.resource_id,
+        name: resource.name,
+        imageUrl,
+        has_image: hasImage,
+        has_figma: hasFigma,
+      }
+
+      setTastes(
+        tastes.map(t =>
+          t.taste_id === selectedTasteId
+            ? { ...t, resources: [...t.resources, displayResource] }
+            : t,
+        ),
+      )
+
+      // Set this as selected resource
+      setSelectedResourceId(resource.resource_id)
+
+      // Close modal and open project modal
+      setIsCreateResourceModalOpen(false)
+      setIsCreateProjectModalOpen(true)
+
+      return resource.resource_id
+    } catch (err) {
+      console.error('Failed to create resource:', err)
+      alert('Failed to create resource. Please try again.')
+      setIsCreatingResource(false)
+      throw err
+    } finally {
+      setIsCreatingResource(false)
+    }
   }
 
-  // Build dynamic content for stage 1 based on userTastes
+  const handleCreateProject = async (projectName: string) => {
+    if (!selectedTasteId) return
+
+    try {
+      setIsCreatingProject(true)
+
+      // Create project
+      const project = await api.projects.create({
+        name: projectName,
+        task_description: ideaText,
+        selected_taste_id: selectedTasteId,
+        selected_resource_id: selectedResourceId || undefined,
+        metadata: {},
+      })
+
+      // Save project info to localStorage for Editor
+      localStorage.setItem(
+        'current_project',
+        JSON.stringify({
+          project_id: project.project_id,
+          project_name: project.name,
+          task_description: project.task_description,
+          selected_taste_id: project.selected_taste_id,
+          selected_resource_id: project.selected_resource_id,
+        }),
+      )
+
+      // Close modal
+      setIsCreateProjectModalOpen(false)
+
+      // Smooth transition to Editor
+      // TODO: Navigate to Editor page
+      alert(
+        `Project "${projectName}" created successfully! (Editor navigation will be implemented next)`,
+      )
+
+      // Reset form
+      setIdeaText('')
+      setUploadedFiles([])
+      setSelectedResourceId(null)
+    } catch (err) {
+      console.error('Failed to create project:', err)
+      alert('Failed to create project. Please try again.')
+    } finally {
+      setIsCreatingProject(false)
+    }
+  }
+
+  const handleSubmitIdea = async () => {
+    if (!ideaText.trim()) return
+    if (!selectedTasteId) return
+
+    // If there are files, create resource first
+    if (uploadedFiles.length > 0) {
+      setIsCreateResourceModalOpen(true)
+    } else {
+      // No files, skip resource creation and go straight to project
+      setIsCreateProjectModalOpen(true)
+    }
+  }
+
+  const handleRemoveFile = (index: number) => {
+    setUploadedFiles(files => files.filter((_, i) => i !== index))
+  }
+
+  // ============================================================================
+  // ACCORDION CONTENT
+  // ============================================================================
+
   const startWithTasteContent = useMemo(() => {
-    if (!tastes || tastes.length === 0) {
+    if (loading) {
+      return (
+        <div className="p-6 flex justify-center items-center min-h-[120px]">
+          <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin" />
+        </div>
+      )
+    }
+
+    if (error) {
+      return (
+        <div className="p-6 flex justify-center items-center min-h-[120px]">
+          <div className="text-center" style={{ color: '#FF7262' }}>
+            {error}
+          </div>
+        </div>
+      )
+    }
+
+    if (tastes.length === 0) {
       return (
         <div className="p-6 flex justify-center items-center min-h-[120px]">
           <div style={{ width: '220px' }}>
@@ -646,16 +1157,23 @@ export default function Home() {
           >
             {tastes.map(taste => (
               <div
-                key={taste.id}
+                key={taste.taste_id}
                 style={{ width: '220px' }}
                 className="flex-none"
               >
                 <TasteCard
                   taste={taste}
-                  isSelected={selectedTasteId === taste.id}
+                  isSelected={selectedTasteId === taste.taste_id}
                   onClick={() => {
-                    setSelectedTasteId(taste.id)
+                    setSelectedTasteId(taste.taste_id)
                     setSelectedResourceId(null)
+
+                    // If taste has resources, expand stage 2; otherwise expand stage 3
+                    if (taste.resources.length > 0) {
+                      setExpandedStage(2)
+                    } else {
+                      setExpandedStage(3)
+                    }
                   }}
                 />
               </div>
@@ -668,9 +1186,8 @@ export default function Home() {
         </div>
       </div>
     )
-  }, [tastes, selectedTasteId])
+  }, [tastes, selectedTasteId, loading, error])
 
-  // Build dynamic content for stage 2 based on selected taste
   const chooseStyleContent = useMemo(() => {
     if (!selectedTaste) {
       return (
@@ -709,10 +1226,13 @@ export default function Home() {
           <div className="flex gap-4" style={{ minWidth: 'min-content' }}>
             {selectedTaste.resources.map(resource => (
               <StyleCard
-                key={resource.id}
+                key={resource.resource_id}
                 resource={resource}
-                isSelected={selectedResourceId === resource.id}
-                onClick={() => setSelectedResourceId(resource.id)}
+                isSelected={selectedResourceId === resource.resource_id}
+                onClick={() => {
+                  setSelectedResourceId(resource.resource_id)
+                  setExpandedStage(3)
+                }}
               />
             ))}
           </div>
@@ -721,11 +1241,15 @@ export default function Home() {
     )
   }, [selectedTaste, selectedResourceId])
 
-  // Determine if stages can be opened
+  // ============================================================================
+  // STAGE LOGIC
+  // ============================================================================
+
   const canOpenStage2 =
     selectedTasteId !== null &&
     selectedTaste !== undefined &&
     selectedTaste.resources.length > 0
+
   const canOpenStage3 =
     selectedTasteId !== null &&
     (selectedResourceId !== null ||
@@ -781,133 +1305,149 @@ export default function Home() {
         >
           {!isDragging ? (
             <>
-              {/* Button row */}
-              <div className="flex items-center gap-3 mb-6">
-                <button
-                  className="px-4 py-2 rounded-lg flex items-center gap-2 transition-all hover:scale-105"
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                  }}
-                >
-                  <div
-                    className="w-5 h-5 rounded"
-                    style={{ backgroundColor: '#FF7262' }}
-                  ></div>
-                  <span className="text-sm" style={{ color: '#3B3B3B' }}>
-                    Main scenario.fig
-                  </span>
-                </button>
-
-                <button
-                  className="w-10 h-10 rounded-lg flex items-center justify-center transition-all hover:scale-105"
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                  }}
-                >
-                  <Settings size={18} style={{ color: '#4F515A' }} />
-                </button>
-
-                <button
-                  className="px-4 py-2 rounded-lg flex items-center gap-2 transition-all hover:scale-105"
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                  }}
-                >
-                  <Smartphone size={18} style={{ color: '#4F515A' }} />
-                  <span className="text-sm" style={{ color: '#3B3B3B' }}>
-                    iOS
-                  </span>
-                </button>
-
-                <button
-                  className="w-10 h-10 rounded-lg flex items-center justify-center transition-all hover:scale-105"
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                  }}
-                >
-                  <Maximize2 size={18} style={{ color: '#4F515A' }} />
-                </button>
-              </div>
-
               {/* Text area with Enter hint */}
               <div className="relative mb-4">
                 <textarea
-                  placeholder="Describe your idea"
+                  placeholder="Describe your idea..."
                   value={ideaText}
                   onChange={e => setIdeaText(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey && ideaText.trim()) {
+                      e.preventDefault()
+                      handleSubmitIdea()
+                    }
+                  }}
                   className="w-full px-4 py-3 rounded-lg resize-none focus:outline-none"
                   style={{
                     backgroundColor: 'transparent',
                     border: 'none',
                     color: '#3B3B3B',
                     fontSize: '14px',
+                    minHeight: '80px',
                   }}
-                  rows={2}
+                  rows={3}
                 />
                 {ideaText.length > 0 && (
                   <div
                     className="absolute bottom-3 right-4 px-2 py-1 rounded text-xs"
                     style={{ backgroundColor: '#F4F4F4', color: '#929397' }}
                   >
-                    Enter
+                    ⏎ Enter
                   </div>
                 )}
               </div>
 
-              {/* Bottom row with file previews and Create button */}
-              <div className="flex items-center justify-end gap-3">
-                {/* File previews - overlapping */}
+              {/* File upload area */}
+              <div
+                className="mb-4 rounded-xl p-4 transition-all border-2 border-dashed"
+                style={{
+                  borderColor: uploadedFiles.length > 0 ? '#F5C563' : '#E8E1DD',
+                  backgroundColor:
+                    uploadedFiles.length > 0
+                      ? 'rgba(245, 197, 99, 0.05)'
+                      : '#F7F5F3',
+                }}
+              >
+                <div className="text-center mb-3">
+                  <div className="text-xs mb-1" style={{ color: '#929397' }}>
+                    Drag & drop files here (up to 200)
+                  </div>
+                  <div className="text-xs" style={{ color: '#929397' }}>
+                    Supported: JSON, PNG, JPG, PDF, DOC
+                  </div>
+                </div>
+
+                {/* Uploaded files display */}
                 {uploadedFiles.length > 0 && (
-                  <div
-                    className="flex items-center"
-                    style={{ marginRight: 'auto' }}
-                  >
-                    {uploadedFiles.slice(0, 3).map((file, index) => {
+                  <div className="flex flex-wrap gap-2">
+                    {uploadedFiles.map((file, index) => {
                       const extension = (file.name.split('.').pop() ?? '')
                         .toUpperCase()
                         .slice(0, 3)
+                      const isImage = file.type.startsWith('image/')
+
                       return (
                         <div
                           key={index}
-                          className="w-12 h-12 rounded-lg flex items-center justify-center text-xs font-medium"
+                          className="group relative rounded-lg overflow-hidden transition-all hover:scale-105"
                           style={{
+                            width: '80px',
+                            height: '80px',
                             backgroundColor: '#FFFFFF',
                             boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                            marginLeft: index > 0 ? '-8px' : '0',
-                            zIndex: uploadedFiles.length - index,
-                            color: '#4F515A',
                           }}
                         >
-                          {extension}
+                          {isImage ? (
+                            <img
+                              src={URL.createObjectURL(file)}
+                              alt={file.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <span
+                                className="text-xs font-bold"
+                                style={{ color: '#4F515A' }}
+                              >
+                                {extension}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Remove button on hover */}
+                          <button
+                            onClick={() => handleRemoveFile(index)}
+                            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            style={{
+                              backgroundColor: 'rgba(0,0,0,0.7)',
+                            }}
+                          >
+                            <X size={24} style={{ color: '#FFFFFF' }} />
+                          </button>
+
+                          {/* Filename tooltip */}
+                          <div
+                            className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-xs truncate opacity-0 group-hover:opacity-100 transition-opacity"
+                            style={{
+                              backgroundColor: 'rgba(0,0,0,0.8)',
+                              color: '#FFFFFF',
+                              fontSize: '9px',
+                            }}
+                            title={file.name}
+                          >
+                            {file.name}
+                          </div>
                         </div>
                       )
                     })}
-                    {uploadedFiles.length > 3 && (
-                      <div
-                        className="w-12 h-12 rounded-lg flex items-center justify-center text-xs font-medium"
-                        style={{
-                          backgroundColor: '#F4F4F4',
-                          marginLeft: '-8px',
-                          color: '#4F515A',
-                        }}
-                      >
-                        +{uploadedFiles.length - 3}
-                      </div>
-                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom row with file count and Create button */}
+              <div className="flex items-center justify-between gap-3">
+                {/* File count */}
+                {uploadedFiles.length > 0 && (
+                  <div className="text-sm" style={{ color: '#929397' }}>
+                    {uploadedFiles.length} file
+                    {uploadedFiles.length !== 1 ? 's' : ''} ready
                   </div>
                 )}
 
+                {/* Spacer */}
+                <div className="flex-1" />
+
                 {/* Create button */}
                 <button
-                  className="px-6 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105"
+                  onClick={handleSubmitIdea}
+                  disabled={!ideaText.trim()}
+                  className="px-6 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
-                    backgroundColor: '#F5C563',
-                    color: '#1F1F20',
-                    boxShadow: '0 2px 12px rgba(245, 197, 99, 0.3)',
+                    backgroundColor: ideaText.trim() ? '#F5C563' : '#E8E1DD',
+                    color: ideaText.trim() ? '#1F1F20' : '#929397',
+                    boxShadow: ideaText.trim()
+                      ? '0 2px 12px rgba(245, 197, 99, 0.3)'
+                      : 'none',
                   }}
                 >
                   Create
@@ -918,9 +1458,9 @@ export default function Home() {
             <div
               className="rounded-2xl flex flex-col items-center justify-center"
               style={{
-                border: '2px dashed #929397',
+                border: '2px dashed #F5C563',
                 minHeight: '240px',
-                backgroundColor: 'rgba(255,255,255,0.3)',
+                backgroundColor: 'rgba(245, 197, 99, 0.1)',
               }}
             >
               <div className="text-xs mb-4" style={{ color: '#929397' }}>
@@ -935,21 +1475,27 @@ export default function Home() {
               <div className="flex gap-3">
                 <div
                   className="px-3 py-1.5 rounded-md text-xs font-medium"
-                  style={{ backgroundColor: '#F4F4F4', color: '#4F515A' }}
+                  style={{ backgroundColor: '#FFFFFF', color: '#4F515A' }}
+                >
+                  JSON
+                </div>
+                <div
+                  className="px-3 py-1.5 rounded-md text-xs font-medium"
+                  style={{ backgroundColor: '#FFFFFF', color: '#4F515A' }}
+                >
+                  PNG
+                </div>
+                <div
+                  className="px-3 py-1.5 rounded-md text-xs font-medium"
+                  style={{ backgroundColor: '#FFFFFF', color: '#4F515A' }}
                 >
                   PDF
                 </div>
                 <div
                   className="px-3 py-1.5 rounded-md text-xs font-medium"
-                  style={{ backgroundColor: '#F4F4F4', color: '#4F515A' }}
+                  style={{ backgroundColor: '#FFFFFF', color: '#4F515A' }}
                 >
                   DOC
-                </div>
-                <div
-                  className="px-3 py-1.5 rounded-md text-xs font-medium"
-                  style={{ backgroundColor: '#F4F4F4', color: '#4F515A' }}
-                >
-                  IMG
                 </div>
               </div>
             </div>
@@ -961,9 +1507,9 @@ export default function Home() {
   ]
 
   const tabs = [
-    { id: 'left', icon: '🏆' },
-    { id: 'middle', icon: '08' },
-    { id: 'right', icon: '👁' },
+    { id: 'left' as const, icon: '🏆' },
+    { id: 'middle' as const, icon: '08' },
+    { id: 'right' as const, icon: '👁' },
   ]
 
   const galleryItems = [
@@ -973,6 +1519,10 @@ export default function Home() {
     { id: 4, title: 'Ambient', bgColor: '#B5B8C8', height: 360 },
     { id: 5, title: 'RonDesign', bgColor: '#C8B5A5', height: 420 },
   ]
+
+  // ============================================================================
+  // RENDER TAB CONTENT
+  // ============================================================================
 
   const renderTabContent = () => {
     if (activeTab === 'left') {
@@ -1107,12 +1657,12 @@ export default function Home() {
             ))}
           </div>
 
-          {/* Right area - placeholder for content */}
+          {/* Right area - Main content */}
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <div className="text-6xl mb-4">08</div>
               <div className="text-lg" style={{ color: '#929397' }}>
-                Gallery View
+                Gallery Tab
               </div>
             </div>
           </div>
@@ -1131,6 +1681,11 @@ export default function Home() {
       )
     }
   }
+
+  // ============================================================================
+  // MAIN RENDER
+  // ============================================================================
+
   return (
     <div
       className="min-h-screen min-w-screen flex flex-col"
@@ -1141,7 +1696,26 @@ export default function Home() {
         isOpen={isCreateTasteModalOpen}
         onClose={() => setIsCreateTasteModalOpen(false)}
         onConfirm={handleCreateTaste}
+        isLoading={isCreatingTaste}
       />
+
+      {/* Create Resource Modal */}
+      <CreateResourceModal
+        isOpen={isCreateResourceModalOpen}
+        onClose={() => setIsCreateResourceModalOpen(false)}
+        onConfirm={handleCreateResource}
+        isLoading={isCreatingResource}
+        fileCount={uploadedFiles.length}
+      />
+
+      {/* Create Project Modal */}
+      <CreateProjectModal
+        isOpen={isCreateProjectModalOpen}
+        onClose={() => setIsCreateProjectModalOpen(false)}
+        onConfirm={handleCreateProject}
+        isLoading={isCreatingProject}
+      />
+
       {/* Top Navigation - Fixed */}
       <div className="flex items-center justify-between px-8 py-4">
         {/* Left - Toggle */}
@@ -1298,7 +1872,6 @@ export default function Home() {
                   <button
                     onClick={() => {
                       setShowProfileMenu(false)
-                      // Add your settings navigation here
                       console.log('Navigate to settings')
                     }}
                     className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors"
@@ -1317,7 +1890,6 @@ export default function Home() {
                   <button
                     onClick={() => {
                       setShowProfileMenu(false)
-                      // Add your help/support navigation here
                       console.log('Navigate to help')
                     }}
                     className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors"
