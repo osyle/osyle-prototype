@@ -6,18 +6,13 @@ import requests
 from functools import lru_cache
 from typing import Optional
 import json
-import logging
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Osyle API", version="1.0.0")
 
-# CORS for Amplify and local development
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
+    allow_origins=["*"],  # Configure with specific origins in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,7 +32,6 @@ def get_jwks():
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        logger.error(f"Error fetching JWKS: {e}")
         return None
 
 def verify_token(authorization: Optional[str] = Header(None)) -> dict:
@@ -51,16 +45,13 @@ def verify_token(authorization: Optional[str] = Header(None)) -> dict:
     token = authorization.replace("Bearer ", "")
     
     try:
-        # Get JWKS
         jwks = get_jwks()
         if not jwks:
             raise HTTPException(status_code=500, detail="Failed to fetch JWKS")
         
-        # Decode header to get kid
         unverified_header = jwt.get_unverified_header(token)
         kid = unverified_header.get("kid")
         
-        # Find the correct key
         key = None
         for jwk in jwks.get("keys", []):
             if jwk.get("kid") == kid:
@@ -70,8 +61,6 @@ def verify_token(authorization: Optional[str] = Header(None)) -> dict:
         if not key:
             raise HTTPException(status_code=401, detail="Invalid token key")
         
-        # Verify and decode token
-        # Skip audience validation - we validate issuer and signature which is sufficient
         payload = jwt.decode(
             token,
             key,
@@ -79,46 +68,33 @@ def verify_token(authorization: Optional[str] = Header(None)) -> dict:
             issuer=COGNITO_ISSUER,
             options={
                 "verify_exp": True,
-                "verify_aud": False  # Skip audience validation
+                "verify_aud": False
             }
         )
         
-        logger.info(f"Token decoded successfully. Token contains: {list(payload.keys())}")
-        
-        # Get email from token
         email = payload.get("email")
         
         if not email:
-            logger.error(f"No email found in token. Keys: {list(payload.keys())}")
             raise HTTPException(
                 status_code=403,
                 detail="Email not found in token"
             )
         
-        logger.info(f"Email extracted: {email}")
-        
-        # Verify email domain
         if not email.endswith("@osyle.com"):
-            logger.warning(f"Unauthorized email domain: {email}")
             raise HTTPException(
                 status_code=403,
                 detail="Only @osyle.com accounts allowed"
             )
-        
-        logger.info(f"User authenticated successfully: {email}")
         
         return payload
         
     except HTTPException:
         raise
     except jwt.ExpiredSignatureError:
-        logger.warning("Token expired")
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError as e:
-        logger.error(f"Invalid token: {str(e)}")
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
     except Exception as e:
-        logger.error(f"Authentication error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Authentication failed: {str(e)}")
 
 @app.get("/")
