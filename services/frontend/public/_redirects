@@ -1,1 +1,5 @@
+# Remove trailing slashes first
+/*/   /:splat   301!
+
+# Then serve index.html for all routes
 /*    /index.html   200
