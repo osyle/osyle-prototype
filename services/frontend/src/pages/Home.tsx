@@ -1,5 +1,5 @@
 import { signOut, fetchAuthSession, getCurrentUser } from 'aws-amplify/auth'
-import { ChevronDown, Plus, Link, Palette, X } from 'lucide-react'
+import { ChevronDown, Plus, Link, Palette, X, Sparkles } from 'lucide-react'
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
@@ -730,6 +730,11 @@ export default function Home() {
     null,
   )
 
+  // Random UI availability state
+  const [hasDesignMLUIs, setHasDesignMLUIs] = useState(false)
+  const [hasReactUIs, setHasReactUIs] = useState(false)
+  const [checkingUIs, setCheckingUIs] = useState(true)
+
   // Refs
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -862,6 +867,28 @@ export default function Home() {
     }
 
     loadTastes()
+  }, [])
+
+  // Check for available UIs by rendering mode
+  useEffect(() => {
+    async function checkAvailableUIs() {
+      setCheckingUIs(true)
+      try {
+        // Check for design-ml UIs
+        const hasDesignML = await api.llm.hasUIsByMode('design-ml')
+        setHasDesignMLUIs(hasDesignML)
+
+        // Check for react UIs
+        const hasReact = await api.llm.hasUIsByMode('react')
+        setHasReactUIs(hasReact)
+      } catch (err) {
+        console.error('Failed to check available UIs:', err)
+      } finally {
+        setCheckingUIs(false)
+      }
+    }
+
+    checkAvailableUIs()
   }, [])
 
   // Save state to sessionStorage to preserve during navigation
@@ -1181,6 +1208,31 @@ export default function Home() {
 
   const handleRemoveFile = (index: number) => {
     setUploadedFiles(files => files.filter((_, i) => i !== index))
+  }
+
+  const handleViewRandomUI = async (renderingMode: 'design-ml' | 'react') => {
+    try {
+      // Fetch random UI
+      const randomUI = await api.llm.getRandomUIByMode(renderingMode)
+
+      // Store project info with view-only flag
+      const projectInfo = {
+        project_id: randomUI.project_id,
+        project_name: randomUI.project_name,
+        view_only: true, // Flag to indicate this is view-only mode
+        ui_data: randomUI.ui,
+        ui_type: randomUI.type,
+        ui_version: randomUI.version,
+      }
+
+      localStorage.setItem('current_project', JSON.stringify(projectInfo))
+
+      // Navigate to editor in view-only mode
+      navigate('/editor')
+    } catch (err) {
+      console.error('Failed to load random UI:', err)
+      alert('No UIs available for this mode')
+    }
   }
 
   // ============================================================================
@@ -1707,6 +1759,40 @@ export default function Home() {
               </div>
             ))}
           </div>
+
+          {/* Random UI Buttons - Only show if there are UIs available */}
+          {!checkingUIs && (hasDesignMLUIs || hasReactUIs) && (
+            <div className="w-full max-w-2xl mt-8 flex justify-center gap-4">
+              {hasDesignMLUIs && (
+                <button
+                  onClick={() => handleViewRandomUI('design-ml')}
+                  className="px-6 py-3 rounded-xl font-medium text-sm transition-all hover:scale-105 flex items-center gap-2"
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    color: '#3B3B3B',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+                  }}
+                >
+                  <Sparkles size={18} style={{ color: '#4A90E2' }} />
+                  <span>View Random Design ML</span>
+                </button>
+              )}
+              {hasReactUIs && (
+                <button
+                  onClick={() => handleViewRandomUI('react')}
+                  className="px-6 py-3 rounded-xl font-medium text-sm transition-all hover:scale-105 flex items-center gap-2"
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    color: '#3B3B3B',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+                  }}
+                >
+                  <Sparkles size={18} style={{ color: '#F5C563' }} />
+                  <span>View Random React</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )
     } else if (activeTab === 'middle') {

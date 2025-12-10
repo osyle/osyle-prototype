@@ -437,3 +437,88 @@ async def get_test_ui(
             status_code=500,
             detail=f"Failed to get test UI: {str(e)}"
         )
+
+
+@router.get("/ui/random")
+async def get_random_ui_by_mode(
+    rendering_mode: str,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Get a random UI from current user's projects filtered by rendering mode
+    
+    Args:
+        rendering_mode: 'design-ml' or 'react'
+    
+    Returns:
+        Random UI matching the specified rendering mode
+    """
+    user_id = user.get("user_id")
+    
+    try:
+        # Validate rendering mode
+        if rendering_mode not in ["design-ml", "react"]:
+            raise HTTPException(
+                status_code=400,
+                detail="rendering_mode must be 'design-ml' or 'react'"
+            )
+        
+        # Get all projects with UI
+        projects = db.list_projects_for_owner(user_id)
+        projects_with_ui = [p for p in projects if p.get("metadata", {}).get("has_ui")]
+        
+        if not projects_with_ui:
+            raise HTTPException(
+                status_code=404,
+                detail="No projects with generated UI found"
+            )
+        
+        # Filter projects by rendering mode
+        matching_projects = []
+        for project in projects_with_ui:
+            try:
+                version = project.get("metadata", {}).get("ui_version", 1)
+                ui_output = storage.get_project_ui(user_id, project["project_id"], version=version)
+                
+                if ui_output is None:
+                    continue
+                
+                # Determine type: dict = design-ml, string = react
+                ui_type = "design-ml" if isinstance(ui_output, dict) else "react"
+                
+                if ui_type == rendering_mode:
+                    matching_projects.append({
+                        "project": project,
+                        "ui": ui_output,
+                        "version": version
+                    })
+            except Exception as e:
+                print(f"Error loading UI for project {project['project_id']}: {e}")
+                continue
+        
+        if not matching_projects:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No projects with {rendering_mode} UIs found"
+            )
+        
+        # Select random project
+        import random
+        selected = random.choice(matching_projects)
+        
+        return {
+            "status": "success",
+            "type": rendering_mode,
+            "ui": selected["ui"],
+            "project_id": selected["project"]["project_id"],
+            "project_name": selected["project"]["name"],
+            "version": selected["version"]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get random UI: {str(e)}"
+        )

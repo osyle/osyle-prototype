@@ -531,6 +531,31 @@ export const llmAPI = {
   > => {
     return apiRequest('/api/llm/ui/get/test')
   },
+
+  /**
+   * Get a random UI by rendering mode
+   */
+  getRandomUIByMode: async (
+    renderingMode: 'design-ml' | 'react',
+  ): Promise<
+    GenerateUIResponse & { project_id: string; project_name: string }
+  > => {
+    return apiRequest(`/api/llm/ui/random?rendering_mode=${renderingMode}`)
+  },
+
+  /**
+   * Check if user has any UIs of a specific rendering mode
+   */
+  hasUIsByMode: async (
+    renderingMode: 'design-ml' | 'react',
+  ): Promise<boolean> => {
+    try {
+      await apiRequest(`/api/llm/ui/random?rendering_mode=${renderingMode}`)
+      return true
+    } catch {
+      return false
+    }
+  },
 }
 
 // ============================================================================
