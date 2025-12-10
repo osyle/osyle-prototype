@@ -37,8 +37,8 @@ export default function DeviceContextProvider({
   // Initialize states with values from localStorage if available
   const [device_info, setDeviceInfoState] = useState<DeviceInfo>(() =>
     getStoredValue('device_info', {
-      platform: 'web',
-      screen: SCREEN_PRESETS.web.desktop,
+      platform: 'phone',
+      screen: SCREEN_PRESETS.phone.iphone14,
     }),
   )
 
