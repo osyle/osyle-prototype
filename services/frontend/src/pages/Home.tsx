@@ -1,7 +1,9 @@
 import { signOut, fetchAuthSession, getCurrentUser } from 'aws-amplify/auth'
 import { ChevronDown, Plus, Link, Palette, X } from 'lucide-react'
 import React, { useState, useMemo, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../api'
+import ConfigurationMenu from '../components/ConfigurationMenu'
 
 // ============================================================================
 // TYPES
@@ -88,29 +90,24 @@ const TasteCard: React.FC<TasteCardProps> = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        transform: isHovered ? 'scale(1.02)' : 'scale(1)',
+        // Add padding to contain the selection ring
+        padding: '8px',
       }}
     >
-      {/* Blue border when selected - fixed to not overflow */}
-      {isSelected && (
-        <div
-          className="absolute rounded-xl transition-all duration-300 pointer-events-none"
-          style={{
-            border: '3px solid #4A90E2',
-            top: '-6px',
-            left: '-6px',
-            right: '-6px',
-            bottom: '-6px',
-          }}
-        />
-      )}
       <div
-        className="h-full rounded-xl p-4 flex flex-col justify-between transition-all duration-300"
+        className="h-full rounded-xl p-4 flex flex-col justify-between transition-all duration-300 relative"
         style={{
           backgroundColor: '#FFFFFF',
           boxShadow: isSelected
             ? '0 8px 24px rgba(74, 144, 226, 0.2)'
-            : '0 2px 12px rgba(0,0,0,0.08)',
+            : isHovered
+              ? '0 4px 16px rgba(0,0,0,0.12)'
+              : '0 2px 12px rgba(0,0,0,0.08)',
+          transform:
+            isHovered && !isSelected ? 'translateY(-2px)' : 'translateY(0)',
+          // Selection ring as box-shadow (stays within bounds)
+          outline: isSelected ? '3px solid #4A90E2' : 'none',
+          outlineOffset: '-3px',
         }}
       >
         <div>
@@ -609,29 +606,26 @@ const StyleCard: React.FC<StyleCardProps> = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        transform: isHovered ? 'scale(1.05)' : 'scale(1)',
         width: '200px',
+        // Add padding to contain the selection ring
+        padding: '8px',
       }}
     >
-      {/* Blue border when selected */}
-      {isSelected && (
-        <div
-          className="absolute inset-0 rounded-2xl transition-all duration-300"
-          style={{
-            border: '3px solid #4A90E2',
-            margin: '-8px',
-            zIndex: 1,
-          }}
-        />
-      )}
       <div
-        className="rounded-2xl overflow-hidden transition-all duration-300"
+        className="rounded-2xl overflow-hidden transition-all duration-300 relative"
         style={{
           backgroundColor: '#E8EBED',
           boxShadow: isSelected
             ? '0 8px 24px rgba(74, 144, 226, 0.2)'
-            : '0 2px 12px rgba(0,0,0,0.08)',
+            : isHovered
+              ? '0 4px 16px rgba(0,0,0,0.12)'
+              : '0 2px 12px rgba(0,0,0,0.08)',
           height: '280px',
+          transform:
+            isHovered && !isSelected ? 'translateY(-2px)' : 'translateY(0)',
+          // Selection ring as outline (stays within bounds)
+          outline: isSelected ? '3px solid #4A90E2' : 'none',
+          outlineOffset: '-3px',
         }}
       >
         <div className="p-4 h-full flex flex-col">
@@ -682,6 +676,12 @@ const StyleCard: React.FC<StyleCardProps> = ({
 
 export default function Home() {
   // ============================================================================
+  // HOOKS
+  // ============================================================================
+
+  const navigate = useNavigate()
+
+  // ============================================================================
   // STATE MANAGEMENT
   // ============================================================================
 
@@ -723,6 +723,12 @@ export default function Home() {
   const [ideaText, setIdeaText] = useState('')
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
   const [isDragging, setIsDragging] = useState(false)
+
+  // Continue project state
+  const [hasActiveProject, setHasActiveProject] = useState(false)
+  const [activeProjectName, setActiveProjectName] = useState<string | null>(
+    null,
+  )
 
   // Refs
   const menuRef = useRef<HTMLDivElement>(null)
@@ -856,6 +862,63 @@ export default function Home() {
     }
 
     loadTastes()
+  }, [])
+
+  // Save state to sessionStorage to preserve during navigation
+  useEffect(() => {
+    const stateToSave = {
+      selectedTasteId,
+      selectedResourceId,
+      ideaText,
+      uploadedFiles: uploadedFiles.map(f => ({
+        name: f.name,
+        type: f.type,
+        size: f.size,
+      })),
+      expandedStage,
+    }
+    sessionStorage.setItem('home_state', JSON.stringify(stateToSave))
+  }, [
+    selectedTasteId,
+    selectedResourceId,
+    ideaText,
+    uploadedFiles,
+    expandedStage,
+  ])
+
+  // Restore state from sessionStorage on mount
+  useEffect(() => {
+    const savedState = sessionStorage.getItem('home_state')
+    if (savedState) {
+      try {
+        const parsed = JSON.parse(savedState)
+        if (parsed.selectedTasteId) setSelectedTasteId(parsed.selectedTasteId)
+        if (parsed.selectedResourceId)
+          setSelectedResourceId(parsed.selectedResourceId)
+        if (parsed.ideaText) setIdeaText(parsed.ideaText)
+        if (parsed.expandedStage) setExpandedStage(parsed.expandedStage)
+        // Note: Files cannot be restored from sessionStorage
+        // User will need to re-upload if they navigate back
+      } catch (err) {
+        console.error('Failed to restore home state:', err)
+      }
+    }
+
+    // Check for active project (user came back from Editor)
+    const currentProject = localStorage.getItem('current_project')
+    const cameFromEditor = sessionStorage.getItem('came_from_editor')
+    if (currentProject && cameFromEditor === 'true') {
+      try {
+        const project = JSON.parse(currentProject)
+        setHasActiveProject(true)
+        setActiveProjectName(project.project_name)
+      } catch (err) {
+        console.error('Failed to load active project:', err)
+      }
+    }
+
+    // Clear the came_from_editor flag after checking
+    sessionStorage.removeItem('came_from_editor')
   }, [])
 
   // Close profile menu when clicking outside
@@ -1067,22 +1130,28 @@ export default function Home() {
       // Close modal
       setIsCreateProjectModalOpen(false)
 
-      // Smooth transition to Editor
-      // TODO: Navigate to Editor page
-      alert(
-        `Project "${projectName}" created successfully! (Editor navigation will be implemented next)`,
-      )
-
-      // Reset form
+      // Reset form and clear active project flag
       setIdeaText('')
       setUploadedFiles([])
       setSelectedResourceId(null)
+      setHasActiveProject(false)
+      setActiveProjectName(null)
+
+      // Smooth transition to Editor with a slight delay for UX
+      setTimeout(() => {
+        navigate('/editor', { replace: true })
+      }, 300)
     } catch (err) {
       console.error('Failed to create project:', err)
       alert('Failed to create project. Please try again.')
     } finally {
       setIsCreatingProject(false)
     }
+  }
+
+  const handleContinueProject = () => {
+    // User wants to continue working on existing project
+    navigate('/editor', { replace: true })
   }
 
   const handleSubmitIdea = async () => {
@@ -1268,7 +1337,7 @@ export default function Home() {
       id: 2,
       title: 'Choose a style',
       icon: Palette,
-      hasNewButton: true,
+      hasNewButton: false, // NOTE: Set to true later when implementing resource creation from Stage 2
       content: chooseStyleContent,
       canOpen: canOpenStage2,
     },
@@ -1716,40 +1785,69 @@ export default function Home() {
         isLoading={isCreatingProject}
       />
 
+      {/* Continue Project Button - Only shows when coming back from Editor */}
+      {hasActiveProject && activeProjectName && (
+        <button
+          onClick={handleContinueProject}
+          className="fixed bottom-8 right-8 px-6 py-4 rounded-full font-medium text-sm flex items-center gap-3 transition-all hover:scale-105 animate-fade-in"
+          style={{
+            backgroundColor: '#4A90E2',
+            color: '#FFFFFF',
+            boxShadow: '0 8px 24px rgba(74, 144, 226, 0.3)',
+            zIndex: 100,
+          }}
+        >
+          <span className="text-base">Continue Project</span>
+          <div
+            className="px-2 py-0.5 rounded text-xs font-medium"
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.2)',
+            }}
+          >
+            {activeProjectName}
+          </div>
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      )}
+
       {/* Top Navigation - Fixed */}
       <div className="flex items-center justify-between px-8 py-4">
         {/* Left - Toggle */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setToggleOn(!toggleOn)}
-            className="relative rounded-full transition-all duration-300"
+            className="relative transition-all duration-300"
             style={{
-              width: '52px',
-              height: '32px',
+              width: '42px',
+              height: '42px',
               backgroundColor: toggleOn ? '#3B3B3B' : '#FFFFFF',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              borderRadius: '8px',
+              boxShadow: '0 1.6px 6.4px rgba(0,0,0,0.08)',
             }}
           >
             <div
-              className="absolute top-1 rounded-full transition-all duration-300"
+              className="absolute transition-all duration-300"
               style={{
-                width: '24px',
-                height: '24px',
+                width: '14px',
+                height: '28px',
                 backgroundColor: toggleOn ? '#FFFFFF' : '#3B3B3B',
-                left: toggleOn ? '24px' : '4px',
+                borderRadius: '6px',
+                top: '7px',
+                left: toggleOn ? '21px' : '6px',
               }}
             />
           </button>
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-sm"
-            style={{
-              backgroundColor: '#FFFFFF',
-              color: '#3B3B3B',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            }}
-          >
-            R
-          </div>
         </div>
 
         {/* Center - Tabs */}
@@ -1776,18 +1874,9 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Right - Status & Profile */}
+        {/* Right - Config Menu & Profile */}
         <div className="flex items-center gap-3">
-          <div
-            className="px-4 py-2 rounded-lg text-sm font-medium"
-            style={{
-              backgroundColor: '#FFFFFF',
-              color: '#3B3B3B',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            }}
-          >
-            25%
-          </div>
+          <ConfigurationMenu />
 
           {/* Profile Dropdown */}
           <div className="relative" ref={menuRef}>
