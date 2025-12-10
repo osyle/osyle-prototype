@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import api from '../api'
 import { type UINode } from '../components/DesignMLRenderer'
 import DeviceFrame from '../components/DeviceFrame'
 import DeviceRenderer from '../components/DeviceRenderer'
@@ -74,40 +75,14 @@ export default function Editor() {
     navigate('/')
   }
 
-  const API_BASE_URL =
-    import.meta.env.VITE_API_URL ||
-    'https://bj7i7munz2.execute-api.us-east-1.amazonaws.com'
-
   // Start generation process on mount (only if not already generated)
   useEffect(() => {
     checkAndStartGeneration()
   }, [])
 
-  const checkDtrExists = async (
-    token: string,
-    tasteId: string,
-    resourceId: string,
-  ) => {
-    const res = await fetch(
-      `${API_BASE_URL}/api/llm/resource/${resourceId}/dtr-exists?taste_id=${tasteId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    )
-
-    if (!res.ok) {
-      throw new Error('Failed to check DTR existence')
-    }
-
-    const data = await res.json()
-    return data.dtr_exists as boolean
-  }
-
+  // ✅ CHANGE: Use centralized API
   const checkAndStartGeneration = async () => {
     try {
-      // Get current project from localStorage
       const currentProject = localStorage.getItem('current_project')
       if (!currentProject) {
         setError('No active project found')
@@ -116,9 +91,7 @@ export default function Editor() {
       }
 
       const project = JSON.parse(currentProject)
-      const token = localStorage.getItem('token')
 
-      // Validate project has required fields
       if (!project.selected_taste_id) {
         setError('Project missing taste selection')
         setGenerationStage('error')
@@ -126,48 +99,34 @@ export default function Editor() {
         return
       }
 
-      // Note: selected_resource_id is optional - if not provided, UI will be generated from scratch
       if (!project.selected_resource_id) {
         console.log('No resource selected - will generate UI from scratch')
       }
 
-      // Check if UI already exists for this project
+      // Check if UI already exists
       try {
-        const existingUIResponse = await fetch(
-          `${API_BASE_URL}/api/llm/ui/get?project_id=${project.project_id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        )
-
-        if (existingUIResponse.ok) {
-          const existingUIData = await existingUIResponse.json()
-          console.log('Loaded existing UI:', existingUIData)
-          setGeneratedUI(existingUIData.ui as UINode)
-          setGenerationStage('complete')
-          return // Don't regenerate
-        }
+        const existingUIData = await api.llm.getUI(project.project_id)
+        console.log('Loaded existing UI:', existingUIData)
+        setGeneratedUI(existingUIData.ui as UINode)
+        setGenerationStage('complete')
+        return
       } catch (err) {
         console.log('No existing UI found, will generate new one:', err)
       }
 
-      // No existing UI, decide whether to build DTR
+      // Decide whether to build DTR
       const hasResource =
         project.selected_resource_id && project.selected_taste_id
-
       let shouldBuildDtr = false
 
       if (hasResource) {
-        shouldBuildDtr = !(await checkDtrExists(
-          token!,
-          project.selected_taste_id,
+        const dtrCheck = await api.llm.checkDtrExists(
           project.selected_resource_id,
-        ))
+          project.selected_taste_id,
+        )
+        shouldBuildDtr = !dtrCheck.dtr_exists
       }
 
-      // Start generation with decision
       startGeneration(shouldBuildDtr)
     } catch (err) {
       console.error('Error checking for existing UI:', err)
@@ -176,6 +135,7 @@ export default function Editor() {
     }
   }
 
+  // ✅ CHANGE: Use centralized API
   const startGeneration = async (shouldBuildDtr: boolean) => {
     try {
       const currentProject = localStorage.getItem('current_project')
@@ -186,55 +146,27 @@ export default function Editor() {
       }
 
       const project = JSON.parse(currentProject)
-      const token = localStorage.getItem('token')
 
-      // ✅ Stage 1: Build DTR only if needed
       if (shouldBuildDtr && project.selected_resource_id) {
         setGenerationStage('learning')
-
-        const dtrResponse = await fetch(`${API_BASE_URL}/api/llm/build-dtr`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            resource_id: project.selected_resource_id,
-            taste_id: project.selected_taste_id,
-          }),
-        })
-
-        if (!dtrResponse.ok) {
-          throw new Error('Failed to build design representation')
-        }
-
+        await api.llm.buildDtr(
+          project.selected_resource_id,
+          project.selected_taste_id,
+        )
         await new Promise(resolve => setTimeout(resolve, 1000))
       }
 
-      // ✅ Stage 2: Generate UI
       setGenerationStage('generating')
 
-      const uiResponse = await fetch(`${API_BASE_URL}/api/llm/generate-ui`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          project_id: project.project_id,
-          task_description: project.task_description,
-          model: 'haiku',
-          device_info,
-          rendering_mode,
-        }),
-      })
+      const uiData = await api.llm.generateUI(
+        project.project_id,
+        project.task_description,
+        device_info,
+        rendering_mode,
+        'haiku',
+      )
 
-      if (!uiResponse.ok) {
-        throw new Error('Failed to generate UI')
-      }
-
-      const uiData = await uiResponse.json()
-      setGeneratedUI(uiData.ui)
+      setGeneratedUI(uiData.ui as UINode)
       setGenerationStage('complete')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error occurred')
@@ -246,44 +178,39 @@ export default function Editor() {
   const renderDeviceContent = () => {
     if (generationStage === 'learning') {
       return (
-        <div className="w-full h-full flex flex-col items-center justify-center p-8">
-          {/* Animated brain icon */}
-          <div className="relative mb-6">
-            <div className="absolute inset-0 animate-ping">
-              <Brain size={48} className="text-blue-400 opacity-40" />
-            </div>
-            <Brain size={48} className="text-blue-500 relative z-10" />
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full max-w-xs mb-4">
-            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full animate-pulse"
-                style={{ width: '100%' }}
-              />
+        <div
+          className="flex flex-col items-center justify-center h-full gap-6 px-8"
+          style={{ backgroundColor: '#EDEBE9' }}
+        >
+          <div className="relative">
+            <Brain
+              size={64}
+              className="animate-pulse"
+              style={{ color: '#4A90E2' }}
+            />
+            <div className="absolute -bottom-2 -right-2">
+              <Sparkles size={24} style={{ color: '#F5C563' }} />
             </div>
           </div>
-
-          {/* Text */}
           <div className="text-center">
-            <p className="text-sm font-semibold text-gray-800 mb-1">
-              Learning design taste
-            </p>
-            <p className="text-xs text-gray-500">
-              Analyzing your reference designs...
+            <h3
+              className="text-xl font-semibold mb-2"
+              style={{ color: '#3B3B3B' }}
+            >
+              Learning your design taste
+            </h3>
+            <p className="text-sm max-w-md" style={{ color: '#929397' }}>
+              Analyzing your reference designs to understand your style
+              preferences...
             </p>
           </div>
-
-          {/* Floating particles */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            {[...Array(6)].map((_, i) => (
+          <div className="flex gap-2">
+            {[0, 1, 2].map(i => (
               <div
                 key={i}
-                className="absolute w-2 h-2 bg-blue-400 rounded-full opacity-20"
+                className="w-2 h-2 rounded-full animate-bounce"
                 style={{
-                  left: `${20 + i * 10}%`,
-                  animation: `float ${2 + i * 0.5}s ease-in-out infinite`,
+                  backgroundColor: '#4A90E2',
                   animationDelay: `${i * 0.2}s`,
                 }}
               />
@@ -295,53 +222,45 @@ export default function Editor() {
 
     if (generationStage === 'generating') {
       return (
-        <div className="w-full h-full flex flex-col items-center justify-center p-8">
-          {/* Animated wand icon */}
-          <div className="relative mb-6">
-            <div className="absolute inset-0 animate-ping">
-              <Wand2 size={48} className="text-purple-400 opacity-40" />
-            </div>
+        <div
+          className="flex flex-col items-center justify-center h-full gap-6 px-8"
+          style={{ backgroundColor: '#EDEBE9' }}
+        >
+          <div className="relative">
             <Wand2
-              size={48}
-              className="text-purple-500 relative z-10 animate-pulse"
+              size={64}
+              className="animate-spin"
+              style={{ color: '#F5C563' }}
             />
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full max-w-xs mb-4">
-            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-purple-400 to-pink-600 rounded-full"
-                style={{
-                  width: '100%',
-                  animation: 'shimmer 2s ease-in-out infinite',
-                }}
+            <div className="absolute -top-2 -right-2">
+              <Sparkles
+                size={24}
+                className="animate-pulse"
+                style={{ color: '#4A90E2' }}
               />
             </div>
           </div>
-
-          {/* Text */}
           <div className="text-center">
-            <p className="text-sm font-semibold text-gray-800 mb-1">
+            <h3
+              className="text-xl font-semibold mb-2"
+              style={{ color: '#3B3B3B' }}
+            >
               Generating your design
-            </p>
-            <p className="text-xs text-gray-500">
-              Creating UI based on your task...
+            </h3>
+            <p className="text-sm max-w-md" style={{ color: '#929397' }}>
+              Creating a beautiful{' '}
+              {rendering_mode === 'react' ? 'React' : 'DesignML'} design based
+              on your task description...
             </p>
           </div>
-
-          {/* Sparkles */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            {[...Array(8)].map((_, i) => (
-              <Sparkles
+          <div className="flex gap-2">
+            {[0, 1, 2, 3].map(i => (
+              <div
                 key={i}
-                size={16}
-                className="absolute text-yellow-400 opacity-30"
+                className="w-3 h-3 rounded-full"
                 style={{
-                  left: `${10 + i * 12}%`,
-                  top: `${20 + (i % 3) * 20}%`,
-                  animation: `twinkle ${1.5 + i * 0.3}s ease-in-out infinite`,
-                  animationDelay: `${i * 0.2}s`,
+                  backgroundColor: '#F5C563',
+                  animation: `pulse 1.5s ease-in-out ${i * 0.2}s infinite`,
                 }}
               />
             ))}
@@ -350,51 +269,65 @@ export default function Editor() {
       )
     }
 
-    if (generationStage === 'complete' && generatedUI) {
-      return (
-        <div className="w-full h-full overflow-hidden p-0 flex items-center justify-center">
-          <div
-            style={{
-              width: device_info.screen.width,
-              height: device_info.screen.height,
-            }}
-          >
-            {/* Render the DML UI tree directly in the DeviceFrame */}
-            <DeviceRenderer uiTree={generatedUI} />
-          </div>
-        </div>
-      )
-    }
-
     if (generationStage === 'error') {
       return (
-        <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center">
-          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
-            <span className="text-2xl">⚠️</span>
-          </div>
-          <p className="text-sm font-semibold text-gray-800 mb-2">
-            Generation Failed
-          </p>
-          <p className="text-xs text-gray-500 mb-4">
-            {error || 'An error occurred during generation'}
-          </p>
-          <button
-            onClick={() => startGeneration(true)}
-            className="px-4 py-2 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600 transition-colors"
+        <div
+          className="flex flex-col items-center justify-center h-full gap-6 px-8"
+          style={{ backgroundColor: '#EDEBE9' }}
+        >
+          <div
+            className="w-16 h-16 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: '#FEE2E2' }}
           >
-            Try Again
-          </button>
+            <span style={{ fontSize: '32px' }}>⚠️</span>
+          </div>
+          <div className="text-center max-w-md">
+            <h3
+              className="text-xl font-semibold mb-2"
+              style={{ color: '#DC2626' }}
+            >
+              Generation Failed
+            </h3>
+            <p className="text-sm mb-4" style={{ color: '#929397' }}>
+              {error || 'An unexpected error occurred'}
+            </p>
+            <button
+              onClick={() => {
+                setError(null)
+                setGenerationStage('idle')
+                checkAndStartGeneration()
+              }}
+              className="px-6 py-2.5 rounded-xl font-medium text-sm transition-all hover:scale-105"
+              style={{
+                backgroundColor: '#4A90E2',
+                color: '#FFFFFF',
+                boxShadow: '0 4px 12px rgba(74, 144, 226, 0.3)',
+              }}
+            >
+              Try Again
+            </button>
+          </div>
         </div>
       )
     }
 
-    // Idle state (shouldn't show)
+    if (generationStage === 'complete' && generatedUI) {
+      return <DeviceRenderer uiTree={generatedUI} />
+    }
+
     return (
-      <div className="w-full h-full flex items-center justify-center p-8 text-center">
-        <div>
-          <p className="text-sm text-gray-400">Generated UI will appear here</p>
-          <p className="text-xs text-gray-300 mt-1">
-            Start generating to see your design
+      <div
+        className="flex items-center justify-center h-full"
+        style={{ backgroundColor: '#EDEBE9' }}
+      >
+        <div className="text-center">
+          <Smile
+            size={48}
+            className="mx-auto mb-4"
+            style={{ color: '#929397' }}
+          />
+          <p className="text-sm" style={{ color: '#929397' }}>
+            Initializing...
           </p>
         </div>
       </div>
@@ -403,28 +336,12 @@ export default function Editor() {
 
   return (
     <div
-      className="min-h-screen min-w-screen flex"
-      style={{ backgroundColor: '#EDEBE9' }}
+      className="flex h-screen w-screen"
+      style={{
+        backgroundColor: '#EDEBE9',
+        fontFamily: "'Inter', -apple-system, sans-serif",
+      }}
     >
-      <style>
-        {`
-          @keyframes float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-20px); }
-          }
-          
-          @keyframes twinkle {
-            0%, 100% { opacity: 0.3; transform: scale(1); }
-            50% { opacity: 0.8; transform: scale(1.2); }
-          }
-          
-          @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-          }
-        `}
-      </style>
-
       {/* Left Menu Buttons - Centered vertically */}
       <div
         className="flex flex-col items-center justify-center py-6 gap-3"
@@ -554,8 +471,8 @@ export default function Editor() {
           <div className="w-12" />
         </div>
 
-        {/* Center Device Frame */}
-        <div className="flex-1 px-16 pb-6 flex items-center justify-center">
+        {/* Device Frame - Replaces center white rectangle */}
+        <div className="flex-1 pb-6">
           <DeviceFrame>{renderDeviceContent()}</DeviceFrame>
         </div>
 
@@ -599,16 +516,17 @@ export default function Editor() {
                   iOS
                 </button>
                 <button
-                  className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm transition-all hover:scale-105"
-                  style={{
-                    backgroundColor: '#F5C563',
-                    color: '#1F1F20',
-                    boxShadow: '0 2px 12px rgba(245, 197, 99, 0.3)',
-                  }}
+                  className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
+                  style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
                 >
                   <Smile size={16} />
-                  <span>Generate</span>
-                  <Maximize2 size={14} />
+                  Mood
+                </button>
+                <button
+                  className="w-10 h-10 rounded-lg flex items-center justify-center transition-all hover:scale-105"
+                  style={{ backgroundColor: '#F7F5F3' }}
+                >
+                  <Maximize2 size={16} style={{ color: '#3B3B3B' }} />
                 </button>
               </div>
             </div>
@@ -616,37 +534,99 @@ export default function Editor() {
         </div>
       </div>
 
-      {/* Right Sidebar - unchanged */}
+      {/* Right Sidebar - 40% width, full height */}
       <div
-        className="flex flex-col p-6 gap-6"
-        style={{ width: '20%', backgroundColor: '#FFFFFF' }}
+        className="rounded-3xl m-6 p-6 flex flex-col gap-6"
+        style={{
+          width: '20%',
+          backgroundColor: '#FFFFFF',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+        }}
       >
-        {/* Style selector */}
+        {/* Top row - L button, 25%, NI */}
+        <div className="flex items-center justify-between">
+          <button
+            className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-semibold transition-all hover:scale-105"
+            style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
+          >
+            L
+          </button>
+          <div className="flex items-center gap-3">
+            <div
+              className="px-4 py-2 rounded-lg text-sm font-medium"
+              style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
+            >
+              25%
+            </div>
+            <button
+              className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm"
+              style={{ backgroundColor: '#3B3B3B', color: '#FFFFFF' }}
+            >
+              NI
+            </button>
+          </div>
+        </div>
+
+        {/* Title and subtitle */}
+        <div>
+          <h2
+            className="text-2xl font-semibold mb-1"
+            style={{ color: '#3B3B3B' }}
+          >
+            Travel interface
+          </h2>
+          <p className="text-sm" style={{ color: '#929397' }}>
+            App for travelling with partner, iOS app
+          </p>
+        </div>
+
+        {/* Style dropdown */}
         <div className="relative">
           <button
             onClick={() => setStyleDropdownOpen(!styleDropdownOpen)}
-            className="w-full rounded-xl p-4 transition-all hover:scale-[1.02] relative"
-            style={{ background: selectedStyle.bg }}
+            className="w-full rounded-2xl p-4 flex flex-col transition-all hover:scale-[1.02]"
+            style={{
+              background: selectedStyle.bg,
+              boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+            }}
           >
-            <div className="flex items-center justify-between">
-              <span
-                className="text-sm font-semibold"
-                style={{ color: '#3B3B3B' }}
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div
+                  className="text-xs mb-1"
+                  style={{ color: '#3B3B3B', opacity: 0.7 }}
+                >
+                  Style
+                </div>
+                <div
+                  className="text-sm font-semibold"
+                  style={{ color: '#3B3B3B' }}
+                >
+                  {selectedStyle.title}
+                </div>
+              </div>
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}
               >
-                {selectedStyle.title}
-              </span>
-              <ChevronDown
-                size={20}
-                style={{
-                  color: '#3B3B3B',
-                  transform: styleDropdownOpen
-                    ? 'rotate(180deg)'
-                    : 'rotate(0deg)',
-                  transition: 'transform 0.2s',
-                }}
-              />
+                <ChevronDown
+                  size={16}
+                  style={{
+                    color: '#3B3B3B',
+                    transform: styleDropdownOpen
+                      ? 'rotate(180deg)'
+                      : 'rotate(0deg)',
+                    transition: 'transform 0.3s',
+                  }}
+                />
+              </div>
             </div>
+            <div
+              className="h-16 rounded-xl"
+              style={{ backgroundColor: 'rgba(255,255,255,0.4)' }}
+            />
           </button>
+
           {styleDropdownOpen && (
             <div
               className="absolute top-full left-0 right-0 mt-2 p-2 rounded-2xl z-10"

@@ -59,6 +59,32 @@ export interface Project {
   updated_at: string
 }
 
+export interface DeviceInfo {
+  platform: 'web' | 'phone'
+  screen: {
+    width: number
+    height: number
+  }
+}
+
+export interface GenerateUIResponse {
+  status: string
+  type: 'design-ml' | 'react'
+  ui: unknown // JSON object for design-ml, string for react
+  version: number
+}
+
+export interface DTRExistsResponse {
+  resource_id: string
+  dtr_exists: boolean
+}
+
+export interface BuildDTRResponse {
+  status: 'success' | 'skipped'
+  reason?: string
+  dtr?: Record<string, unknown>
+}
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -417,6 +443,97 @@ export const projectsAPI = {
 }
 
 // ============================================================================
+// LLM API
+// ============================================================================
+
+export const llmAPI = {
+  /**
+   * Check if DTR exists for a resource
+   */
+  checkDtrExists: async (
+    resourceId: string,
+    tasteId: string,
+  ): Promise<DTRExistsResponse> => {
+    return apiRequest<DTRExistsResponse>(
+      `/api/llm/resource/${resourceId}/dtr-exists?taste_id=${tasteId}`,
+    )
+  },
+
+  /**
+   * Build DTR from resource files
+   */
+  buildDtr: async (
+    resourceId: string,
+    tasteId: string,
+  ): Promise<BuildDTRResponse> => {
+    return apiRequest<BuildDTRResponse>('/api/llm/build-dtr', {
+      method: 'POST',
+      body: JSON.stringify({
+        resource_id: resourceId,
+        taste_id: tasteId,
+      }),
+    })
+  },
+
+  /**
+   * Generate UI from project
+   */
+  generateUI: async (
+    projectId: string,
+    taskDescription: string,
+    deviceInfo: DeviceInfo,
+    renderingMode: 'design-ml' | 'react',
+    model: string = 'haiku',
+  ): Promise<GenerateUIResponse> => {
+    return apiRequest<GenerateUIResponse>('/api/llm/generate-ui', {
+      method: 'POST',
+      body: JSON.stringify({
+        project_id: projectId,
+        task_description: taskDescription,
+        device_info: deviceInfo,
+        rendering_mode: renderingMode,
+        model,
+      }),
+    })
+  },
+
+  /**
+   * Get existing UI for a project
+   */
+  getUI: async (
+    projectId: string,
+    version?: number,
+  ): Promise<GenerateUIResponse> => {
+    const query = version
+      ? `?project_id=${projectId}&version=${version}`
+      : `?project_id=${projectId}`
+    return apiRequest<GenerateUIResponse>(`/api/llm/ui/get${query}`)
+  },
+
+  /**
+   * Get all UI versions for a project
+   */
+  getUIVersions: async (
+    projectId: string,
+  ): Promise<{
+    status: string
+    current_version: number
+    versions: number[]
+  }> => {
+    return apiRequest(`/api/llm/ui/versions?project_id=${projectId}`)
+  },
+
+  /**
+   * Get a random test UI (for testing)
+   */
+  getTestUI: async (): Promise<
+    GenerateUIResponse & { project_id: string; project_name: string }
+  > => {
+    return apiRequest('/api/llm/ui/get/test')
+  },
+}
+
+// ============================================================================
 // EXPORT DEFAULT API OBJECT
 // ============================================================================
 
@@ -424,6 +541,7 @@ const api = {
   tastes: tastesAPI,
   resources: resourcesAPI,
   projects: projectsAPI,
+  llm: llmAPI,
 }
 
 export default api
