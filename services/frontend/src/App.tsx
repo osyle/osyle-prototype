@@ -10,6 +10,8 @@ import {
 } from 'react-router-dom'
 
 import { config } from './config/env'
+
+import Editor from './pages/Editor'
 import Home from './pages/Home'
 import LoginScreen from './pages/Login'
 
@@ -139,6 +141,10 @@ function AppContent() {
       <Route
         path="/"
         element={user ? <Home /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/editor"
+        element={user ? <Editor /> : <Navigate to="/login" replace />}
       />
     </Routes>
   )

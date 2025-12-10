@@ -10,9 +10,18 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import DeviceFrame from '../components/DeviceFrame'
 
 export default function Editor() {
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('Concept')
+
+  const handleBackToHome = () => {
+    // Set flag so Home knows user came from Editor
+    sessionStorage.setItem('came_from_editor', 'true')
+    navigate('/')
+  }
   const [detailsValue, setDetailsValue] = useState(66) // Bold = 66-100%
   const [energyValue, setEnergyValue] = useState(50) // 5/10
   const [craftValue, setCraftValue] = useState(10) // 1/10
@@ -145,6 +154,7 @@ export default function Editor() {
         <div className="flex items-center justify-between px-16 py-6">
           {/* Back Button */}
           <button
+            onClick={handleBackToHome}
             className="w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105"
             style={{
               backgroundColor: '#FFFFFF',
@@ -182,17 +192,24 @@ export default function Editor() {
           <div className="w-12" />
         </div>
 
-        {/* Center White Rectangle with 10% margins on sides */}
-        <div className="flex-1 px-16 pb-6">
-          <div
-            className="w-full h-full rounded-3xl"
-            style={{
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
-            }}
-          >
-            {/* Empty for now */}
-          </div>
+        {/* Device Frame - Replaces center white rectangle */}
+        <div className="flex-1 pb-6">
+          <DeviceFrame>
+            <div className="w-full h-full flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-6xl mb-4">🎨</div>
+                <div
+                  className="text-lg font-medium mb-2"
+                  style={{ color: '#3B3B3B' }}
+                >
+                  Generated UI will appear here
+                </div>
+                <div className="text-sm" style={{ color: '#929397' }}>
+                  Start generating to see your design
+                </div>
+              </div>
+            </div>
+          </DeviceFrame>
         </div>
 
         {/* Bottom Control Bar */}
