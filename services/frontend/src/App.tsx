@@ -133,7 +133,7 @@ function AppContent() {
   if (loading) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center"
+        className="min-h-screen min-w-screen flex items-center justify-center"
         style={{ backgroundColor: '#EDEBE9' }}
       >
         <div className="w-12 h-12 border-4 border-gray-300 border-t-gray-800 rounded-full animate-spin" />
