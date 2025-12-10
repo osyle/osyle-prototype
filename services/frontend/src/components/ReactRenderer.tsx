@@ -28,19 +28,27 @@ interface ReactRendererProps {
 const renderNode = (node: UINode): React.ReactNode => {
   const { type, props, style, children, textContent } = node
 
+  // Remove key from props so React doesn't complain when spreading
+  const restProps = { ...(props || {}) }
+  delete (restProps as { key?: string }).key
+
   const commonProps = {
-    key: node.id,
     style: style || {},
-    ...props,
+    ...restProps,
   }
 
   switch (type) {
     case 'container':
-      return <div {...commonProps}>{children?.map(renderNode)}</div>
+      return (
+        <div key={node.id} {...commonProps}>
+          {children?.map(renderNode)}
+        </div>
+      )
 
     case 'stack':
       return (
         <div
+          key={node.id}
           {...commonProps}
           style={{
             display: 'flex',
@@ -54,11 +62,15 @@ const renderNode = (node: UINode): React.ReactNode => {
       )
 
     case 'text':
-      return <span {...commonProps}>{textContent}</span>
+      return (
+        <span key={node.id} {...commonProps}>
+          {textContent}
+        </span>
+      )
 
     case 'button':
       return (
-        <button {...commonProps}>
+        <button key={node.id} {...commonProps}>
           {textContent}
           {children?.map(renderNode)}
         </button>
@@ -67,6 +79,7 @@ const renderNode = (node: UINode): React.ReactNode => {
     case 'image':
       return (
         <img
+          key={node.id}
           {...commonProps}
           src={props?.['src'] as string}
           alt={props?.['alt'] as string}
@@ -76,6 +89,7 @@ const renderNode = (node: UINode): React.ReactNode => {
     case 'input':
       return (
         <input
+          key={node.id}
           {...commonProps}
           placeholder={props?.['placeholder'] as string}
         />
@@ -83,10 +97,18 @@ const renderNode = (node: UINode): React.ReactNode => {
 
     case 'custom':
       // Render custom components if needed
-      return <div {...commonProps}>{children?.map(renderNode)}</div>
+      return (
+        <div key={node.id} {...commonProps}>
+          {children?.map(renderNode)}
+        </div>
+      )
 
     default:
-      return <div {...commonProps}>{children?.map(renderNode)}</div>
+      return (
+        <div key={node.id} {...commonProps}>
+          {children?.map(renderNode)}
+        </div>
+      )
   }
 }
 
