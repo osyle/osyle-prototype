@@ -1030,6 +1030,7 @@ export default function Home() {
             undefined,
           )
           hasFigma = true
+          console.log('Figma file uploaded successfully')
         } catch (err) {
           console.error('Failed to upload figma file:', err)
         }
@@ -1043,12 +1044,13 @@ export default function Home() {
             imageFile as File,
           )
           hasImage = true
+          console.log('Image file uploaded successfully')
         } catch (err) {
           console.error('Failed to upload image file:', err)
         }
       }
 
-      // Mark files as uploaded
+      // CRITICAL: Mark files as uploaded BEFORE proceeding
       if (hasFigma || hasImage) {
         await api.resources.markUploaded(
           selectedTasteId,
@@ -1056,6 +1058,13 @@ export default function Home() {
           hasFigma,
           hasImage,
         )
+        console.log('Resource marked as uploaded:', {
+          resource_id: resource.resource_id,
+          hasFigma,
+          hasImage,
+        })
+      } else {
+        console.warn('No files were successfully uploaded')
       }
 
       // Update local taste with new resource
@@ -1064,6 +1073,7 @@ export default function Home() {
           ? await api.resources
               .get(selectedTasteId, resource.resource_id, true)
               .then(r => r.download_urls?.image_get_url || null)
+              .catch(() => null)
           : null
 
       const displayResource: ResourceDisplay = {
@@ -1085,8 +1095,11 @@ export default function Home() {
       // Set this as selected resource
       setSelectedResourceId(resource.resource_id)
 
-      // Close modal and open project modal
+      // Close resource modal and stop loading
+      setIsCreatingResource(false)
       setIsCreateResourceModalOpen(false)
+
+      // ONLY open project modal after everything is complete
       setIsCreateProjectModalOpen(true)
 
       return resource.resource_id
@@ -1094,9 +1107,8 @@ export default function Home() {
       console.error('Failed to create resource:', err)
       alert('Failed to create resource. Please try again.')
       setIsCreatingResource(false)
+      setIsCreateResourceModalOpen(false)
       throw err
-    } finally {
-      setIsCreatingResource(false)
     }
   }
 

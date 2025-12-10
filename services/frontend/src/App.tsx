@@ -45,11 +45,20 @@ export const AuthContext = {
     try {
       const currentUser = await getCurrentUser()
       const session = await fetchAuthSession()
+
+      const idToken = session.tokens?.idToken?.toString()
       const email = session.tokens?.idToken?.payload['email'] as
         | string
         | undefined
 
       if (email && email.endsWith('@osyle.com')) {
+        if (idToken) {
+          localStorage.setItem('token', idToken)
+          console.log('✅ Auth token saved to localStorage')
+        } else {
+          console.warn('⚠️ No ID token found in session')
+        }
+
         return {
           username: currentUser.username,
           email,
