@@ -330,6 +330,22 @@ def put_resource_dtr(user_id: str, taste_id: str, resource_id: str, dtr_json: di
         raise
 
 
+def resource_dtr_exists(user_id: str, taste_id: str, resource_id: str) -> bool:
+    """
+    Check if DTR already exists for a resource.
+    
+    Args:
+        user_id: User ID
+        taste_id: Taste ID
+        resource_id: Resource ID
+        
+    Returns:
+        True if dtr.json exists, False otherwise
+    """
+    key = f"tastes/{user_id}/{taste_id}/resources/{resource_id}/dtr.json"
+    return check_object_exists(key)
+
+
 def get_project_ui(user_id: str, project_id: str, version: int = 1) -> dict:
     """Get UI JSON from project (specific version)"""
     key = f"projects/{user_id}/{project_id}/ui_v{version}.json"

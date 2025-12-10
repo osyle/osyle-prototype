@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import base64
 
-from app.auth import verify_token
+from app.auth import get_current_user
 from app.llm import get_llm_service, LLMService
 from app import db
 from app import storage
@@ -44,13 +44,13 @@ class GenerateUIRequest(BaseModel):
 @router.post("/build-dtr")
 async def build_dtr(
     request: BuildDTRRequest,
-    user: dict = Depends(verify_token),
+    user: dict = Depends(get_current_user),
     llm: LLMService = Depends(get_llm_service),
 ):
     """
     Build Design Taste Representation (DTR) from resource files
     """
-    user_id = user.get("sub")
+    user_id = user.get("user_id")
     
     try:
         # Get resource from database
@@ -172,21 +172,17 @@ async def build_dtr(
             detail=f"Failed to build DTR: {str(e)}"
         )
 
-def resource_dtr_exists(user_id: str, taste_id: str, resource_id: str) -> bool:
-    """
-    Check if DTR already exists for a resource.
-    """
-    key = f"tastes/{user_id}/{taste_id}/resources/{resource_id}/dtr.json"
-    return storage.check_object_exists(key)
-
 
 @router.get("/resource/{resource_id}/dtr-exists")
 async def check_dtr_exists(
     resource_id: str,
     taste_id: str,
-    user: dict = Depends(verify_token),
+    user: dict = Depends(get_current_user),
 ):
-    user_id = user.get("sub")
+    """
+    Check if DTR exists for a resource
+    """
+    user_id = user.get("user_id")
 
     exists = storage.resource_dtr_exists(
         user_id=user_id,
@@ -203,13 +199,13 @@ async def check_dtr_exists(
 @router.post("/generate-ui")
 async def generate_ui(
     request: GenerateUIRequest,
-    user: dict = Depends(verify_token),
+    user: dict = Depends(get_current_user),
     llm: LLMService = Depends(get_llm_service),
 ):
     """
     Generate UI from task description and project context
     """
-    user_id = user.get("sub")
+    user_id = user.get("user_id")
     
     try:
         project = db.get_project(request.project_id)
@@ -318,10 +314,10 @@ Rendering Mode:
 async def get_ui(
     project_id: str,
     version: Optional[int] = None,
-    user: dict = Depends(verify_token),
+    user: dict = Depends(get_current_user),
 ):
     """Get UI JSON for a project"""
-    user_id = user.get("sub")
+    user_id = user.get("user_id")
     
     try:
         project = db.get_project(project_id)
@@ -368,10 +364,10 @@ async def get_ui(
 @router.get("/ui/versions")
 async def get_ui_versions(
     project_id: str,
-    user: dict = Depends(verify_token),
+    user: dict = Depends(get_current_user),
 ):
     """Get list of available UI versions for a project"""
-    user_id = user.get("sub")
+    user_id = user.get("user_id")
     
     try:
         project = db.get_project(project_id)
@@ -380,7 +376,7 @@ async def get_ui_versions(
             raise HTTPException(status_code=404, detail="Project not found")
         
         if project.get("owner_id") != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized")
+            raise HTTPException(status_code=403, detail="Access denied")
         
         current_version = project.get("metadata", {}).get("ui_version", 0)
         
@@ -401,10 +397,10 @@ async def get_ui_versions(
 
 @router.get("/ui/get/test")
 async def get_test_ui(
-    user: dict = Depends(verify_token),
+    user: dict = Depends(get_current_user),
 ):
     """Get a random UI from current user's projects (for testing)"""
-    user_id = user.get("sub")
+    user_id = user.get("user_id")
     
     try:
         projects = db.list_projects_for_owner(user_id)

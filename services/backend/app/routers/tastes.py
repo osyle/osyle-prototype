@@ -182,13 +182,14 @@ async def create_resource(
     if taste.get("owner_id") != user["user_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # Generate S3 keys
+    # ✅ FIX: Generate resource_id ONCE and pass it to db.create_resource
     resource_id = db.generate_uuid()
     figma_key = storage.get_figma_key(user["user_id"], taste_id, resource_id)
     image_key = storage.get_image_key(user["user_id"], taste_id, resource_id)
     
-    # Create resource in database
+    # Create resource in database with the SAME resource_id
     resource = db.create_resource(
+        resource_id=resource_id,  # ✅ PASS THE ID HERE
         taste_id=taste_id,
         owner_id=user["user_id"],
         name=payload.name,
@@ -197,11 +198,11 @@ async def create_resource(
         metadata=payload.metadata
     )
     
-    # Generate presigned PUT URLs
+    # Generate presigned PUT URLs using the SAME resource_id
     upload_urls = storage.generate_resource_upload_urls(
         owner_id=user["user_id"],
         taste_id=taste_id,
-        resource_id=resource_id
+        resource_id=resource_id  # ✅ Uses same ID
     )
     
     return {

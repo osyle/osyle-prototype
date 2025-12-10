@@ -181,6 +181,7 @@ def delete_taste(taste_id: str) -> bool:
 # ============================================================================
 
 def create_resource(
+    resource_id: str,  # ✅ FIX: Accept resource_id as parameter
     taste_id: str,
     owner_id: str,
     name: str,
@@ -188,12 +189,18 @@ def create_resource(
     image_key: str = None,
     metadata: dict = None
 ) -> Dict[str, Any]:
-    """Create a new resource"""
-    resource_id = generate_uuid()
+    """
+    Create a new resource
+    
+    ✅ FIX: Now accepts resource_id as a parameter instead of generating it
+    This ensures the resource_id matches the S3 keys generated beforehand
+    """
+    # ✅ FIX: Use provided resource_id instead of generating a new one
+    # resource_id = generate_uuid()  # OLD (WRONG)
     now = get_timestamp()
     
     item = {
-        "resource_id": resource_id,
+        "resource_id": resource_id,  # Use the provided ID
         "taste_id": taste_id,
         "owner_id": owner_id,
         "name": name,

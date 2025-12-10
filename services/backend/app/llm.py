@@ -144,12 +144,15 @@ class LLMService:
         else:
             message_content = user_message
         
+        # ✅ FIX: Add timeout for large requests (images, long content)
+        # Set to 15 minutes (900 seconds) to handle large images
         response = await self.async_client.messages.create(
             model=model_id,
             system=system_prompt,
             messages=[{"role": "user", "content": message_content}],
             max_tokens=max_tokens,
             temperature=temperature,
+            timeout=900.0,  # ✅ 15 minutes timeout for large requests
         )
         
         # Extract text from response
@@ -197,12 +200,14 @@ class LLMService:
         else:
             message_content = user_message
         
+        # ✅ FIX: Add timeout for large requests
         response = self.client.messages.create(
             model=model_id,
             system=system_prompt,
             messages=[{"role": "user", "content": message_content}],
             max_tokens=max_tokens,
             temperature=temperature,
+            timeout=900.0,  # ✅ 15 minutes timeout
         )
         
         # Extract text from response
