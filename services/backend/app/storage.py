@@ -3,6 +3,8 @@ S3 storage operations for Osyle
 Provides presigned URL generation and file operations
 """
 import os
+import re
+import json
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
@@ -14,7 +16,7 @@ from typing import Optional
 # ============================================================================
 
 S3_REGION = os.getenv("AWS_REGION", "us-east-1")
-S3_BUCKET = os.getenv("S3_BUCKET", "osyle-shared-assets-dev")
+S3_BUCKET = os.getenv("S3_BUCKET", "osyle-shared-assets")
 S3_ENDPOINT = os.getenv("S3_ENDPOINT_URL")  # For local development (LocalStack)
 PRESIGNED_EXPIRATION = int(os.getenv("PRESIGNED_EXPIRATION", "3600"))  # 1 hour default
 
@@ -261,6 +263,127 @@ def delete_project_outputs(owner_id: str, project_id: str, output_keys: list) ->
         "deleted": deleted,
         "failed": failed
     }
+
+
+# ============================================================================
+# LLM-RELATED FUNCTIONS
+# ============================================================================
+
+
+def get_resource_figma(user_id: str, taste_id: str, resource_id: str) -> str:
+    """Get Figma JSON content from resource"""
+    key = f"tastes/{user_id}/{taste_id}/resources/{resource_id}/figma.json"
+    
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        content = response['Body'].read().decode('utf-8')
+        return content
+    except s3_client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"Error getting Figma JSON: {e}")
+        raise
+
+
+def get_resource_image(user_id: str, taste_id: str, resource_id: str) -> bytes:
+    """Get image bytes from resource"""
+    key = f"tastes/{user_id}/{taste_id}/resources/{resource_id}/image.png"
+    
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        return response['Body'].read()
+    except s3_client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"Error getting image: {e}")
+        raise
+
+
+def get_resource_dtr(user_id: str, taste_id: str, resource_id: str) -> dict:
+    """Get DTR JSON from resource"""
+    key = f"tastes/{user_id}/{taste_id}/resources/{resource_id}/dtr.json"
+    
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        content = response['Body'].read().decode('utf-8')
+        return json.loads(content)
+    except s3_client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"Error getting DTR: {e}")
+        raise
+
+
+def put_resource_dtr(user_id: str, taste_id: str, resource_id: str, dtr_json: dict):
+    """Save DTR JSON to resource"""
+    key = f"tastes/{user_id}/{taste_id}/resources/{resource_id}/dtr.json"
+    
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=key,
+            Body=json.dumps(dtr_json, indent=2),
+            ContentType='application/json'
+        )
+    except Exception as e:
+        print(f"Error saving DTR: {e}")
+        raise
+
+
+def get_project_ui(user_id: str, project_id: str, version: int = 1) -> dict:
+    """Get UI JSON from project (specific version)"""
+    key = f"projects/{user_id}/{project_id}/ui_v{version}.json"
+    
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        content = response['Body'].read().decode('utf-8')
+        return json.loads(content)
+    except s3_client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"Error getting UI: {e}")
+        raise
+
+
+def put_project_ui(user_id: str, project_id: str, ui_json: dict, version: int = 1):
+    """Save UI JSON to project (versioned)"""
+    key = f"projects/{user_id}/{project_id}/ui_v{version}.json"
+    
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=key,
+            Body=json.dumps(ui_json, indent=2),
+            ContentType='application/json'
+        )
+    except Exception as e:
+        print(f"Error saving UI: {e}")
+        raise
+
+
+def list_project_ui_versions(user_id: str, project_id: str) -> list:
+    """List all UI versions for a project"""
+    prefix = f"projects/{user_id}/{project_id}/"
+    
+    try:
+        response = s3_client.list_objects_v2(
+            Bucket=S3_BUCKET,
+            Prefix=prefix
+        )
+        
+        versions = []
+        for obj in response.get('Contents', []):
+            key = obj['Key']
+            if key.endswith('.json') and 'ui_v' in key:
+                # Extract version number from ui_v1.json, ui_v2.json, etc.
+                match = re.search(r'ui_v(\d+)\.json', key)
+                if match:
+                    versions.append(int(match.group(1)))
+        
+        return sorted(versions)
+    except Exception as e:
+        print(f"Error listing UI versions: {e}")
+        return []
 
 
 # ============================================================================

@@ -6,9 +6,15 @@ import requests
 from functools import lru_cache
 from typing import Optional
 import json
+import os
+from dotenv import load_dotenv
 
-# Import new routers
+# Load environment variables
+load_dotenv()
+
+# Import routers
 from app.routers import tastes, projects
+from app.llm_routes import router as llm_router
 
 app = FastAPI(title="Osyle API", version="1.0.0")
 
@@ -21,9 +27,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# AWS Cognito configuration
-REGION = "us-east-1"
-USER_POOL_ID = "us-east-1_KZwi3uUTn"
+# AWS Cognito configuration from environment
+REGION = os.getenv("AWS_REGION")
+USER_POOL_ID = os.getenv("USER_POOL_ID")
+
+if not REGION or not USER_POOL_ID:
+    raise ValueError("AWS_REGION and USER_POOL_ID must be set in environment variables")
+
 COGNITO_ISSUER = f"https://cognito-idp.{REGION}.amazonaws.com/{USER_POOL_ID}"
 
 @lru_cache()
@@ -131,9 +141,10 @@ async def user_profile(user: dict = Depends(verify_token)):
         "cognito_username": user.get("cognito:username"),
     }
 
-# Mount new routers
+# Include routers
 app.include_router(tastes.router)
 app.include_router(projects.router)
+app.include_router(llm_router)
 
 # Lambda handler
 handler = Mangum(app)
