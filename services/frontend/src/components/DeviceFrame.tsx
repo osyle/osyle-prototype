@@ -17,7 +17,7 @@ export default function DeviceFrame({ children }: DeviceFrameProps) {
           'rounded-lg overflow-hidden bg-white shadow-2xl border border-gray-300',
         topBarClass:
           'h-8 bg-gray-200 flex items-center px-3 border-b border-gray-300',
-        contentClass: 'overflow-auto',
+        contentClass: 'overflow-auto scrollbar-hide',
       }
     } else {
       // Phone frame
@@ -25,7 +25,7 @@ export default function DeviceFrame({ children }: DeviceFrameProps) {
         frameClass:
           'rounded-[32px] overflow-hidden bg-black shadow-2xl border-8 border-black relative',
         topBarClass: 'h-6 bg-black relative',
-        contentClass: 'overflow-auto',
+        contentClass: 'overflow-auto scrollbar-hide',
       }
     }
   }
@@ -37,6 +37,17 @@ export default function DeviceFrame({ children }: DeviceFrameProps) {
       className="flex items-center justify-center w-full h-full"
       style={{ backgroundColor: '#EDEBE9' }}
     >
+      {/* Add global styles for hiding scrollbars */}
+      <style>{`
+        .scrollbar-hide {
+          -ms-overflow-style: none;  /* IE and Edge */
+          scrollbar-width: none;  /* Firefox */
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;  /* Chrome, Safari, Opera */
+        }
+      `}</style>
+
       <div
         className={frameClass}
         style={{
@@ -73,7 +84,7 @@ export default function DeviceFrame({ children }: DeviceFrameProps) {
           )}
         </div>
 
-        {/* Content Area */}
+        {/* Content Area - Scrollable */}
         <div
           className={contentClass}
           style={{
@@ -83,6 +94,7 @@ export default function DeviceFrame({ children }: DeviceFrameProps) {
                 : `${screen.height}px`,
             width: '100%',
             backgroundColor: 'white',
+            position: 'relative',
           }}
         >
           {children}
