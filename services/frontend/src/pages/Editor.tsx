@@ -14,8 +14,8 @@ import {
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
-import { type UINode } from '../components/DesignMLRenderer'
 import DeviceFrame from '../components/DeviceFrame'
+import { type UINode } from '../components/DeviceRenderer'
 import DeviceRenderer from '../components/DeviceRenderer'
 import { useDeviceContext } from '../hooks/useDeviceContext'
 
