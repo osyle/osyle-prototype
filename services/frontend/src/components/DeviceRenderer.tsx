@@ -1,10 +1,15 @@
 import { useDeviceContext } from '../hooks/useDeviceContext'
-import DesignMLRenderer, { type UINode as DMLUINode } from './DesignMLRenderer'
+import DesignMLv2Renderer from './DesignMLRenderer'
 import DynamicReactRenderer from './DynamicReactRenderer'
-import ReactRenderer, { type UINode as ReactUINode } from './ReactRenderer'
 
-// Union type for both renderer trees
-export type UINode = DMLUINode | ReactUINode | string
+// UI data can be a Design ML document or a string of JSX code
+export type UINode = DesignMLDocument | string | Record<string, unknown>
+
+interface DesignMLDocument {
+  version: string
+  meta?: Record<string, unknown>
+  root: Record<string, unknown>
+}
 
 interface DeviceRendererProps {
   uiTree: UINode
@@ -24,16 +29,13 @@ export default function DeviceRenderer({ uiTree }: DeviceRendererProps) {
       }}
     >
       {rendering_mode === 'design-ml' ? (
-        <DesignMLRenderer
-          uiTree={uiTree as DMLUINode}
-          deviceInfo={device_info}
-        />
+        <DesignMLv2Renderer document={uiTree} />
       ) : typeof uiTree === 'string' ? (
-        // ✅ NEW: Handle JSX code strings from backend
+        // Handle JSX code strings from backend
         <DynamicReactRenderer jsxCode={uiTree} />
       ) : (
-        // ✅ EXISTING: Handle UINode tree objects
-        <ReactRenderer uiTree={uiTree as ReactUINode} />
+        // Handle React component trees
+        <DynamicReactRenderer jsxCode={JSON.stringify(uiTree)} />
       )}
     </div>
   )

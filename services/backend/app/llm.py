@@ -11,7 +11,7 @@ import re
 # Model options (easy to change)
 MODELS = {
     "haiku": "claude-haiku-4-5-20251001",
-    "sonnet": "claude-sonnet-4-5-20251001", 
+    "sonnet": "claude-sonnet-4-20250514", 
     "opus": "claude-opus-4-1-20250514",
 }
 
@@ -76,7 +76,7 @@ class LLMService:
         self,
         prompt_name: str,
         user_message: str,
-        model: str = "haiku",
+        model: str = "sonnet",
         max_tokens: int = 50000,
         system_suffix: Optional[str] = None,
         temperature: float = 1.0,
@@ -90,7 +90,7 @@ class LLMService:
         if system_suffix:
             system_prompt += "\n\n" + system_suffix
         
-        model_id = MODELS.get(model, MODELS["haiku"])
+        model_id = MODELS.get(model, MODELS["sonnet"])
         
         async with self.async_client.messages.stream(
             model=model_id,
@@ -106,7 +106,7 @@ class LLMService:
         self,
         prompt_name: str,
         user_message: str,
-        model: str = "haiku",
+        model: str = "sonnet",
         max_tokens: int = 50000,
         system_suffix: Optional[str] = None,
         temperature: float = 1.0,
@@ -136,7 +136,7 @@ class LLMService:
         if parse_json:
             system_prompt += "\n\nIMPORTANT: Output a single valid JSON object only. No markdown, no explanations."
         
-        model_id = MODELS.get(model, MODELS["haiku"])
+        model_id = MODELS.get(model, MODELS["sonnet"])
         
         # Build message content
         if isinstance(user_message, str):
@@ -177,7 +177,7 @@ class LLMService:
         self,
         prompt_name: str,
         user_message: str,
-        model: str = "haiku",
+        model: str = "sonnet",
         max_tokens: int = 50000,
         system_suffix: Optional[str] = None,
         temperature: float = 1.0,
@@ -192,7 +192,7 @@ class LLMService:
         if parse_json:
             system_prompt += "\n\nIMPORTANT: Output a single valid JSON object only. No markdown, no explanations."
         
-        model_id = MODELS.get(model, MODELS["haiku"])
+        model_id = MODELS.get(model, MODELS["sonnet"])
         
         # Build message content
         if isinstance(user_message, str):
