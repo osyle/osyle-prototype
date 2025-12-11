@@ -15,6 +15,8 @@ MODELS = {
     "opus": "claude-opus-4-1-20250514",
 }
 
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL")
+
 class LLMService:
     """Service for handling Claude API calls with streaming and JSON parsing"""
     
@@ -76,7 +78,7 @@ class LLMService:
         self,
         prompt_name: str,
         user_message: str,
-        model: str = "sonnet",
+        model: str = DEFAULT_MODEL,
         max_tokens: int = 50000,
         system_suffix: Optional[str] = None,
         temperature: float = 1.0,
@@ -90,7 +92,7 @@ class LLMService:
         if system_suffix:
             system_prompt += "\n\n" + system_suffix
         
-        model_id = MODELS.get(model, MODELS["sonnet"])
+        model_id = MODELS.get(model, MODELS[DEFAULT_MODEL])
         
         async with self.async_client.messages.stream(
             model=model_id,
@@ -106,7 +108,7 @@ class LLMService:
         self,
         prompt_name: str,
         user_message: str,
-        model: str = "sonnet",
+        model: str = DEFAULT_MODEL,
         max_tokens: int = 50000,
         system_suffix: Optional[str] = None,
         temperature: float = 1.0,
@@ -136,7 +138,7 @@ class LLMService:
         if parse_json:
             system_prompt += "\n\nIMPORTANT: Output a single valid JSON object only. No markdown, no explanations."
         
-        model_id = MODELS.get(model, MODELS["sonnet"])
+        model_id = MODELS.get(model, MODELS[DEFAULT_MODEL])
         
         # Build message content
         if isinstance(user_message, str):
@@ -177,7 +179,7 @@ class LLMService:
         self,
         prompt_name: str,
         user_message: str,
-        model: str = "sonnet",
+        model: str = DEFAULT_MODEL,
         max_tokens: int = 50000,
         system_suffix: Optional[str] = None,
         temperature: float = 1.0,
@@ -192,7 +194,7 @@ class LLMService:
         if parse_json:
             system_prompt += "\n\nIMPORTANT: Output a single valid JSON object only. No markdown, no explanations."
         
-        model_id = MODELS.get(model, MODELS["sonnet"])
+        model_id = MODELS.get(model, MODELS[DEFAULT_MODEL])
         
         # Build message content
         if isinstance(user_message, str):
