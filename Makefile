@@ -204,3 +204,86 @@ aws-empty-bucket: ## Empty S3 bucket (DESTRUCTIVE)
 	@read -p "Are you sure? (yes/no): " confirm && [ "$$confirm" = "yes" ] || exit 1
 	aws s3 rm s3://osyle-shared-assets --recursive
 	@echo "✅ Bucket emptied"
+
+### PRODUCTION AWS SETUP (ONE-TIME)
+
+aws-create-tables-prod: ## Create PRODUCTION DynamoDB tables in AWS (run ONCE)
+	@echo "Creating PRODUCTION DynamoDB tables in AWS..."
+	@chmod +x infra/scripts/create_dynamodb_tables_prod.sh
+	@./infra/scripts/create_dynamodb_tables_prod.sh
+	@echo "✅ Production tables created successfully!"
+
+aws-create-bucket-prod: ## Create PRODUCTION S3 bucket in AWS (run ONCE)
+	@echo "Creating PRODUCTION S3 bucket..."
+	aws s3 mb s3://osyle-shared-assets-prod --region us-east-1
+	aws s3api put-bucket-cors --bucket osyle-shared-assets-prod --cors-configuration '{"CORSRules":[{"AllowedOrigins":["https://main.d1z1przwpoqpmu.amplifyapp.com"],"AllowedMethods":["GET","PUT","POST","DELETE","HEAD"],"AllowedHeaders":["*"],"MaxAgeSeconds":3600}]}'
+	@echo "✅ Production bucket created successfully!"
+
+aws-verify-prod: ## Verify PRODUCTION AWS setup
+	@echo "Verifying PRODUCTION AWS setup..."
+	cd $(BACKEND_DIR) && python3 verify_aws_setup_prod.py
+
+### PRODUCTION AWS STATUS
+
+aws-db-status-prod: ## Check PRODUCTION DynamoDB tables status
+	@echo "Checking PRODUCTION DynamoDB tables..."
+	@aws dynamodb describe-table --table-name OsyleUsers-Prod --region us-east-1 --query 'Table.[TableName,ItemCount]' --output table 2>/dev/null || echo "OsyleUsers-Prod: Not found"
+	@aws dynamodb describe-table --table-name OsyleTastes-Prod --region us-east-1 --query 'Table.[TableName,ItemCount]' --output table 2>/dev/null || echo "OsyleTastes-Prod: Not found"
+	@aws dynamodb describe-table --table-name OsyleResources-Prod --region us-east-1 --query 'Table.[TableName,ItemCount]' --output table 2>/dev/null || echo "OsyleResources-Prod: Not found"
+	@aws dynamodb describe-table --table-name OsyleProjects-Prod --region us-east-1 --query 'Table.[TableName,ItemCount]' --output table 2>/dev/null || echo "OsyleProjects-Prod: Not found"
+
+aws-s3-status-prod: ## Check PRODUCTION S3 bucket status
+	@echo "Checking PRODUCTION S3 bucket..."
+	@aws s3 ls s3://osyle-shared-assets-prod --region us-east-1 --summarize 2>/dev/null || echo "Bucket not found"
+
+aws-status-prod: ## Check all PRODUCTION AWS services status
+	@echo "=============================================="
+	@echo "PRODUCTION AWS SERVICES STATUS"
+	@echo "=============================================="
+	@echo ""
+	@make aws-db-status-prod
+	@echo ""
+	@make aws-s3-status-prod
+
+### PRODUCTION DEPLOYMENT
+
+deploy-prod: ## Deploy to PRODUCTION (backend + frontend)
+	@echo "🚀 Deploying to PRODUCTION..."
+	./infra/scripts/deploy-all.sh
+
+### PRODUCTION CLEANUP (DANGEROUS)
+
+aws-delete-tables-prod: ## Delete PRODUCTION DynamoDB tables (DESTRUCTIVE)
+	@echo "⚠️  WARNING: This will DELETE all PRODUCTION DynamoDB tables!"
+	@echo "⚠️  This will permanently delete production data!"
+	@read -p "Are you sure? (yes/no): " confirm && [ "$$confirm" = "yes" ] || exit 1
+	aws dynamodb delete-table --table-name OsyleUsers-Prod --region us-east-1
+	aws dynamodb delete-table --table-name OsyleTastes-Prod --region us-east-1
+	aws dynamodb delete-table --table-name OsyleResources-Prod --region us-east-1
+	aws dynamodb delete-table --table-name OsyleProjects-Prod --region us-east-1
+	@echo "✅ All production tables deleted"
+
+aws-empty-bucket-prod: ## Empty PRODUCTION S3 bucket (DESTRUCTIVE)
+	@echo "⚠️  WARNING: This will DELETE all files in PRODUCTION S3 bucket!"
+	@echo "⚠️  This will permanently delete production data!"
+	@read -p "Are you sure? (yes/no): " confirm && [ "$$confirm" = "yes" ] || exit 1
+	aws s3 rm s3://osyle-shared-assets-prod --recursive
+	@echo "✅ Production bucket emptied"
+
+### PRODUCTION FIRST TIME SETUP
+
+first-time-setup-prod: ## Complete PRODUCTION first-time setup (run ONCE)
+	@echo "=============================================="
+	@echo "PRODUCTION FIRST TIME SETUP"
+	@echo "=============================================="
+	@echo ""
+	@echo "Step 1: Creating PRODUCTION DynamoDB tables..."
+	@make aws-create-tables-prod
+	@echo ""
+	@echo "Step 2: Creating PRODUCTION S3 bucket..."
+	@make aws-create-bucket-prod || echo "Bucket may already exist"
+	@echo ""
+	@echo "Step 3: Verifying PRODUCTION setup..."
+	@make aws-verify-prod
+	@echo ""
+	@echo "✅ Production setup complete! Now run: make deploy-prod"
