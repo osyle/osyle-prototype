@@ -287,3 +287,63 @@ first-time-setup-prod: ## Complete PRODUCTION first-time setup (run ONCE)
 	@make aws-verify-prod
 	@echo ""
 	@echo "✅ Production setup complete! Now run: make deploy-prod"
+
+
+### DEVELOPMENT LOCAL BACKUP
+
+aws-backup-tables: ## Create local backup of DynamoDB tables
+	@echo "📦 Backing up DynamoDB tables..."
+	@mkdir -p backups/dynamodb/dev/$$(date +%Y%m%d-%H%M%S)
+	@BACKUP_DIR="backups/dynamodb/dev/$$(date +%Y%m%d-%H%M%S)" && \
+	echo "Exporting OsyleUsers..." && \
+	aws dynamodb scan --table-name OsyleUsers --region us-east-1 > $$BACKUP_DIR/OsyleUsers.json && \
+	echo "Exporting OsyleTastes..." && \
+	aws dynamodb scan --table-name OsyleTastes --region us-east-1 > $$BACKUP_DIR/OsyleTastes.json && \
+	echo "Exporting OsyleResources..." && \
+	aws dynamodb scan --table-name OsyleResources --region us-east-1 > $$BACKUP_DIR/OsyleResources.json && \
+	echo "Exporting OsyleProjects..." && \
+	aws dynamodb scan --table-name OsyleProjects --region us-east-1 > $$BACKUP_DIR/OsyleProjects.json && \
+	echo "✅ All tables backed up to $$BACKUP_DIR/"
+
+aws-backup-bucket: ## Create local backup of S3 bucket
+	@echo "📦 Backing up S3 bucket..."
+	@mkdir -p backups/s3/dev/$$(date +%Y%m%d-%H%M%S)
+	@BACKUP_DIR="backups/s3/dev/$$(date +%Y%m%d-%H%M%S)" && \
+	aws s3 sync s3://osyle-shared-assets $$BACKUP_DIR/ && \
+	echo "✅ Bucket backed up to $$BACKUP_DIR/"
+
+aws-backup-all: ## Backup both DynamoDB tables and S3 bucket
+	@echo "📦 Creating full backup..."
+	@$(MAKE) aws-backup-tables
+	@$(MAKE) aws-backup-bucket
+	@echo "✅ Full backup complete"
+
+
+### PRODUCTION LOCAL BACKUP
+
+aws-backup-tables-prod: ## Create local backup of PRODUCTION DynamoDB tables
+	@echo "📦 Backing up PRODUCTION DynamoDB tables..."
+	@mkdir -p backups/dynamodb/prod/$$(date +%Y%m%d-%H%M%S)
+	@BACKUP_DIR="backups/dynamodb/prod/$$(date +%Y%m%d-%H%M%S)" && \
+	echo "Exporting OsyleUsers-Prod..." && \
+	aws dynamodb scan --table-name OsyleUsers-Prod --region us-east-1 > $$BACKUP_DIR/OsyleUsers-Prod.json && \
+	echo "Exporting OsyleTastes-Prod..." && \
+	aws dynamodb scan --table-name OsyleTastes-Prod --region us-east-1 > $$BACKUP_DIR/OsyleTastes-Prod.json && \
+	echo "Exporting OsyleResources-Prod..." && \
+	aws dynamodb scan --table-name OsyleResources-Prod --region us-east-1 > $$BACKUP_DIR/OsyleResources-Prod.json && \
+	echo "Exporting OsyleProjects-Prod..." && \
+	aws dynamodb scan --table-name OsyleProjects-Prod --region us-east-1 > $$BACKUP_DIR/OsyleProjects-Prod.json && \
+	echo "✅ All production tables backed up to $$BACKUP_DIR/"
+
+aws-backup-bucket-prod: ## Create local backup of PRODUCTION S3 bucket
+	@echo "📦 Backing up PRODUCTION S3 bucket..."
+	@mkdir -p backups/s3/prod/$$(date +%Y%m%d-%H%M%S)
+	@BACKUP_DIR="backups/s3/prod/$$(date +%Y%m%d-%H%M%S)" && \
+	aws s3 sync s3://osyle-shared-assets-prod $$BACKUP_DIR/ && \
+	echo "✅ Production bucket backed up to $$BACKUP_DIR/"
+
+aws-backup-all-prod: ## Backup both PRODUCTION DynamoDB tables and S3 bucket
+	@echo "📦 Creating full PRODUCTION backup..."
+	@$(MAKE) aws-backup-tables-prod
+	@$(MAKE) aws-backup-bucket-prod
+	@echo "✅ Full production backup complete"
