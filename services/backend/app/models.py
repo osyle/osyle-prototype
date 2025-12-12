@@ -65,6 +65,12 @@ class ResourceCreate(BaseModel):
     metadata: Optional[dict] = {}
 
 
+class ResourceDownloadUrls(BaseModel):
+    """Presigned URLs for downloading resource files"""
+    figma_get_url: Optional[str] = None
+    image_get_url: Optional[str] = None
+
+
 class ResourceOut(BaseModel):
     """Resource response"""
     resource_id: str
@@ -77,6 +83,7 @@ class ResourceOut(BaseModel):
     has_image: bool = False
     metadata: dict
     created_at: str
+    download_urls: Optional[ResourceDownloadUrls] = None  # ✅ ADDED THIS FIELD
 
 
 class ResourceUploadUrls(BaseModel):
