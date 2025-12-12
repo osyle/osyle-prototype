@@ -4,6 +4,8 @@ import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import ConfigurationMenu from '../components/ConfigurationMenu'
+import DesignMLv2Renderer from '../components/DesignMLRenderer'
+import DynamicReactRenderer from '../components/DynamicReactRenderer'
 
 // ============================================================================
 // TYPES
@@ -28,6 +30,16 @@ interface TasteDisplay {
   taste_id: string
   name: string
   resources: ResourceDisplay[]
+}
+
+interface ProjectDisplay {
+  project_id: string
+  name: string
+  rendering_mode: string // 'react' | 'design-ml'
+  created_at: string
+  ui?: unknown // The actual UI data (Design ML JSON or React JSX string)
+  ui_loading?: boolean
+  ui_error?: boolean
 }
 
 // ============================================================================
@@ -63,6 +75,87 @@ function selectDisplayResources(
   }
 
   return selected
+}
+
+// ============================================================================
+// PROJECT CARD PREVIEW COMPONENT
+// ============================================================================
+
+interface ProjectCardPreviewProps {
+  project: ProjectDisplay
+  cardHeight: number
+}
+
+const ProjectCardPreview: React.FC<ProjectCardPreviewProps> = ({
+  project,
+  cardHeight,
+}) => {
+  if (project.ui_loading) {
+    return (
+      <div
+        className="w-full h-full flex items-center justify-center"
+        style={{ backgroundColor: '#F7F5F3' }}
+      >
+        <div className="text-sm" style={{ color: '#929397' }}>
+          Loading preview...
+        </div>
+      </div>
+    )
+  }
+
+  if (project.ui_error || !project.ui) {
+    return (
+      <div
+        className="w-full h-full flex items-center justify-center"
+        style={{ backgroundColor: '#F7F5F3' }}
+      >
+        <div className="text-sm" style={{ color: '#929397' }}>
+          Preview unavailable
+        </div>
+      </div>
+    )
+  }
+
+  // Calculate scale to fit the UI in the card
+  // Assume typical design is 1024x768 or phone size 375x812
+  const isDesignML = project.rendering_mode === 'design-ml'
+  const baseWidth = isDesignML ? 1024 : 375
+  const baseHeight = isDesignML ? 768 : 812
+
+  // Card content area height (subtract footer height ~70px)
+  const availableHeight = cardHeight - 70
+  const availableWidth = 280 // Card width
+
+  // Calculate scale to fit with 1.2x zoom for better visibility
+  const scaleX = (availableWidth / baseWidth) * 1.2
+  const scaleY = (availableHeight / baseHeight) * 1.2
+  const scale = Math.min(scaleX, scaleY, 0.6) // Max scale of 0.6 (increased from 0.5)
+
+  return (
+    <div
+      className="w-full h-full flex items-center justify-center overflow-hidden"
+      style={{ backgroundColor: '#F7F5F3' }}
+    >
+      <div
+        style={{
+          transform: `scale(${scale})`,
+          transformOrigin: 'center center',
+          width: baseWidth,
+          height: baseHeight,
+          pointerEvents: 'none', // Disable interactions in preview
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {project.rendering_mode === 'design-ml' ? (
+          <DesignMLv2Renderer document={project.ui} />
+        ) : (
+          <DynamicReactRenderer jsxCode={project.ui as string} />
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ============================================================================
@@ -788,11 +881,23 @@ export default function Home() {
   // UI state
   // const [toggleOn, setToggleOn] = useState(false)
   const [activeTab, setActiveTab] = useState<'left' | 'middle' | 'right'>(
-    'left',
+    () => {
+      // Restore last active tab from localStorage
+      const savedTab = localStorage.getItem('home_active_tab')
+      if (
+        savedTab === 'left' ||
+        savedTab === 'middle' ||
+        savedTab === 'right'
+      ) {
+        return savedTab
+      }
+      return 'left'
+    },
   )
 
   // Data state
   const [tastes, setTastes] = useState<TasteDisplay[]>([])
+  const [projects, setProjects] = useState<ProjectDisplay[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -825,11 +930,6 @@ export default function Home() {
   const [activeProjectName, setActiveProjectName] = useState<string | null>(
     null,
   )
-
-  // Random UI availability state
-  const [hasDesignMLUIs, setHasDesignMLUIs] = useState(false)
-  const [hasReactUIs, setHasReactUIs] = useState(false)
-  const [checkingUIs, setCheckingUIs] = useState(true)
 
   // Refs
   const menuRef = useRef<HTMLDivElement>(null)
@@ -965,27 +1065,73 @@ export default function Home() {
     loadTastes()
   }, [])
 
-  // Check for available UIs by rendering mode
+  // Load projects
   useEffect(() => {
-    async function checkAvailableUIs() {
-      setCheckingUIs(true)
+    async function loadProjects() {
       try {
-        // Check for design-ml UIs
-        const hasDesignML = await api.llm.hasUIsByMode('design-ml')
-        setHasDesignMLUIs(hasDesignML)
+        const apiProjects = await api.projects.list()
 
-        // Check for react UIs
-        const hasReact = await api.llm.hasUIsByMode('react')
-        setHasReactUIs(hasReact)
+        // Transform to display format
+        const displayProjects: ProjectDisplay[] = apiProjects
+          .filter(p => p.metadata?.['has_ui']) // Only show projects with generated UIs
+          .map(p => ({
+            project_id: p.project_id,
+            name: p.name,
+            rendering_mode:
+              (p.metadata?.['rendering_mode'] as string) || 'design-ml',
+            created_at: p.created_at,
+            ui: undefined,
+            ui_loading: true,
+            ui_error: false,
+          }))
+          // Sort by created_at descending (newest first)
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime(),
+          )
+
+        setProjects(displayProjects)
+
+        // Fetch UI data for each project in parallel
+        const projectsWithUI = await Promise.all(
+          displayProjects.map(async project => {
+            try {
+              const uiResponse = await api.llm.getUI(project.project_id)
+              return {
+                ...project,
+                ui: uiResponse.ui,
+                ui_loading: false,
+                ui_error: false,
+              }
+            } catch (err) {
+              console.error(
+                `Failed to load UI for project ${project.project_id}:`,
+                err,
+              )
+              return {
+                ...project,
+                ui: undefined,
+                ui_loading: false,
+                ui_error: true,
+              }
+            }
+          }),
+        )
+
+        setProjects(projectsWithUI)
       } catch (err) {
-        console.error('Failed to check available UIs:', err)
-      } finally {
-        setCheckingUIs(false)
+        console.error('Failed to load projects:', err)
       }
     }
 
-    checkAvailableUIs()
+    loadProjects()
   }, [])
+
+  // Save active tab to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('home_active_tab', activeTab)
+  }, [activeTab])
 
   // Save state to sessionStorage to preserve during navigation
   useEffect(() => {
@@ -1289,6 +1435,31 @@ export default function Home() {
     navigate('/editor', { replace: true })
   }
 
+  const handleOpenProject = async (project: ProjectDisplay) => {
+    try {
+      // Fetch full project details from API to get taste and resource IDs
+      const projectDetails = await api.projects.get(project.project_id)
+
+      // Save project info to localStorage for Editor
+      localStorage.setItem(
+        'current_project',
+        JSON.stringify({
+          project_id: projectDetails.project_id,
+          project_name: projectDetails.name,
+          task_description: projectDetails.task_description,
+          selected_taste_id: projectDetails.selected_taste_id,
+          selected_resource_id: projectDetails.selected_resource_id,
+        }),
+      )
+
+      // Navigate to Editor
+      navigate('/editor', { replace: true })
+    } catch (err) {
+      console.error('Failed to load project:', err)
+      alert('Failed to open project. Please try again.')
+    }
+  }
+
   const handleSubmitIdea = async () => {
     if (!ideaText.trim()) return
     if (!selectedTasteId) return
@@ -1304,31 +1475,6 @@ export default function Home() {
 
   const handleRemoveFile = (index: number) => {
     setUploadedFiles(files => files.filter((_, i) => i !== index))
-  }
-
-  const handleViewRandomUI = async (renderingMode: 'design-ml' | 'react') => {
-    try {
-      // Fetch random UI
-      const randomUI = await api.llm.getRandomUIByMode(renderingMode)
-
-      // Store project info with view-only flag
-      const projectInfo = {
-        project_id: randomUI.project_id,
-        project_name: randomUI.project_name,
-        view_only: true, // Flag to indicate this is view-only mode
-        ui_data: randomUI.ui,
-        ui_type: randomUI.type,
-        ui_version: randomUI.version,
-      }
-
-      localStorage.setItem('current_project', JSON.stringify(projectInfo))
-
-      // Navigate to editor in view-only mode
-      navigate('/editor')
-    } catch (err) {
-      console.error('Failed to load random UI:', err)
-      alert('No UIs available for this mode')
-    }
   }
 
   // ============================================================================
@@ -1736,9 +1882,9 @@ export default function Home() {
   ]
 
   const tabs = [
-    { id: 'left' as const, icon: '🏆' },
-    { id: 'middle' as const, icon: '08' },
-    { id: 'right' as const, icon: '👁' },
+    { id: 'left' as const, icon: <Palette size={18} /> },
+    { id: 'middle' as const, icon: <Link size={18} /> },
+    { id: 'right' as const, icon: <Sparkles size={18} /> },
   ]
 
   const galleryItems = [
@@ -1758,7 +1904,7 @@ export default function Home() {
       return (
         <div className="flex-1 flex flex-col items-center justify-start pt-16 px-8">
           <h1
-            className="text-5xl font-light mb-12"
+            className="text-5xl font-light mb-12 mt-20"
             style={{ color: '#3B3B3B' }}
           >
             New project
@@ -1855,40 +2001,6 @@ export default function Home() {
               </div>
             ))}
           </div>
-
-          {/* Random UI Buttons - Only show if there are UIs available */}
-          {!checkingUIs && (hasDesignMLUIs || hasReactUIs) && (
-            <div className="w-full max-w-2xl mt-8 flex justify-center gap-4">
-              {hasDesignMLUIs && (
-                <button
-                  onClick={() => handleViewRandomUI('design-ml')}
-                  className="px-6 py-3 rounded-xl font-medium text-sm transition-all hover:scale-105 flex items-center gap-2"
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    color: '#3B3B3B',
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-                  }}
-                >
-                  <Sparkles size={18} style={{ color: '#4A90E2' }} />
-                  <span>View Random Design ML</span>
-                </button>
-              )}
-              {hasReactUIs && (
-                <button
-                  onClick={() => handleViewRandomUI('react')}
-                  className="px-6 py-3 rounded-xl font-medium text-sm transition-all hover:scale-105 flex items-center gap-2"
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    color: '#3B3B3B',
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-                  }}
-                >
-                  <Sparkles size={18} style={{ color: '#F5C563' }} />
-                  <span>View Random React</span>
-                </button>
-              )}
-            </div>
-          )}
         </div>
       )
     } else if (activeTab === 'middle') {
@@ -2049,13 +2161,94 @@ export default function Home() {
         </div>
       )
     } else {
+      // Projects Gallery View (Projects Tab)
       return (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-6xl mb-4">👁</div>
-            <div className="text-lg" style={{ color: '#929397' }}>
-              Preview Tab
+        <div className="flex-1 overflow-y-auto px-8 pt-8 pb-16">
+          <div className="max-w-7xl mx-auto">
+            {/* Header */}
+            <div className="mb-8 mt-20">
+              <h2
+                className="text-2xl font-medium mb-1"
+                style={{ color: '#3B3B3B' }}
+              >
+                Here are your past projects
+              </h2>
+              <p className="text-sm" style={{ color: '#929397' }}>
+                Created with Osyle AI ®
+              </p>
             </div>
+
+            {/* Projects Grid */}
+            {projects.length === 0 ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="text-center">
+                  <Sparkles
+                    size={48}
+                    style={{ color: '#929397', margin: '0 auto 16px' }}
+                  />
+                  <div className="text-lg mb-2" style={{ color: '#3B3B3B' }}>
+                    No projects yet
+                  </div>
+                  <div className="text-sm" style={{ color: '#929397' }}>
+                    Create a project to see it here
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                  gap: '24px',
+                  gridAutoFlow: 'dense',
+                }}
+              >
+                {projects.map((project, index) => {
+                  // Alternate between two heights: tall and short
+                  const isTall = index % 2 === 0
+                  const cardHeight = isTall ? 400 : 280
+
+                  return (
+                    <div
+                      key={project.project_id}
+                      className="rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02] cursor-pointer flex flex-col"
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+                        height: `${cardHeight}px`,
+                      }}
+                      onClick={() => handleOpenProject(project)}
+                    >
+                      {/* Card content area with UI preview */}
+                      <div className="flex-1 overflow-hidden">
+                        <ProjectCardPreview
+                          project={project}
+                          cardHeight={cardHeight}
+                        />
+                      </div>
+
+                      {/* Card footer with project info */}
+                      <div
+                        className="p-4"
+                        style={{ backgroundColor: '#FFFFFF' }}
+                      >
+                        <div
+                          className="text-sm font-medium mb-1 truncate"
+                          style={{ color: '#3B3B3B' }}
+                        >
+                          {project.name}
+                        </div>
+                        <div className="text-xs" style={{ color: '#929397' }}>
+                          {project.rendering_mode === 'react'
+                            ? 'React'
+                            : 'Design ML'}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       )
@@ -2105,7 +2298,7 @@ export default function Home() {
             backgroundColor: '#4A90E2',
             color: '#FFFFFF',
             boxShadow: '0 8px 24px rgba(74, 144, 226, 0.3)',
-            zIndex: 100,
+            zIndex: 9999,
           }}
         >
           <span className="text-base">Continue Project</span>
