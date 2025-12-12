@@ -606,63 +606,159 @@ const StyleCard: React.FC<StyleCardProps> = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        width: '200px',
-        // Add padding to contain the selection ring
-        padding: '8px',
+        width: '240px',
+        height: '340px',
       }}
     >
+      {/* Main card container with background color */}
       <div
-        className="rounded-2xl overflow-hidden transition-all duration-300 relative"
+        className="rounded-3xl transition-all duration-300 relative h-full"
         style={{
           backgroundColor: '#E8EBED',
           boxShadow: isSelected
-            ? '0 8px 24px rgba(74, 144, 226, 0.2)'
+            ? '0 12px 32px rgba(74, 144, 226, 0.3)'
             : isHovered
-              ? '0 4px 16px rgba(0,0,0,0.12)'
-              : '0 2px 12px rgba(0,0,0,0.08)',
-          height: '280px',
+              ? '0 8px 24px rgba(0,0,0,0.15)'
+              : '0 4px 16px rgba(0,0,0,0.1)',
           transform:
-            isHovered && !isSelected ? 'translateY(-2px)' : 'translateY(0)',
-          // Selection ring as outline (stays within bounds)
+            isHovered && !isSelected ? 'translateY(-4px)' : 'translateY(0)',
           outline: isSelected ? '3px solid #4A90E2' : 'none',
           outlineOffset: '-3px',
+          overflow: 'hidden',
         }}
       >
-        <div className="p-4 h-full flex flex-col">
-          {/* Icon at top */}
-          <div className="flex justify-center mb-4">
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: '#1F1F20' }}
-            >
-              <div className="w-2 h-2 bg-white rounded-full"></div>
-            </div>
-          </div>
-
-          {/* Preview area with image */}
+        {/* 3D Card Stack Container */}
+        <div
+          className="absolute"
+          style={{
+            left: '50%',
+            top: '48%',
+            transform: 'translate(-50%, -50%)',
+            width: '180px',
+            height: '240px',
+          }}
+        >
+          {/* Back card (furthest) - smaller, positioned HIGHER so it peeks out on top */}
           <div
-            className="flex-1 rounded-xl flex items-center justify-center overflow-hidden mb-4"
-            style={{ backgroundColor: '#FFFFFF' }}
+            className="absolute rounded-2xl"
+            style={{
+              width: '150px',
+              height: '210px',
+              backgroundColor: '#FFFFFF',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              left: '50%',
+              top: '40%', // Moved down (was 35%)
+              transform: 'translate(-50%, -50%)',
+              zIndex: 1,
+            }}
+          />
+
+          {/* Middle card - medium size, positioned between back and front, also peeks out on top */}
+          <div
+            className="absolute rounded-2xl"
+            style={{
+              width: '165px',
+              height: '225px',
+              backgroundColor: '#FFFFFF',
+              boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
+              left: '50%',
+              top: '45%', // Moved down (was 42%)
+              transform: 'translate(-50%, -50%)',
+              zIndex: 2,
+            }}
+          />
+
+          {/* Front card with resource image - full size, positioned lowest */}
+          <div
+            className="absolute rounded-2xl overflow-hidden"
+            style={{
+              width: '180px',
+              height: '240px',
+              backgroundColor: '#FFFFFF',
+              boxShadow: '0 8px 20px rgba(0,0,0,0.15)',
+              left: '50%',
+              top: '50%', // Stays the same
+              transform: 'translate(-50%, -50%)',
+              zIndex: 3,
+            }}
           >
-            {resource.has_image && resource.imageUrl ? (
+            {resource.imageUrl ? (
               <img
                 src={resource.imageUrl}
                 alt={resource.name}
                 className="w-full h-full object-cover"
+                onError={e => {
+                  // Fallback if image fails to load
+                  e.currentTarget.style.display = 'none'
+                  const parent = e.currentTarget.parentElement
+                  if (parent) {
+                    parent.style.display = 'flex'
+                    parent.style.alignItems = 'center'
+                    parent.style.justifyContent = 'center'
+                    parent.style.backgroundColor = '#F4F4F4'
+                    parent.innerHTML = `<span style="color: #929397; font-size: 48px; font-weight: bold;">${getInitials(resource.name)}</span>`
+                  }
+                }}
               />
             ) : (
-              <div className="text-4xl font-bold" style={{ color: '#E8EBED' }}>
-                {getInitials(resource.name)}
+              <div
+                className="w-full h-full flex items-center justify-center"
+                style={{ backgroundColor: '#F4F4F4' }}
+              >
+                <span
+                  className="text-5xl font-bold"
+                  style={{ color: '#929397' }}
+                >
+                  {getInitials(resource.name)}
+                </span>
               </div>
             )}
           </div>
+        </div>
 
-          {/* Resource name */}
+        {/* Bottom blur envelope with PROPER DEPRESSION/DIP in middle */}
+        <div
+          className="absolute left-0 right-0"
+          style={{
+            bottom: 0,
+            height: '35%',
+            zIndex: 5,
+          }}
+        >
+          {/* Frosted glass with depression - the middle third dips DOWN creating envelope shape */}
           <div
-            className="text-xs font-medium text-center truncate"
-            style={{ color: '#3B3B3B' }}
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: '100%',
+              background: 'rgba(255, 255, 255, 0.75)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              // Creates a depression with subtle depth: flat left → dip down → dip stays down → back up → flat right
+              clipPath:
+                'polygon(0 0, 32% 0, 37% 20%, 63% 20%, 68% 0, 100% 0, 100% 100%, 0 100%)',
+              willChange: 'clip-path',
+            }}
+          />
+
+          {/* Text content over the blur */}
+          <div
+            className="absolute left-0 right-0 bottom-0 px-5 pb-5 pt-7"
+            style={{
+              zIndex: 6,
+            }}
           >
-            {resource.name}
+            <h3
+              className="text-base font-semibold mb-1 truncate"
+              style={{ color: '#1F1F20' }}
+            >
+              {resource.name}
+            </h3>
+            <p className="text-xs truncate" style={{ color: '#929397' }}>
+              by Milkinside
+            </p>
           </div>
         </div>
       </div>
@@ -690,7 +786,7 @@ export default function Home() {
   const [showProfileMenu, setShowProfileMenu] = useState(false)
 
   // UI state
-  const [toggleOn, setToggleOn] = useState(false)
+  // const [toggleOn, setToggleOn] = useState(false)
   const [activeTab, setActiveTab] = useState<'left' | 'middle' | 'right'>(
     'left',
   )
@@ -1345,7 +1441,7 @@ export default function Home() {
     return (
       <div className="p-6">
         <div
-          className="overflow-x-auto overflow-y-hidden style-scroll-container"
+          className="overflow-x-auto overflow-y-visible style-scroll-container"
           style={{
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',
@@ -1803,22 +1899,139 @@ export default function Home() {
             {galleryItems.map(item => (
               <div
                 key={item.id}
-                className="rounded-2xl overflow-hidden cursor-pointer transition-all hover:scale-105"
+                className="cursor-pointer transition-all hover:scale-105"
                 style={{
-                  backgroundColor: item.bgColor,
                   height: `${item.height}px`,
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-                  backgroundImage: `linear-gradient(135deg, ${item.bgColor} 0%, ${item.bgColor}dd 100%)`,
                   position: 'relative',
                 }}
               >
-                <div className="absolute bottom-0 left-0 right-0 p-6">
-                  <h3
-                    className="text-xl font-medium"
-                    style={{ color: '#1F1F20' }}
+                {/* Container for the entire card */}
+                <div
+                  className="rounded-3xl overflow-hidden relative"
+                  style={{
+                    height: '100%',
+                    backgroundColor: item.bgColor,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                  }}
+                >
+                  {/* 3D Card Stack Container */}
+                  <div
+                    className="absolute"
+                    style={{
+                      left: '50%',
+                      top: '48%',
+                      transform: 'translate(-50%, -50%)',
+                      width: '180px',
+                      height: '240px',
+                    }}
                   >
-                    {item.title}
-                  </h3>
+                    {/* Back card (furthest) - smaller, positioned HIGHER to peek out on top */}
+                    <div
+                      className="absolute rounded-2xl"
+                      style={{
+                        width: '150px',
+                        height: '210px',
+                        backgroundColor: '#FFFFFF',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                        left: '50%',
+                        top: '40%',
+                        transform: 'translate(-50%, -50%)',
+                        zIndex: 1,
+                      }}
+                    />
+
+                    {/* Middle card - positioned between, also peeks out on top */}
+                    <div
+                      className="absolute rounded-2xl"
+                      style={{
+                        width: '165px',
+                        height: '225px',
+                        backgroundColor: '#FFFFFF',
+                        boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
+                        left: '50%',
+                        top: '45%',
+                        transform: 'translate(-50%, -50%)',
+                        zIndex: 2,
+                      }}
+                    />
+
+                    {/* Front card with image - full size, positioned lowest */}
+                    <div
+                      className="absolute rounded-2xl overflow-hidden"
+                      style={{
+                        width: '180px',
+                        height: '240px',
+                        backgroundColor: '#FFFFFF',
+                        boxShadow: '0 8px 20px rgba(0,0,0,0.15)',
+                        left: '50%',
+                        top: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        zIndex: 3,
+                        backgroundImage: `linear-gradient(135deg, ${item.bgColor}40 0%, ${item.bgColor}20 100%)`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                      }}
+                    >
+                      {/* Placeholder for resource image - will be replaced with actual image.png */}
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#929397',
+                          fontSize: '14px',
+                        }}
+                      >
+                        {/* Image will go here */}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom blur envelope with PROPER DEPRESSION */}
+                  <div
+                    className="absolute left-0 right-0"
+                    style={{
+                      bottom: 0,
+                      height: '35%',
+                      zIndex: 5,
+                    }}
+                  >
+                    {/* Frosted glass with depression - middle third dips down */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        height: '100%',
+                        background: 'rgba(255, 255, 255, 0.7)',
+                        backdropFilter: 'blur(12px)',
+                        WebkitBackdropFilter: 'blur(12px)',
+                        clipPath:
+                          'polygon(0 0, 33% 0, 38% 18%, 62% 18%, 67% 0, 100% 0, 100% 100%, 0 100%)',
+                      }}
+                    />
+
+                    {/* Content over the blur */}
+                    <div
+                      className="absolute left-0 right-0 bottom-0 px-6 pb-6 pt-8"
+                      style={{
+                        zIndex: 6,
+                      }}
+                    >
+                      <h3
+                        className="text-xl font-semibold mb-1"
+                        style={{ color: '#1F1F20' }}
+                      >
+                        {item.title}
+                      </h3>
+                      <p className="text-sm" style={{ color: '#929397' }}>
+                        by Milkinside
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
@@ -1920,9 +2133,17 @@ export default function Home() {
       )}
 
       {/* Top Navigation - Fixed */}
-      <div className="flex items-center justify-between px-8 py-4">
-        {/* Left - Toggle */}
-        <div className="flex items-center gap-3">
+      <div className="relative px-8 py-4" style={{ pointerEvents: 'none' }}>
+        {/* Left - Toggle (Commented out for now, will implement dark mode later) */}
+        {/* <div 
+          className="absolute flex items-center gap-3"
+          style={{
+            left: '32px',
+            top: '16px',
+            pointerEvents: 'auto',
+            zIndex: 50,
+          }}
+        >
           <button
             onClick={() => setToggleOn(!toggleOn)}
             className="relative transition-all duration-300"
@@ -1946,25 +2167,30 @@ export default function Home() {
               }}
             />
           </button>
-        </div>
+        </div> */}
 
         {/* Center - Tabs */}
         <div
-          className="flex items-center gap-1 rounded-full p-1"
+          className="absolute left-1/2 transform -translate-x-1/2 flex items-center gap-1 p-1"
           style={{
+            top: '16px',
             backgroundColor: '#FFFFFF',
             boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            borderRadius: '16px',
+            pointerEvents: 'auto',
+            zIndex: 50,
           }}
         >
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className="relative px-6 py-2 rounded-full transition-all duration-300 text-sm"
+              className="relative px-6 py-2 transition-all duration-300 text-sm"
               style={{
                 backgroundColor:
                   activeTab === tab.id ? '#F4F4F4' : 'transparent',
                 color: activeTab === tab.id ? '#3B3B3B' : '#929397',
+                borderRadius: '12px',
               }}
             >
               {tab.icon}
@@ -1973,7 +2199,15 @@ export default function Home() {
         </div>
 
         {/* Right - Config Menu & Profile */}
-        <div className="flex items-center gap-3">
+        <div
+          className="absolute flex items-center gap-3"
+          style={{
+            right: '32px',
+            top: '16px',
+            pointerEvents: 'auto',
+            zIndex: 50,
+          }}
+        >
           <ConfigurationMenu />
 
           {/* Profile Dropdown */}
