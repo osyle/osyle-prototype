@@ -44,9 +44,6 @@ export default function Editor() {
 
   const [error, setError] = useState<string | null>(null)
 
-  // View-only mode (when viewing random UI or continuing existing project)
-  const [isViewOnlyMode, setIsViewOnlyMode] = useState(false)
-
   // Right panel collapsed state
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false)
 
@@ -76,6 +73,31 @@ export default function Editor() {
   const getEnergyValue = () => Math.max(1, Math.round((energyValue / 100) * 10))
   const getCraftValue = () => Math.max(1, Math.round((craftValue / 100) * 10))
 
+  // Scale device dimensions to fit within max constraints while maintaining aspect ratio
+  const getScaledDimensions = () => {
+    const maxWidth = 1024
+    const maxHeight = 650
+    const { width, height } = device_info.screen
+
+    // If both dimensions are within limits, return original
+    if (width <= maxWidth && height <= maxHeight) {
+      return { width, height, scale: 1 }
+    }
+
+    // Calculate scale factors for both dimensions
+    const widthScale = maxWidth / width
+    const heightScale = maxHeight / height
+
+    // Use the smaller scale factor to ensure both dimensions fit
+    const scale = Math.min(widthScale, heightScale)
+
+    return {
+      width: Math.floor(width * scale),
+      height: Math.floor(height * scale),
+      scale,
+    }
+  }
+
   const handleBackToHome = () => {
     // Only allow navigation back if generation is complete or in error state
     if (generationStage !== 'complete' && generationStage !== 'error') {
@@ -87,8 +109,6 @@ export default function Editor() {
     if (currentProject) {
       try {
         const project = JSON.parse(currentProject)
-        // Add view_only flag so it doesn't regenerate when continuing
-        project.view_only = true
         project.ui_data = generatedUI
         localStorage.setItem('current_project', JSON.stringify(project))
       } catch (err) {
@@ -105,7 +125,6 @@ export default function Editor() {
     checkAndStartGeneration()
   }, [])
 
-  // ✅ CHANGE: Use centralized API
   const checkAndStartGeneration = async () => {
     try {
       const currentProject = localStorage.getItem('current_project')
@@ -116,15 +135,6 @@ export default function Editor() {
       }
 
       const project = JSON.parse(currentProject)
-
-      // Check if this is view-only mode (viewing random UI or continuing project)
-      if (project.view_only) {
-        console.log('View-only mode detected - loading existing UI')
-        setIsViewOnlyMode(true)
-        setGeneratedUI(project.ui_data as UINode)
-        setGenerationStage('complete')
-        return
-      }
 
       if (!project.selected_taste_id) {
         setError('Project missing taste selection')
@@ -143,7 +153,6 @@ export default function Editor() {
         console.log('Loaded existing UI:', existingUIData)
         setGeneratedUI(existingUIData.ui as UINode)
         setGenerationStage('complete')
-        setIsViewOnlyMode(true) // Treat existing UIs as view-only
         return
       } catch (err) {
         console.log('No existing UI found, will generate new one:', err)
@@ -170,14 +179,7 @@ export default function Editor() {
     }
   }
 
-  // ✅ CHANGE: Use centralized API
   const startGeneration = async (shouldBuildDtr: boolean) => {
-    // Prevent regeneration if in view-only mode
-    if (isViewOnlyMode) {
-      console.log('View-only mode active - skipping generation')
-      return
-    }
-
     try {
       const currentProject = localStorage.getItem('current_project')
       if (!currentProject) {
@@ -377,17 +379,28 @@ export default function Editor() {
 
   return (
     <div
-      className="flex h-screen w-screen"
+      className="relative h-screen w-screen overflow-hidden"
       style={{
         backgroundColor: '#EDEBE9',
         fontFamily: "'Inter', -apple-system, sans-serif",
       }}
     >
-      {/* Left Menu Buttons - Centered vertically */}
-      <div
-        className="flex flex-col items-center justify-center py-6 gap-3"
-        style={{ width: '80px' }}
-      >
+      {/* Back Button - Fixed top-left */}
+      {(generationStage === 'complete' || generationStage === 'error') && (
+        <button
+          onClick={handleBackToHome}
+          className="fixed top-6 left-6 w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 z-50"
+          style={{
+            backgroundColor: '#FFFFFF',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          }}
+        >
+          <ArrowLeft size={20} style={{ color: '#3B3B3B' }} />
+        </button>
+      )}
+
+      {/* Left Side Menu - Fixed left center */}
+      <div className="fixed left-6 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-40">
         {/* Menu button */}
         <button
           className="rounded-lg flex items-center justify-center transition-all hover:scale-105"
@@ -468,515 +481,506 @@ export default function Editor() {
         </button>
       </div>
 
-      {/* Left Section - Responsive width based on panel state */}
+      {/* Tab Navigation - Fixed top center (responsive to right panel) */}
       <div
-        className="flex flex-col transition-all duration-300"
+        className="fixed top-6 transition-all duration-300 z-40"
         style={{
-          width: isRightPanelCollapsed
-            ? 'calc(100% - 80px)'
-            : 'calc(80% - 80px)',
+          left: '80px',
+          right: isRightPanelCollapsed ? '0' : '20%',
+          display: 'flex',
+          justifyContent: 'center',
         }}
       >
-        {/* Top Section with Back Button and Tabs */}
-        <div className="flex items-center justify-between px-16 py-6">
-          {/* Back Button - Only show when generation is complete or error */}
-          {(generationStage === 'complete' || generationStage === 'error') && (
+        <div
+          className="flex items-center gap-1 rounded-full px-2 py-1.5"
+          style={{
+            backgroundColor: '#FFFFFF',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          }}
+        >
+          {tabs.map(tab => (
             <button
-              onClick={handleBackToHome}
-              className="w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105"
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className="px-6 py-2 rounded-full transition-all duration-300 text-sm font-medium"
               style={{
-                backgroundColor: '#FFFFFF',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                backgroundColor: activeTab === tab ? '#F4F4F4' : 'transparent',
+                color: activeTab === tab ? '#3B3B3B' : '#929397',
               }}
             >
-              <ArrowLeft size={20} style={{ color: '#3B3B3B' }} />
+              {tab}
             </button>
-          )}
+          ))}
+        </div>
+      </div>
 
-          {/* Tab Navigation */}
-          <div
-            className="flex items-center gap-1 rounded-full px-2 py-1.5"
-            style={{
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-            }}
-          >
-            {tabs.map(tab => (
+      {/* Device Frame - Centered in available space */}
+      <div
+        className="fixed top-1/2 -translate-y-1/2 transition-all duration-300 z-30"
+        style={{
+          left: '80px',
+          right: isRightPanelCollapsed ? '0' : '20%',
+          display: 'flex',
+          justifyContent: 'center',
+        }}
+      >
+        <DeviceFrame scaledDimensions={getScaledDimensions()}>
+          {renderDeviceContent()}
+        </DeviceFrame>
+      </div>
+
+      {/* Bottom Control Bar - Fixed bottom center (responsive to right panel) */}
+      <div
+        className="fixed bottom-6 transition-all duration-300 z-40"
+        style={{
+          left: '80px',
+          right: isRightPanelCollapsed ? '0' : '20%',
+          display: 'flex',
+          justifyContent: 'center',
+        }}
+      >
+        <div
+          className="rounded-2xl p-4"
+          style={{
+            backgroundColor: '#FFFFFF',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+            width: '800px',
+            maxWidth: '90%',
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <input
+              type="text"
+              placeholder="Describe your edits"
+              className="flex-1 px-4 py-2 rounded-lg focus:outline-none text-sm"
+              style={{ backgroundColor: 'transparent', color: '#3B3B3B' }}
+            />
+            <div className="flex items-center gap-3">
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className="px-6 py-2 rounded-full transition-all duration-300 text-sm font-medium"
-                style={{
-                  backgroundColor:
-                    activeTab === tab ? '#F4F4F4' : 'transparent',
-                  color: activeTab === tab ? '#3B3B3B' : '#929397',
-                }}
+                className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-105"
+                style={{ backgroundColor: '#1F1F20' }}
               >
-                {tab}
+                <div
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: '#FFFFFF' }}
+                />
               </button>
-            ))}
-          </div>
-
-          {/* View Only Badge or Empty space for balance */}
-          {isViewOnlyMode ? (
-            <div
-              className="px-4 py-2 rounded-full text-xs font-medium"
-              style={{
-                backgroundColor: '#E8F4FF',
-                color: '#4A90E2',
-                border: '1px solid #4A90E2',
-              }}
-            >
-              View Only
-            </div>
-          ) : (
-            <div className="w-12" />
-          )}
-        </div>
-
-        {/* Device Frame - Replaces center white rectangle */}
-        <div className="flex-1 pb-6">
-          <DeviceFrame>{renderDeviceContent()}</DeviceFrame>
-        </div>
-
-        {/* Bottom Control Bar */}
-        <div className="px-16 pb-6">
-          <div
-            className="rounded-2xl p-4"
-            style={{
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
-            }}
-          >
-            <div className="flex items-center justify-between">
-              <input
-                type="text"
-                placeholder="Describe your edits"
-                className="flex-1 px-4 py-2 rounded-lg focus:outline-none text-sm"
-                style={{ backgroundColor: 'transparent', color: '#3B3B3B' }}
-              />
-              <div className="flex items-center gap-3">
-                <button
-                  className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-105"
-                  style={{ backgroundColor: '#1F1F20' }}
-                >
-                  <div
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: '#FFFFFF' }}
-                  />
-                </button>
-                <button
-                  className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
-                  style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
-                >
-                  <Settings size={16} />
-                </button>
-                <button
-                  className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
-                  style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
-                >
-                  <Smartphone size={16} />
-                  iOS
-                </button>
-                <button
-                  className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
-                  style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
-                >
-                  <Smile size={16} />
-                  Mood
-                </button>
-                <button
-                  className="w-10 h-10 rounded-lg flex items-center justify-center transition-all hover:scale-105"
-                  style={{ backgroundColor: '#F7F5F3' }}
-                >
-                  <Maximize2 size={16} style={{ color: '#3B3B3B' }} />
-                </button>
-              </div>
+              <button
+                className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
+                style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
+              >
+                <Settings size={16} />
+              </button>
+              <button
+                className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
+                style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
+              >
+                <Smartphone size={16} />
+                iOS
+              </button>
+              <button
+                className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
+                style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
+              >
+                <Smile size={16} />
+                Mood
+              </button>
+              <button
+                className="w-10 h-10 rounded-lg flex items-center justify-center transition-all hover:scale-105"
+                style={{ backgroundColor: '#F7F5F3' }}
+              >
+                <Maximize2 size={16} style={{ color: '#3B3B3B' }} />
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Right Sidebar - 20% width, full height, collapsible */}
+      {/* Right Sidebar - Fixed right side, collapsible */}
       <div
-        className="relative rounded-3xl m-6 p-6 flex flex-col gap-6 transition-all duration-300"
+        className="fixed right-0 top-0 h-screen transition-all duration-300 z-30"
         style={{
-          width: isRightPanelCollapsed ? '0%' : '20%',
-          backgroundColor: '#FFFFFF',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
-          opacity: isRightPanelCollapsed ? 0 : 1,
-          padding: isRightPanelCollapsed ? 0 : '24px',
-          margin: isRightPanelCollapsed ? '0' : '24px',
-          overflow: 'hidden',
+          width: isRightPanelCollapsed ? '0' : '20%',
         }}
       >
-        {/* Collapse/Expand Toggle Button - Always visible */}
-        {!isRightPanelCollapsed && (
-          <button
-            onClick={() => setIsRightPanelCollapsed(true)}
-            className="absolute top-6 -left-4 w-8 h-12 rounded-l-lg flex items-center justify-center transition-all hover:scale-110 z-10"
-            style={{
-              backgroundColor: '#FFFFFF',
-              boxShadow: '-2px 2px 8px rgba(0,0,0,0.1)',
-            }}
-          >
-            <ChevronDown
-              size={20}
-              style={{
-                color: '#3B3B3B',
-                transform: 'rotate(-90deg)',
-                transition: 'transform 0.3s',
-              }}
-            />
-          </button>
-        )}
-
-        {!isRightPanelCollapsed && (
-          <>
-            {/* Top row - L button, 25%, NI */}
-            <div className="flex items-center justify-between">
-              <button
-                className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-semibold transition-all hover:scale-105"
-                style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
-              >
-                L
-              </button>
-              <div className="flex items-center gap-3">
-                <div
-                  className="px-4 py-2 rounded-lg text-sm font-medium"
+        <div
+          className="relative rounded-3xl mt-6 mr-6 mb-6 ml-0 p-6 flex flex-col gap-6 h-[calc(100vh-48px)]"
+          style={{
+            backgroundColor: '#FFFFFF',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+            opacity: isRightPanelCollapsed ? 0 : 1,
+            overflow: isRightPanelCollapsed ? 'hidden' : 'auto',
+          }}
+        >
+          {!isRightPanelCollapsed && (
+            <>
+              {/* Top row - L button, 25%, NI */}
+              <div className="flex items-center justify-between">
+                <button
+                  className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-semibold transition-all hover:scale-105"
                   style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
                 >
-                  25%
-                </div>
-                <button
-                  className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm"
-                  style={{ backgroundColor: '#3B3B3B', color: '#FFFFFF' }}
-                >
-                  NI
+                  L
                 </button>
-              </div>
-            </div>
-
-            {/* Title and subtitle */}
-            <div>
-              <h2
-                className="text-2xl font-semibold mb-1"
-                style={{ color: '#3B3B3B' }}
-              >
-                Travel interface
-              </h2>
-              <p className="text-sm" style={{ color: '#929397' }}>
-                App for travelling with partner, iOS app
-              </p>
-            </div>
-
-            {/* Style dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setStyleDropdownOpen(!styleDropdownOpen)}
-                className="w-full rounded-2xl p-4 flex flex-col transition-all hover:scale-[1.02]"
-                style={{
-                  background: selectedStyle.bg,
-                  boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-                }}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div
-                      className="text-xs mb-1"
-                      style={{ color: '#3B3B3B', opacity: 0.7 }}
-                    >
-                      Style
-                    </div>
-                    <div
-                      className="text-sm font-semibold"
-                      style={{ color: '#3B3B3B' }}
-                    >
-                      {selectedStyle.title}
-                    </div>
-                  </div>
+                <div className="flex items-center gap-3">
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center"
-                    style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}
+                    className="px-4 py-2 rounded-lg text-sm font-medium"
+                    style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
                   >
-                    <ChevronDown
-                      size={16}
-                      style={{
-                        color: '#3B3B3B',
-                        transform: styleDropdownOpen
-                          ? 'rotate(180deg)'
-                          : 'rotate(0deg)',
-                        transition: 'transform 0.3s',
-                      }}
-                    />
+                    25%
                   </div>
+                  <button
+                    className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm"
+                    style={{ backgroundColor: '#3B3B3B', color: '#FFFFFF' }}
+                  >
+                    NI
+                  </button>
                 </div>
-                <div
-                  className="h-16 rounded-xl"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.4)' }}
-                />
-              </button>
+              </div>
 
-              {styleDropdownOpen && (
-                <div
-                  className="absolute top-full left-0 right-0 mt-2 p-2 rounded-2xl z-10"
+              {/* Title and subtitle */}
+              <div>
+                <h2
+                  className="text-2xl font-semibold mb-1"
+                  style={{ color: '#3B3B3B' }}
+                >
+                  Travel interface
+                </h2>
+                <p className="text-sm" style={{ color: '#929397' }}>
+                  App for travelling with partner, iOS app
+                </p>
+              </div>
+
+              {/* Style dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setStyleDropdownOpen(!styleDropdownOpen)}
+                  className="w-full rounded-2xl p-4 flex flex-col transition-all hover:scale-[1.02]"
                   style={{
-                    backgroundColor: '#FFFFFF',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                    background: selectedStyle.bg,
+                    boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
                   }}
                 >
-                  {styleOptions.map((option, index) => (
-                    <button
-                      key={index}
-                      onClick={() => {
-                        setSelectedStyle(option)
-                        setStyleDropdownOpen(false)
-                      }}
-                      className="w-full rounded-xl p-3 mb-2 last:mb-0 transition-all hover:scale-[1.02]"
-                      style={{ background: option.bg }}
-                    >
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
                       <div
-                        className="text-sm font-semibold text-left"
+                        className="text-xs mb-1"
+                        style={{ color: '#3B3B3B', opacity: 0.7 }}
+                      >
+                        Style
+                      </div>
+                      <div
+                        className="text-sm font-semibold"
                         style={{ color: '#3B3B3B' }}
                       >
-                        {option.title}
+                        {selectedStyle.title}
                       </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Sliders */}
-            <div className="space-y-4">
-              {/* Details slider */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="text-sm font-medium"
-                      style={{ color: '#3B3B3B' }}
+                    </div>
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}
                     >
-                      Details
-                    </span>
-                    <span className="text-xs" style={{ color: '#929397' }}>
-                      ||
-                    </span>
+                      <ChevronDown
+                        size={16}
+                        style={{
+                          color: '#3B3B3B',
+                          transform: styleDropdownOpen
+                            ? 'rotate(180deg)'
+                            : 'rotate(0deg)',
+                          transition: 'transform 0.3s',
+                        }}
+                      />
+                    </div>
                   </div>
-                  <span
-                    className="text-sm font-medium"
-                    style={{ color: '#3B3B3B' }}
-                  >
-                    {getDetailsLabel()}
-                  </span>
-                </div>
-                <div
-                  className="relative h-2 rounded-full"
-                  style={{ backgroundColor: '#F4F4F4' }}
-                >
                   <div
-                    className="absolute left-0 top-0 h-full rounded-full"
+                    className="h-16 rounded-xl"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.4)' }}
+                  />
+                </button>
+
+                {styleDropdownOpen && (
+                  <div
+                    className="absolute top-full left-0 right-0 mt-2 p-2 rounded-2xl z-10"
                     style={{
-                      backgroundColor: '#3B3B3B',
-                      width: `${detailsValue}%`,
+                      backgroundColor: '#FFFFFF',
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
                     }}
-                  />
-                  <input
-                    type="range"
-                    min="10"
-                    max="100"
-                    value={detailsValue}
-                    onChange={e => setDetailsValue(Number(e.target.value))}
-                    className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                </div>
-              </div>
-
-              {/* Energy slider */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="text-sm font-medium"
-                      style={{ color: '#3B3B3B' }}
-                    >
-                      Energy
-                    </span>
-                    <span className="text-xs" style={{ color: '#929397' }}>
-                      ||
-                    </span>
-                  </div>
-                  <span
-                    className="text-sm font-medium"
-                    style={{ color: '#3B3B3B' }}
                   >
-                    {getEnergyValue()}
-                  </span>
-                </div>
-                <div
-                  className="relative h-2 rounded-full"
-                  style={{ backgroundColor: '#F4F4F4' }}
-                >
-                  <div
-                    className="absolute left-0 top-0 h-full rounded-full"
-                    style={{
-                      backgroundColor: '#3B3B3B',
-                      width: `${energyValue}%`,
-                    }}
-                  />
-                  <input
-                    type="range"
-                    min="10"
-                    max="100"
-                    value={energyValue}
-                    onChange={e => setEnergyValue(Number(e.target.value))}
-                    className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                </div>
-              </div>
-
-              {/* Craft slider */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="text-sm font-medium"
-                      style={{ color: '#3B3B3B' }}
-                    >
-                      Craft
-                    </span>
-                    <span className="text-xs" style={{ color: '#929397' }}>
-                      ||
-                    </span>
-                  </div>
-                  <span
-                    className="text-sm font-medium"
-                    style={{ color: '#3B3B3B' }}
-                  >
-                    {getCraftValue()}
-                  </span>
-                </div>
-                <div
-                  className="relative h-2 rounded-full"
-                  style={{ backgroundColor: '#F4F4F4' }}
-                >
-                  <div
-                    className="absolute left-0 top-0 h-full rounded-full"
-                    style={{
-                      backgroundColor: '#3B3B3B',
-                      width: `${craftValue}%`,
-                    }}
-                  />
-                  <input
-                    type="range"
-                    min="10"
-                    max="100"
-                    value={craftValue}
-                    onChange={e => setCraftValue(Number(e.target.value))}
-                    className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* 4 Control buttons */}
-            <div className="grid grid-cols-4 gap-3">
-              <button
-                className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
-                style={{ backgroundColor: '#F7F5F3' }}
-              >
-                <RotateCcw size={20} style={{ color: '#4F515A' }} />
-                <span className="text-xs" style={{ color: '#929397' }}>
-                  Vary
-                </span>
-              </button>
-              <button
-                className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
-                style={{ backgroundColor: '#F7F5F3' }}
-              >
-                <Palette size={20} style={{ color: '#4F515A' }} />
-                <span className="text-xs" style={{ color: '#929397' }}>
-                  Colors
-                </span>
-              </button>
-              <button
-                className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
-                style={{ backgroundColor: '#F7F5F3' }}
-              >
-                <Sparkles size={20} style={{ color: '#4F515A' }} />
-                <span className="text-xs" style={{ color: '#929397' }}>
-                  Taste
-                </span>
-              </button>
-              <button
-                className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
-                style={{ backgroundColor: '#F7F5F3' }}
-              >
-                <span className="text-lg">08</span>
-                <span className="text-xs" style={{ color: '#929397' }}>
-                  Style
-                </span>
-              </button>
-            </div>
-
-            {/* Input area at bottom */}
-            <div className="mt-auto">
-              <div className="relative">
-                <textarea
-                  placeholder="Add suggestions or feedback..."
-                  value={inputText}
-                  onChange={e => setInputText(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl resize-none focus:outline-none"
-                  style={{
-                    backgroundColor: '#F7F5F3',
-                    border: 'none',
-                    color: '#3B3B3B',
-                    fontSize: '14px',
-                  }}
-                  rows={3}
-                />
-                {inputText.length > 0 && (
-                  <div
-                    className="absolute bottom-3 right-4 px-2 py-1 rounded text-xs"
-                    style={{ backgroundColor: '#FFFFFF', color: '#929397' }}
-                  >
-                    Enter
+                    {styleOptions.map((option, index) => (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          setSelectedStyle(option)
+                          setStyleDropdownOpen(false)
+                        }}
+                        className="w-full rounded-xl p-3 mb-2 last:mb-0 transition-all hover:scale-[1.02]"
+                        style={{ background: option.bg }}
+                      >
+                        <div
+                          className="text-sm font-semibold text-left"
+                          style={{ color: '#3B3B3B' }}
+                        >
+                          {option.title}
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
-              {inputText.length > 0 && (
+
+              {/* Sliders */}
+              <div className="space-y-4">
+                {/* Details slider */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="text-sm font-medium"
+                        style={{ color: '#3B3B3B' }}
+                      >
+                        Details
+                      </span>
+                      <span className="text-xs" style={{ color: '#929397' }}>
+                        ||
+                      </span>
+                    </div>
+                    <span
+                      className="text-sm font-medium"
+                      style={{ color: '#3B3B3B' }}
+                    >
+                      {getDetailsLabel()}
+                    </span>
+                  </div>
+                  <div
+                    className="relative h-2 rounded-full"
+                    style={{ backgroundColor: '#F4F4F4' }}
+                  >
+                    <div
+                      className="absolute left-0 top-0 h-full rounded-full"
+                      style={{
+                        backgroundColor: '#3B3B3B',
+                        width: `${detailsValue}%`,
+                      }}
+                    />
+                    <input
+                      type="range"
+                      min="10"
+                      max="100"
+                      value={detailsValue}
+                      onChange={e => setDetailsValue(Number(e.target.value))}
+                      className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Energy slider */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="text-sm font-medium"
+                        style={{ color: '#3B3B3B' }}
+                      >
+                        Energy
+                      </span>
+                      <span className="text-xs" style={{ color: '#929397' }}>
+                        ||
+                      </span>
+                    </div>
+                    <span
+                      className="text-sm font-medium"
+                      style={{ color: '#3B3B3B' }}
+                    >
+                      {getEnergyValue()}
+                    </span>
+                  </div>
+                  <div
+                    className="relative h-2 rounded-full"
+                    style={{ backgroundColor: '#F4F4F4' }}
+                  >
+                    <div
+                      className="absolute left-0 top-0 h-full rounded-full"
+                      style={{
+                        backgroundColor: '#3B3B3B',
+                        width: `${energyValue}%`,
+                      }}
+                    />
+                    <input
+                      type="range"
+                      min="10"
+                      max="100"
+                      value={energyValue}
+                      onChange={e => setEnergyValue(Number(e.target.value))}
+                      className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Craft slider */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="text-sm font-medium"
+                        style={{ color: '#3B3B3B' }}
+                      >
+                        Craft
+                      </span>
+                      <span className="text-xs" style={{ color: '#929397' }}>
+                        ||
+                      </span>
+                    </div>
+                    <span
+                      className="text-sm font-medium"
+                      style={{ color: '#3B3B3B' }}
+                    >
+                      {getCraftValue()}
+                    </span>
+                  </div>
+                  <div
+                    className="relative h-2 rounded-full"
+                    style={{ backgroundColor: '#F4F4F4' }}
+                  >
+                    <div
+                      className="absolute left-0 top-0 h-full rounded-full"
+                      style={{
+                        backgroundColor: '#3B3B3B',
+                        width: `${craftValue}%`,
+                      }}
+                    />
+                    <input
+                      type="range"
+                      min="10"
+                      max="100"
+                      value={craftValue}
+                      onChange={e => setCraftValue(Number(e.target.value))}
+                      className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 4 Control buttons */}
+              <div className="grid grid-cols-4 gap-3">
                 <button
-                  className="w-full mt-3 px-6 py-3 rounded-xl font-medium text-sm transition-all hover:scale-[1.02]"
-                  style={{
-                    backgroundColor: '#F5C563',
-                    color: '#1F1F20',
-                    boxShadow: '0 2px 12px rgba(245, 197, 99, 0.3)',
-                  }}
+                  className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
+                  style={{ backgroundColor: '#F7F5F3' }}
                 >
-                  Submit
+                  <RotateCcw size={20} style={{ color: '#4F515A' }} />
+                  <span className="text-xs" style={{ color: '#929397' }}>
+                    Vary
+                  </span>
                 </button>
-              )}
-            </div>
-          </>
-        )}
+                <button
+                  className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
+                  style={{ backgroundColor: '#F7F5F3' }}
+                >
+                  <Palette size={20} style={{ color: '#4F515A' }} />
+                  <span className="text-xs" style={{ color: '#929397' }}>
+                    Colors
+                  </span>
+                </button>
+                <button
+                  className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
+                  style={{ backgroundColor: '#F7F5F3' }}
+                >
+                  <Sparkles size={20} style={{ color: '#4F515A' }} />
+                  <span className="text-xs" style={{ color: '#929397' }}>
+                    Taste
+                  </span>
+                </button>
+                <button
+                  className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
+                  style={{ backgroundColor: '#F7F5F3' }}
+                >
+                  <span className="text-lg">08</span>
+                  <span className="text-xs" style={{ color: '#929397' }}>
+                    Style
+                  </span>
+                </button>
+              </div>
+
+              {/* Input area at bottom */}
+              <div className="mt-auto">
+                <div className="relative">
+                  <textarea
+                    placeholder="Add suggestions or feedback..."
+                    value={inputText}
+                    onChange={e => setInputText(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl resize-none focus:outline-none"
+                    style={{
+                      backgroundColor: '#F7F5F3',
+                      border: 'none',
+                      color: '#3B3B3B',
+                      fontSize: '14px',
+                    }}
+                    rows={3}
+                  />
+                  {inputText.length > 0 && (
+                    <div
+                      className="absolute bottom-3 right-4 px-2 py-1 rounded text-xs"
+                      style={{ backgroundColor: '#FFFFFF', color: '#929397' }}
+                    >
+                      Enter
+                    </div>
+                  )}
+                </div>
+                {inputText.length > 0 && (
+                  <button
+                    className="w-full mt-3 px-6 py-3 rounded-xl font-medium text-sm transition-all hover:scale-[1.02]"
+                    style={{
+                      backgroundColor: '#F5C563',
+                      color: '#1F1F20',
+                      boxShadow: '0 2px 12px rgba(245, 197, 99, 0.3)',
+                    }}
+                  >
+                    Submit
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
+
+      {/* Floating Collapse Button - Only visible when panel is open */}
+      {!isRightPanelCollapsed && (
+        <button
+          onClick={() => setIsRightPanelCollapsed(true)}
+          className="fixed bottom-1/6 right-0 -translate-y-1/2 w-10 h-16 rounded-l-xl flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg z-50 group"
+          style={{
+            backgroundColor: '#FFFFFF',
+            boxShadow: '-4px 4px 12px rgba(0,0,0,0.12)',
+          }}
+        >
+          <ChevronDown
+            size={20}
+            style={{
+              color: '#3B3B3B',
+              transform: 'rotate(-90deg)',
+            }}
+            className="group-hover:scale-110 transition-transform"
+          />
+        </button>
+      )}
 
       {/* Floating Expand Button - Only visible when panel is collapsed */}
       {isRightPanelCollapsed && (
         <button
           onClick={() => setIsRightPanelCollapsed(false)}
-          className="fixed top-1/2 right-4 -translate-y-1/2 w-10 h-16 rounded-l-xl flex items-center justify-center transition-all hover:scale-110 z-50"
+          className="fixed bottom-1/6 right-0 -translate-y-1/2 w-10 h-16 rounded-l-xl flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg z-50 group"
           style={{
             backgroundColor: '#FFFFFF',
-            boxShadow: '-4px 4px 16px rgba(0,0,0,0.15)',
+            boxShadow: '-4px 4px 12px rgba(0,0,0,0.12)',
           }}
         >
           <ChevronDown
-            size={24}
+            size={20}
             style={{
               color: '#3B3B3B',
               transform: 'rotate(90deg)',
             }}
+            className="group-hover:scale-110 transition-transform"
           />
         </button>
       )}

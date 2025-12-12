@@ -3,11 +3,19 @@ import { useDeviceContext } from '../hooks/useDeviceContext'
 
 interface DeviceFrameProps {
   children: ReactNode
+  scaledDimensions?: { width: number; height: number; scale: number }
 }
 
-export default function DeviceFrame({ children }: DeviceFrameProps) {
+export default function DeviceFrame({
+  children,
+  scaledDimensions,
+}: DeviceFrameProps) {
   const { device_info } = useDeviceContext()
   const { platform, screen } = device_info
+
+  // Use scaled dimensions if provided, otherwise use original
+  const displayWidth = scaledDimensions?.width ?? screen.width
+  const displayHeight = scaledDimensions?.height ?? screen.height
 
   // Frame-specific styles
   const getFrameStyles = () => {
@@ -17,7 +25,7 @@ export default function DeviceFrame({ children }: DeviceFrameProps) {
           'rounded-lg overflow-hidden bg-white shadow-2xl border border-gray-300',
         topBarClass:
           'h-8 bg-gray-200 flex items-center px-3 border-b border-gray-300',
-        contentClass: 'overflow-auto scrollbar-hide',
+        contentClass: 'overflow-auto',
       }
     } else {
       // Phone frame
@@ -25,7 +33,7 @@ export default function DeviceFrame({ children }: DeviceFrameProps) {
         frameClass:
           'rounded-[32px] overflow-hidden bg-black shadow-2xl border-8 border-black relative',
         topBarClass: 'h-6 bg-black relative',
-        contentClass: 'overflow-auto scrollbar-hide',
+        contentClass: 'overflow-auto',
       }
     }
   }
@@ -37,25 +45,14 @@ export default function DeviceFrame({ children }: DeviceFrameProps) {
       className="flex items-center justify-center w-full h-full"
       style={{ backgroundColor: '#EDEBE9' }}
     >
-      {/* Add global styles for hiding scrollbars */}
-      <style>{`
-        .scrollbar-hide {
-          -ms-overflow-style: none;  /* IE and Edge */
-          scrollbar-width: none;  /* Firefox */
-        }
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;  /* Chrome, Safari, Opera */
-        }
-      `}</style>
-
       <div
         className={frameClass}
         style={{
-          width: `${screen.width}px`,
+          width: `${displayWidth}px`,
           height:
             platform === 'web'
-              ? `${screen.height}px`
-              : `${screen.height + 32}px`, // Add space for top bar
+              ? `${displayHeight}px`
+              : `${displayHeight + 32}px`, // Add space for top bar
         }}
       >
         {/* Browser/Phone Top Bar */}
@@ -84,17 +81,16 @@ export default function DeviceFrame({ children }: DeviceFrameProps) {
           )}
         </div>
 
-        {/* Content Area - Scrollable */}
+        {/* Content Area */}
         <div
           className={contentClass}
           style={{
             height:
               platform === 'web'
-                ? `${screen.height - 32}px`
-                : `${screen.height}px`,
+                ? `${displayHeight - 32}px`
+                : `${displayHeight}px`,
             width: '100%',
             backgroundColor: 'white',
-            position: 'relative',
           }}
         >
           {children}
