@@ -1,5 +1,15 @@
 import { signOut, fetchAuthSession, getCurrentUser } from 'aws-amplify/auth'
-import { ChevronDown, Plus, Link, Palette, X, Sparkles } from 'lucide-react'
+import {
+  ChevronDown,
+  Plus,
+  Link,
+  Palette,
+  X,
+  Sparkles,
+  Sprout,
+  Layers,
+  Eye,
+} from 'lucide-react'
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
@@ -1882,9 +1892,9 @@ export default function Home() {
   ]
 
   const tabs = [
-    { id: 'left' as const, icon: <Palette size={18} /> },
-    { id: 'middle' as const, icon: <Link size={18} /> },
-    { id: 'right' as const, icon: <Sparkles size={18} /> },
+    { id: 'left' as const, icon: <Sprout size={18} /> },
+    { id: 'middle' as const, icon: <Layers size={18} /> },
+    { id: 'right' as const, icon: <Eye size={18} /> },
   ]
 
   const galleryItems = [
