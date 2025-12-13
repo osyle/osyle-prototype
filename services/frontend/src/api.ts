@@ -483,7 +483,6 @@ export const llmAPI = {
     taskDescription: string,
     deviceInfo: DeviceInfo,
     renderingMode: 'design-ml' | 'react',
-    model: string = 'haiku',
   ): Promise<GenerateUIResponse> => {
     return apiRequest<GenerateUIResponse>('/api/llm/generate-ui', {
       method: 'POST',
@@ -492,7 +491,6 @@ export const llmAPI = {
         task_description: taskDescription,
         device_info: deviceInfo,
         rendering_mode: renderingMode,
-        model,
       }),
     })
   },

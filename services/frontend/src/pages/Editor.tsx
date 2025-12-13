@@ -206,7 +206,6 @@ export default function Editor() {
         project.task_description,
         device_info,
         rendering_mode,
-        'haiku',
       )
 
       setGeneratedUI(uiData.ui as UINode)

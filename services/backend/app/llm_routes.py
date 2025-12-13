@@ -50,7 +50,6 @@ class DeviceInfo(BaseModel):
 class GenerateUIRequest(BaseModel):
     project_id: str
     task_description: str
-    model: Optional[str] = "sonnet"  # Use Sonnet for quality
     device_info: Optional[DeviceInfo] = None
     rendering_mode: Optional[str] = "design-ml"  # 'design-ml' | 'react'
 
@@ -72,7 +71,7 @@ async def build_dtr(
     1. Load Figma JSON from plugin v3 (already compressed & intelligent)
     2. Run code-based quantitative analysis
     3. Extract LLM context from code analysis
-    4. Send to Claude: Figma JSON + Code context + Image
+    4. Send to LLM: Figma JSON + Code context + Image
     5. Merge LLM semantic DTR with code validation
     6. Save unified DTR v3
     """
@@ -181,9 +180,9 @@ async def build_dtr(
         print(f"  Token estimate: ~{len(figma_for_llm) // 4:,} tokens")
         
         # ====================================================================
-        # STEP 6: Build message content for Claude
+        # STEP 6: Build message content for LLM
         # ====================================================================
-        print(f"\n[6/9] Building message for Claude...")
+        print(f"\n[6/9] Building message for LLM...")
         
         content = []
         
@@ -224,14 +223,13 @@ async def build_dtr(
         print(f"✓ Message built: {len(content)} parts (image: {image_included})")
         
         # ====================================================================
-        # STEP 7: Call Claude with DTR v3 prompt
+        # STEP 7: Call LLM with DTR v3 prompt
         # ====================================================================
-        print(f"\n[7/9] Calling Claude Sonnet (DTR v3 prompt)...")
+        print(f"\n[7/9] Calling LLM (DTR v3 prompt)...")
         
         response = await llm.call_claude(
             prompt_name="build_dtr_v3",
             user_message=content,
-            model="sonnet",  # Use Sonnet for quality
             parse_json=True,
         )
         
@@ -354,7 +352,6 @@ async def generate_ui(
         print(f"Project: {request.project_id}")
         print(f"Task: {request.task_description[:80]}...")
         print(f"Rendering mode: {request.rendering_mode}")
-        print(f"Model: {request.model}")
         
         # Load DTR from resource if available
         dtr_json = None
@@ -416,12 +413,11 @@ async def generate_ui(
         
         user_message = "\n".join(user_message_parts)
         
-        # Call Claude with appropriate prompt
-        print(f"Calling Claude with {prompt_name}...")
+        # Call LLM with appropriate prompt
+        print(f"Calling LLM with {prompt_name}...")
         response = await llm.call_claude(
             prompt_name=prompt_name,
             user_message=user_message,
-            model=request.model,
             parse_json=parse_json,
         )
         

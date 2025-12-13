@@ -1,36 +1,42 @@
 """
-LLM Service for Claude API interactions
+LLM Service for Multi-Provider API interactions
+Supports Claude (Anthropic) and Gemini (Google) models
 Handles streaming, JSON parsing, and response management
 """
 import json
 import os
-from typing import Dict, Any, Optional, List, AsyncGenerator
-from anthropic import Anthropic, AsyncAnthropic
+from typing import Dict, Any, Optional, AsyncGenerator
 import re
 
-# Model options (easy to change)
-MODELS = {
-    "haiku": "claude-haiku-4-5-20251001",
-    "sonnet": "claude-sonnet-4-20250514", 
-    "opus": "claude-opus-4-1-20250514",
-}
+from app.providers import ProviderFactory
 
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL")
+# Default model from environment or fallback to Claude Sonnet
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "claude-sonnet")
+
 
 class LLMService:
-    """Service for handling Claude API calls with streaming and JSON parsing"""
+    """Service for handling multi-provider LLM API calls"""
     
-    def __init__(self, api_key: str):
-        self.client = Anthropic(api_key=api_key)
-        self.async_client = AsyncAnthropic(api_key=api_key)
+    def __init__(self, anthropic_api_key: str = None, google_api_key: str = None):
+        """
+        Initialize LLM service with API keys
         
+        Args:
+            anthropic_api_key: API key for Claude models
+            google_api_key: API key for Gemini models
+        """
+        self.factory = ProviderFactory(
+            anthropic_api_key=anthropic_api_key,
+            google_api_key=google_api_key
+        )
+    
     def _load_prompt(self, prompt_name: str) -> str:
         """Load system prompt from prompts directory"""
         prompt_path = os.path.join("app", "prompts", f"{prompt_name}.md")
         
         if not os.path.exists(prompt_path):
             raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
-            
+        
         with open(prompt_path, "r") as f:
             return f.read()
     
@@ -84,30 +90,34 @@ class LLMService:
         temperature: float = 1.0,
     ) -> AsyncGenerator[str, None]:
         """
-        Stream response from Claude API
+        Stream response from any LLM provider
         Yields text chunks as they arrive
+        
+        Note: Method name kept for backward compatibility
         """
         system_prompt = self._load_prompt(prompt_name)
         
         if system_suffix:
             system_prompt += "\n\n" + system_suffix
         
-        model_id = MODELS.get(model, MODELS[DEFAULT_MODEL])
+        # Get provider and short model name
+        provider = self.factory.get_provider(model)
+        short_model = self.factory.get_short_model_name(model)
         
-        async with self.async_client.messages.stream(
-            model=model_id,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_message}],
+        # Stream response
+        async for text_chunk in provider.call_streaming(
+            system_prompt=system_prompt,
+            user_message=user_message,
+            model=short_model,
             max_tokens=max_tokens,
             temperature=temperature,
-        ) as stream:
-            async for text_chunk in stream.text_stream:
-                yield text_chunk
+        ):
+            yield text_chunk
     
     async def call_claude(
         self,
         prompt_name: str,
-        user_message: str,
+        user_message: Any,  # Can be string or list of content blocks
         model: str = DEFAULT_MODEL,
         max_tokens: int = 50000,
         system_suffix: Optional[str] = None,
@@ -115,12 +125,14 @@ class LLMService:
         parse_json: bool = False,
     ) -> Dict[str, Any]:
         """
-        Call Claude API and return complete response
+        Call any LLM provider and return complete response
+        
+        Note: Method name kept for backward compatibility
         
         Args:
             prompt_name: Name of prompt file (without .md extension)
             user_message: User message content (text or list of content blocks)
-            model: Model to use (haiku, sonnet, opus)
+            model: Model to use (e.g., 'claude-sonnet', 'gemini-flash')
             max_tokens: Maximum tokens in response
             system_suffix: Additional text to append to system prompt
             temperature: Sampling temperature (0-1)
@@ -138,30 +150,18 @@ class LLMService:
         if parse_json:
             system_prompt += "\n\nIMPORTANT: Output a single valid JSON object only. No markdown, no explanations."
         
-        model_id = MODELS.get(model, MODELS[DEFAULT_MODEL])
+        # Get provider and short model name
+        provider = self.factory.get_provider(model)
+        short_model = self.factory.get_short_model_name(model)
         
-        # Build message content
-        if isinstance(user_message, str):
-            message_content = [{"type": "text", "text": user_message}]
-        else:
-            message_content = user_message
-        
-        # ✅ FIX: Add timeout for large requests (images, long content)
-        # Set to 15 minutes (900 seconds) to handle large images
-        response = await self.async_client.messages.create(
-            model=model_id,
-            system=system_prompt,
-            messages=[{"role": "user", "content": message_content}],
+        # Call provider
+        text_content = await provider.call(
+            system_prompt=system_prompt,
+            user_message=user_message,
+            model=short_model,
             max_tokens=max_tokens,
             temperature=temperature,
-            timeout=900.0,  # ✅ 15 minutes timeout for large requests
         )
-        
-        # Extract text from response
-        text_content = ""
-        for block in response.content:
-            if block.type == "text":
-                text_content += block.text
         
         result = {"text": text_content}
         
@@ -178,14 +178,18 @@ class LLMService:
     def call_claude_sync(
         self,
         prompt_name: str,
-        user_message: str,
+        user_message: Any,
         model: str = DEFAULT_MODEL,
         max_tokens: int = 50000,
         system_suffix: Optional[str] = None,
         temperature: float = 1.0,
         parse_json: bool = False,
     ) -> Dict[str, Any]:
-        """Synchronous version of call_claude"""
+        """
+        Synchronous version of call_claude
+        
+        Note: Method name kept for backward compatibility
+        """
         system_prompt = self._load_prompt(prompt_name)
         
         if system_suffix:
@@ -194,29 +198,18 @@ class LLMService:
         if parse_json:
             system_prompt += "\n\nIMPORTANT: Output a single valid JSON object only. No markdown, no explanations."
         
-        model_id = MODELS.get(model, MODELS[DEFAULT_MODEL])
+        # Get provider and short model name
+        provider = self.factory.get_provider(model)
+        short_model = self.factory.get_short_model_name(model)
         
-        # Build message content
-        if isinstance(user_message, str):
-            message_content = [{"type": "text", "text": user_message}]
-        else:
-            message_content = user_message
-        
-        # ✅ FIX: Add timeout for large requests
-        response = self.client.messages.create(
-            model=model_id,
-            system=system_prompt,
-            messages=[{"role": "user", "content": message_content}],
+        # Call provider
+        text_content = provider.call_sync(
+            system_prompt=system_prompt,
+            user_message=user_message,
+            model=short_model,
             max_tokens=max_tokens,
             temperature=temperature,
-            timeout=900.0,  # ✅ 15 minutes timeout
         )
-        
-        # Extract text from response
-        text_content = ""
-        for block in response.content:
-            if block.type == "text":
-                text_content += block.text
         
         result = {"text": text_content}
         
@@ -229,11 +222,25 @@ class LLMService:
                 raise ValueError("Failed to parse JSON from response")
         
         return result
+    
+    @staticmethod
+    def list_available_models() -> Dict[str, list]:
+        """List all available models grouped by provider"""
+        return ProviderFactory.list_available_models()
 
 
 def get_llm_service() -> LLMService:
-    """Get LLM service instance with API key from environment"""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY not found in environment")
-    return LLMService(api_key)
+    """Get LLM service instance with API keys from environment"""
+    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    
+    if not anthropic_api_key and not google_api_key:
+        raise ValueError(
+            "At least one API key required: "
+            "ANTHROPIC_API_KEY or GOOGLE_API_KEY"
+        )
+    
+    return LLMService(
+        anthropic_api_key=anthropic_api_key,
+        google_api_key=google_api_key
+    )
