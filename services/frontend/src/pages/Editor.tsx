@@ -13,11 +13,11 @@ import {
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import api from '../api'
 import DeviceFrame from '../components/DeviceFrame'
 import { type UINode } from '../components/DeviceRenderer'
 import DeviceRenderer from '../components/DeviceRenderer'
 import { useDeviceContext } from '../hooks/useDeviceContext'
+import api from '../services/api'
 
 type GenerationStage = 'idle' | 'learning' | 'generating' | 'complete' | 'error'
 

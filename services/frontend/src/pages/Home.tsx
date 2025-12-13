@@ -12,10 +12,10 @@ import {
 } from 'lucide-react'
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import api from '../api'
 import ConfigurationMenu from '../components/ConfigurationMenu'
 import DesignMLv2Renderer from '../components/DesignMLRenderer'
 import DynamicReactRenderer from '../components/DynamicReactRenderer'
+import api from '../services/api'
 
 // ============================================================================
 // TYPES
