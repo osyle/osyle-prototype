@@ -53,7 +53,7 @@ function connectWebSocket(
 ): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     // Get auth token and connect
-    fetchAuthSession()
+    void fetchAuthSession()
       .then(session => {
         const token = session.tokens?.idToken?.toString()
 
@@ -64,7 +64,7 @@ function connectWebSocket(
 
         // Connect to WebSocket
         const ws = new WebSocket(
-          `${WS_BASE_URL}/ws/llm?token=${encodeURIComponent(token)}`,
+          `${WS_BASE_URL}?token=${encodeURIComponent(token)}`,
         )
 
         ws.onopen = () => {
@@ -75,10 +75,14 @@ function connectWebSocket(
 
         ws.onmessage = event => {
           try {
-            const message: WSMessage = JSON.parse(event.data)
+            const message = JSON.parse(event.data) as WSMessage
 
-            if (message.type === 'progress' && callbacks.onProgress) {
-              callbacks.onProgress(message.stage, message.message, message.data)
+            if (message.type === 'progress') {
+              callbacks.onProgress?.(
+                message.stage,
+                message.message,
+                message.data,
+              )
             } else if (message.type === 'complete') {
               callbacks.onComplete?.(message.result)
               ws.close()
@@ -103,7 +107,7 @@ function connectWebSocket(
           console.log('WebSocket closed')
         }
       })
-      .catch(error => {
+      .catch((error: Error) => {
         reject(error)
       })
   })
@@ -112,7 +116,7 @@ function connectWebSocket(
 /**
  * Build DTR via WebSocket
  */
-export async function buildDTRWebSocket(
+export function buildDTRWebSocket(
   resourceId: string,
   tasteId: string,
   callbacks: WSCallbacks,
@@ -130,7 +134,7 @@ export async function buildDTRWebSocket(
 /**
  * Generate UI via WebSocket
  */
-export async function generateUIWebSocket(
+export function generateUIWebSocket(
   projectId: string,
   taskDescription: string,
   deviceInfo: { platform: string; screen: { width: number; height: number } },
