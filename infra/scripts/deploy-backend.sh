@@ -95,20 +95,35 @@ echo -e "${GREEN}✓ Package created: ${PACKAGE_SIZE}${NC}"
 
 # Check package size (Lambda has a 50MB direct upload limit)
 PACKAGE_SIZE_BYTES=$(stat -f%z deployment.zip 2>/dev/null || stat -c%s deployment.zip 2>/dev/null)
+USE_S3=false
 if [ "$PACKAGE_SIZE_BYTES" -gt 52428800 ]; then
-    echo -e "${RED}✗ Package size exceeds 50MB. Consider using Lambda layers or S3.${NC}"
-    exit 1
+    echo -e "${YELLOW}Package exceeds 50MB, will use S3 upload${NC}"
+    USE_S3=true
 fi
 
 # Check if Lambda function exists
 echo -e "${BLUE}Checking if Lambda function exists...${NC}"
 if aws lambda get-function --function-name $FUNCTION_NAME --region $REGION 2>/dev/null; then
     echo -e "${BLUE}Updating existing Lambda function...${NC}"
-    aws lambda update-function-code \
-        --function-name $FUNCTION_NAME \
-        --zip-file fileb://deployment.zip \
-        --region $REGION \
-        --no-cli-pager
+    
+    if [ "$USE_S3" = true ]; then
+        # Upload to S3 first
+        echo -e "${BLUE}Uploading package to S3...${NC}"
+        aws s3 cp deployment.zip s3://osyle-shared-assets-prod/lambda/deployment.zip --region $REGION
+        
+        aws lambda update-function-code \
+            --function-name $FUNCTION_NAME \
+            --s3-bucket osyle-shared-assets-prod \
+            --s3-key lambda/deployment.zip \
+            --region $REGION \
+            --no-cli-pager
+    else
+        aws lambda update-function-code \
+            --function-name $FUNCTION_NAME \
+            --zip-file fileb://deployment.zip \
+            --region $REGION \
+            --no-cli-pager
+    fi
     
     echo -e "${GREEN}✓ Lambda function updated${NC}"
 else
