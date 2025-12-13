@@ -3,6 +3,11 @@
  * Automatically attaches Cognito JWT tokens to requests
  */
 import { fetchAuthSession } from 'aws-amplify/auth'
+import {
+  buildDTRWebSocket,
+  generateUIWebSocket,
+  type WSCallbacks,
+} from './websocketClient'
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
@@ -72,6 +77,7 @@ export interface GenerateUIResponse {
   type: 'design-ml' | 'react'
   ui: unknown // JSON object for design-ml, string for react
   version: number
+  dtr_applied?: boolean
 }
 
 export interface DTRExistsResponse {
@@ -83,6 +89,8 @@ export interface BuildDTRResponse {
   status: 'success' | 'skipped'
   reason?: string
   dtr?: Record<string, unknown>
+  version?: string
+  confidence?: Record<string, unknown>
 }
 
 // ============================================================================
@@ -131,13 +139,13 @@ async function apiRequest<T>(
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({
+    const error = (await response.json().catch(() => ({
       detail: 'Request failed',
-    }))
+    }))) as { detail: string }
     throw new Error(error.detail || `HTTP ${response.status}`)
   }
 
-  return response.json()
+  return response.json() as Promise<T>
 }
 
 /**
@@ -210,7 +218,7 @@ export const tastesAPI = {
    * Delete a taste
    */
   delete: async (tasteId: string): Promise<{ message: string }> => {
-    return apiRequest(`/api/tastes/${tasteId}`, {
+    return apiRequest<{ message: string }>(`/api/tastes/${tasteId}`, {
       method: 'DELETE',
     })
   },
@@ -324,9 +332,12 @@ export const resourcesAPI = {
     tasteId: string,
     resourceId: string,
   ): Promise<{ message: string }> => {
-    return apiRequest(`/api/tastes/${tasteId}/resources/${resourceId}`, {
-      method: 'DELETE',
-    })
+    return apiRequest<{ message: string }>(
+      `/api/tastes/${tasteId}/resources/${resourceId}`,
+      {
+        method: 'DELETE',
+      },
+    )
   },
 }
 
@@ -388,7 +399,7 @@ export const projectsAPI = {
    * Delete a project
    */
   delete: async (projectId: string): Promise<{ message: string }> => {
-    return apiRequest(`/api/projects/${projectId}`, {
+    return apiRequest<{ message: string }>(`/api/projects/${projectId}`, {
       method: 'DELETE',
     })
   },
@@ -400,12 +411,13 @@ export const projectsAPI = {
     projectId: string,
     filename: string,
   ): Promise<{ output_key: string; upload_url: string; filename: string }> => {
-    return apiRequest(
-      `/api/projects/${projectId}/outputs?filename=${filename}`,
-      {
-        method: 'POST',
-      },
-    )
+    return apiRequest<{
+      output_key: string
+      upload_url: string
+      filename: string
+    }>(`/api/projects/${projectId}/outputs?filename=${filename}`, {
+      method: 'POST',
+    })
   },
 
   /**
@@ -438,7 +450,9 @@ export const projectsAPI = {
     projectId: string,
     filename: string,
   ): Promise<{ download_url: string; filename: string }> => {
-    return apiRequest(`/api/projects/${projectId}/outputs/${filename}/download`)
+    return apiRequest<{ download_url: string; filename: string }>(
+      `/api/projects/${projectId}/outputs/${filename}/download`,
+    )
   },
 }
 
@@ -460,39 +474,55 @@ export const llmAPI = {
   },
 
   /**
-   * Build DTR from resource files
+   * Build DTR from resource files (WebSocket for long-running operation)
    */
   buildDtr: async (
     resourceId: string,
     tasteId: string,
+    callbacks?: WSCallbacks,
   ): Promise<BuildDTRResponse> => {
-    return apiRequest<BuildDTRResponse>('/api/llm/build-dtr', {
-      method: 'POST',
-      body: JSON.stringify({
-        resource_id: resourceId,
-        taste_id: tasteId,
-      }),
-    })
+    const result = await buildDTRWebSocket(resourceId, tasteId, callbacks || {})
+    // Type guard to ensure result matches BuildDTRResponse
+    if (
+      typeof result === 'object' &&
+      result !== null &&
+      'status' in result &&
+      (result['status'] === 'success' || result['status'] === 'skipped')
+    ) {
+      return result as unknown as BuildDTRResponse
+    }
+    throw new Error('Invalid response format from buildDTR')
   },
 
   /**
-   * Generate UI from project
+   * Generate UI from project (WebSocket for long-running operation)
    */
   generateUI: async (
     projectId: string,
     taskDescription: string,
     deviceInfo: DeviceInfo,
     renderingMode: 'design-ml' | 'react',
+    callbacks?: WSCallbacks,
   ): Promise<GenerateUIResponse> => {
-    return apiRequest<GenerateUIResponse>('/api/llm/generate-ui', {
-      method: 'POST',
-      body: JSON.stringify({
-        project_id: projectId,
-        task_description: taskDescription,
-        device_info: deviceInfo,
-        rendering_mode: renderingMode,
-      }),
-    })
+    const result = await generateUIWebSocket(
+      projectId,
+      taskDescription,
+      deviceInfo,
+      renderingMode,
+      callbacks || {},
+    )
+    // Type guard to ensure result matches GenerateUIResponse
+    if (
+      typeof result === 'object' &&
+      result !== null &&
+      'status' in result &&
+      'type' in result &&
+      'ui' in result &&
+      'version' in result
+    ) {
+      return result as unknown as GenerateUIResponse
+    }
+    throw new Error('Invalid response format from generateUI')
   },
 
   /**
@@ -518,7 +548,11 @@ export const llmAPI = {
     current_version: number
     versions: number[]
   }> => {
-    return apiRequest(`/api/llm/ui/versions?project_id=${projectId}`)
+    return apiRequest<{
+      status: string
+      current_version: number
+      versions: number[]
+    }>(`/api/llm/ui/versions?project_id=${projectId}`)
   },
 
   /**
@@ -527,7 +561,9 @@ export const llmAPI = {
   getTestUI: async (): Promise<
     GenerateUIResponse & { project_id: string; project_name: string }
   > => {
-    return apiRequest('/api/llm/ui/get/test')
+    return apiRequest<
+      GenerateUIResponse & { project_id: string; project_name: string }
+    >('/api/llm/ui/get/test')
   },
 
   /**
@@ -538,7 +574,9 @@ export const llmAPI = {
   ): Promise<
     GenerateUIResponse & { project_id: string; project_name: string }
   > => {
-    return apiRequest(`/api/llm/ui/random?rendering_mode=${renderingMode}`)
+    return apiRequest<
+      GenerateUIResponse & { project_id: string; project_name: string }
+    >(`/api/llm/ui/random?rendering_mode=${renderingMode}`)
   },
 
   /**

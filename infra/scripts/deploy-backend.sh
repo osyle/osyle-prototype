@@ -12,6 +12,7 @@ NC='\033[0m' # No Color
 
 REGION="us-east-1"
 FUNCTION_NAME="osyle-api"
+WEBSOCKET_API_ID="n6m806tmzk"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
 echo -e "${BLUE}Account ID: ${ACCOUNT_ID}${NC}"
@@ -118,7 +119,7 @@ else
         --role arn:aws:iam::${ACCOUNT_ID}:role/lambda-execution-role \
         --handler app.main.handler \
         --zip-file fileb://deployment.zip \
-        --timeout 30 \
+        --timeout 900 \
         --memory-size 512 \
         --region $REGION \
         --no-cli-pager
@@ -130,15 +131,35 @@ fi
 echo -e "${BLUE}Waiting for Lambda to be ready...${NC}"
 aws lambda wait function-updated --function-name $FUNCTION_NAME --region $REGION
 
-# Check if API Gateway exists
-echo -e "${BLUE}Checking API Gateway...${NC}"
+# Ensure Lambda timeout is 900 seconds
+echo -e "${BLUE}Verifying Lambda timeout (15 minutes)...${NC}"
+CURRENT_TIMEOUT=$(aws lambda get-function-configuration \
+    --function-name $FUNCTION_NAME \
+    --region $REGION \
+    --query 'Timeout' \
+    --output text)
+
+if [ "$CURRENT_TIMEOUT" != "900" ]; then
+    echo -e "${YELLOW}Updating Lambda timeout to 900 seconds...${NC}"
+    aws lambda update-function-configuration \
+        --function-name $FUNCTION_NAME \
+        --timeout 900 \
+        --region $REGION \
+        --no-cli-pager > /dev/null
+    echo -e "${GREEN}✓ Lambda timeout updated${NC}"
+else
+    echo -e "${GREEN}✓ Lambda timeout already set to 900 seconds${NC}"
+fi
+
+# Check if HTTP API Gateway exists
+echo -e "${BLUE}Checking HTTP API Gateway...${NC}"
 API_ID=$(aws apigatewayv2 get-apis \
     --region $REGION \
     --query "Items[?Name=='osyle-api'].ApiId" \
     --output text)
 
 if [ -z "$API_ID" ]; then
-    echo -e "${BLUE}Creating API Gateway...${NC}"
+    echo -e "${BLUE}Creating HTTP API Gateway...${NC}"
     API_ID=$(aws apigatewayv2 create-api \
         --name osyle-api \
         --protocol-type HTTP \
@@ -147,13 +168,13 @@ if [ -z "$API_ID" ]; then
         --query 'ApiId' \
         --output text)
     
-    echo -e "${GREEN}✓ API Gateway created${NC}"
+    echo -e "${GREEN}✓ HTTP API Gateway created${NC}"
 else
-    echo -e "${GREEN}✓ API Gateway already exists${NC}"
+    echo -e "${GREEN}✓ HTTP API Gateway already exists${NC}"
 fi
 
-# Grant API Gateway permission to invoke Lambda
-echo -e "${BLUE}Configuring API Gateway permissions...${NC}"
+# Grant HTTP API Gateway permission to invoke Lambda
+echo -e "${BLUE}Configuring HTTP API Gateway permissions...${NC}"
 aws lambda add-permission \
     --function-name $FUNCTION_NAME \
     --statement-id apigateway-invoke-$(date +%s) \
@@ -161,21 +182,52 @@ aws lambda add-permission \
     --principal apigateway.amazonaws.com \
     --source-arn "arn:aws:execute-api:${REGION}:${ACCOUNT_ID}:${API_ID}/*" \
     --region $REGION \
-    --no-cli-pager 2>/dev/null || echo "Permission already exists"
+    --no-cli-pager 2>/dev/null || echo "  (Permission already exists)"
 
-# Get API endpoint
+# Check WebSocket API exists
+echo -e "${BLUE}Checking WebSocket API Gateway...${NC}"
+WS_EXISTS=$(aws apigatewayv2 get-api \
+    --api-id $WEBSOCKET_API_ID \
+    --region $REGION \
+    --query 'ApiId' \
+    --output text 2>/dev/null || echo "")
+
+if [ -z "$WS_EXISTS" ]; then
+    echo -e "${RED}✗ WebSocket API not found!${NC}"
+    echo -e "${YELLOW}Run this once to create it:${NC}"
+    echo -e "  aws apigatewayv2 create-api --name osyle-websocket-api --protocol-type WEBSOCKET --route-selection-expression '\$request.body.action' --region us-east-1"
+    exit 1
+else
+    echo -e "${GREEN}✓ WebSocket API exists${NC}"
+fi
+
+# Grant WebSocket API permission to invoke Lambda
+echo -e "${BLUE}Configuring WebSocket API Gateway permissions...${NC}"
+aws lambda add-permission \
+    --function-name $FUNCTION_NAME \
+    --statement-id websocket-invoke-$(date +%s) \
+    --action lambda:InvokeFunction \
+    --principal apigateway.amazonaws.com \
+    --source-arn "arn:aws:execute-api:${REGION}:${ACCOUNT_ID}:${WEBSOCKET_API_ID}/*" \
+    --region $REGION \
+    --no-cli-pager 2>/dev/null || echo "  (Permission already exists)"
+
+# Get API endpoints
 API_ENDPOINT="https://${API_ID}.execute-api.${REGION}.amazonaws.com"
+WS_ENDPOINT="wss://${WEBSOCKET_API_ID}.execute-api.${REGION}.amazonaws.com/production"
 
 echo ""
-echo -e "${GREEN}═══════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}╔═══════════════════════════════════════════════════${NC}"
 echo -e "${GREEN}✓ Backend deployed successfully!${NC}"
-echo -e "${GREEN}═══════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}╚═══════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "${BLUE}API Endpoint:${NC} ${API_ENDPOINT}"
+echo -e "${BLUE}HTTP API Endpoint:${NC} ${API_ENDPOINT}"
+echo -e "${BLUE}WebSocket Endpoint:${NC} ${WS_ENDPOINT}"
 echo -e "${BLUE}Lambda Function:${NC} ${FUNCTION_NAME}"
-echo -e "${BLUE}API Gateway ID:${NC} ${API_ID}"
+echo -e "${BLUE}HTTP API Gateway ID:${NC} ${API_ID}"
+echo -e "${BLUE}WebSocket API Gateway ID:${NC} ${WEBSOCKET_API_ID}"
 echo ""
-echo -e "${BLUE}Test your API:${NC}"
+echo -e "${BLUE}Test your APIs:${NC}"
 echo -e "  curl ${API_ENDPOINT}/"
 echo -e "  curl ${API_ENDPOINT}/api/health"
 echo ""

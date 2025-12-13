@@ -15,6 +15,7 @@ load_dotenv()
 # Import routers
 from app.routers import tastes, projects
 from app.llm_routes import router as llm_router
+from app.websocket_routes import router as ws_router
 
 app = FastAPI(title="Osyle API", version="1.0.0")
 
@@ -145,6 +146,7 @@ async def user_profile(user: dict = Depends(verify_token)):
 app.include_router(tastes.router)
 app.include_router(projects.router)
 app.include_router(llm_router)
+app.include_router(ws_router)
 
 # Lambda handler
 handler = Mangum(app)
