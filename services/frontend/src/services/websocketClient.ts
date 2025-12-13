@@ -4,12 +4,10 @@
  */
 import { fetchAuthSession } from 'aws-amplify/auth'
 
-const WS_BASE_URL = (
-  import.meta.env.VITE_API_URL ||
-  'https://bj7i7munz2.execute-api.us-east-1.amazonaws.com'
-)
-  .replace('https://', 'wss://')
-  .replace('http://', 'ws://')
+// WebSocket uses a separate API Gateway
+const WS_BASE_URL =
+  import.meta.env['VITE_WS_URL'] ||
+  'wss://n6m806tmzk.execute-api.us-east-1.amazonaws.com/production'
 
 export interface ProgressUpdate {
   type: 'progress'
