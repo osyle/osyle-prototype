@@ -19,10 +19,20 @@ from app.websocket_routes import router as ws_router
 
 app = FastAPI(title="Osyle API", version="1.0.0")
 
+# Get ALLOWED_ORIGINS from environment
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*")
+if ALLOWED_ORIGINS != "*":
+    # Split by comma and strip whitespace
+    origins_list = [origin.strip() for origin in ALLOWED_ORIGINS.split(",")]
+else:
+    origins_list = ["*"]
+
+print(f"CORS allowed origins: {origins_list}")
+
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure with specific origins in production
+    allow_origins=origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -148,5 +158,38 @@ app.include_router(projects.router)
 app.include_router(llm_router)
 app.include_router(ws_router)
 
-# Lambda handler
-handler = Mangum(app)
+# Create Mangum handler for HTTP events
+mangum_handler = Mangum(app)
+
+
+def handler(event, context):
+    """
+    Main Lambda handler - routes to HTTP or WebSocket handler
+    
+    Detects event type:
+    - WebSocket: routeKey starts with $ ($connect, $disconnect, $default)
+    - HTTP: routeKey is like "GET /api/projects" OR has 'http' in requestContext
+    """
+    
+    request_context = event.get("requestContext", {})
+    route_key = request_context.get("routeKey", "")
+    
+    # More robust detection:
+    # 1. Check if routeKey starts with $ (WebSocket specific)
+    # 2. Check if 'connectionId' exists (WebSocket specific)
+    # 3. Check if 'http' key exists (HTTP API Gateway V2)
+    
+    is_websocket = (
+        route_key.startswith("$") or 
+        "connectionId" in request_context
+    )
+    
+    is_http = "http" in request_context
+    
+    if is_websocket and not is_http:
+        print(f"Detected WebSocket event: {route_key}")
+        from app.websocket_lambda_handler import handle_websocket_event
+        return handle_websocket_event(event, context)
+    else:
+        print(f"Detected HTTP event: {route_key}")
+        return mangum_handler(event, context)
