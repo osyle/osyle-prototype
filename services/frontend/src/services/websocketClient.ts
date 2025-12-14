@@ -4,10 +4,15 @@
  */
 import { fetchAuthSession } from 'aws-amplify/auth'
 
-// WebSocket uses a separate API Gateway
+// WebSocket uses a separate API Gateway in production, local server in dev
 const WS_BASE_URL =
   import.meta.env['VITE_WS_URL'] ||
-  'wss://n6m806tmzk.execute-api.us-east-1.amazonaws.com/production'
+  (import.meta.env.DEV
+    ? 'ws://localhost:8000'
+    : 'wss://n6m806tmzk.execute-api.us-east-1.amazonaws.com/production')
+
+// Add /ws/llm for local FastAPI, nothing for API Gateway
+const WS_PATH = WS_BASE_URL.includes('localhost') ? '/ws/llm' : ''
 
 export interface ProgressUpdate {
   type: 'progress'
@@ -52,39 +57,25 @@ function connectWebSocket(
   callbacks: WSCallbacks,
 ): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    // Get auth token and user ID
+    // Get auth token and connect
     void fetchAuthSession()
       .then(session => {
         const token = session.tokens?.idToken?.toString()
-        const userId = session.tokens?.idToken?.payload?.sub as string
 
         if (!token) {
           reject(new Error('No authentication token'))
           return
         }
 
-        if (!userId) {
-          reject(new Error('No user ID in token'))
-          return
-        }
-
         // Connect to WebSocket
         const ws = new WebSocket(
-          `${WS_BASE_URL}?token=${encodeURIComponent(token)}`,
+          `${WS_BASE_URL}${WS_PATH}?token=${encodeURIComponent(token)}`,
         )
 
         ws.onopen = () => {
           console.log('WebSocket connected')
-          // Send action with user_id included
-          ws.send(
-            JSON.stringify({
-              action,
-              data: {
-                ...data,
-                user_id: userId, // Add user_id to all messages
-              },
-            }),
-          )
+          // Send action
+          ws.send(JSON.stringify({ action, data }))
         }
 
         ws.onmessage = event => {
