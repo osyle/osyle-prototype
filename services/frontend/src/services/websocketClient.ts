@@ -61,9 +61,15 @@ function connectWebSocket(
     void fetchAuthSession()
       .then(session => {
         const token = session.tokens?.idToken?.toString()
+        const userId = session.tokens?.idToken?.payload?.sub as string
 
         if (!token) {
           reject(new Error('No authentication token'))
+          return
+        }
+
+        if (!userId) {
+          reject(new Error('No user ID in token'))
           return
         }
 
@@ -74,8 +80,16 @@ function connectWebSocket(
 
         ws.onopen = () => {
           console.log('WebSocket connected')
-          // Send action
-          ws.send(JSON.stringify({ action, data }))
+          // Send action with user_id included for production Lambda
+          ws.send(
+            JSON.stringify({
+              action,
+              data: {
+                ...data,
+                user_id: userId,
+              },
+            }),
+          )
         }
 
         ws.onmessage = event => {
