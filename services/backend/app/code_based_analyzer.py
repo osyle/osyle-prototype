@@ -282,6 +282,63 @@ class CodeBasedDesignAnalyzer:
     # ANALYSIS METHODS
     # ========================================================================
     
+    
+    def _analyze_saturation(self) -> Dict[str, float]:
+        """Analyze saturation distribution (v4 NEW)"""
+        if not self.colors:
+            return {"high": 0.0, "medium": 0.0, "low": 0.0}
+        
+        high = medium = low = 0
+        for color_info in self.colors:
+            r, g, b = color_info.rgb
+            max_rgb = max(r, g, b)
+            min_rgb = min(r, g, b)
+            
+            # Calculate saturation
+            if max_rgb == 0:
+                sat = 0
+            else:
+                sat = (max_rgb - min_rgb) / max_rgb
+            
+            if sat > 0.6:
+                high += 1
+            elif sat > 0.3:
+                medium += 1
+            else:
+                low += 1
+        
+        total = len(self.colors)
+        return {
+            "high": round(high / total, 3),
+            "medium": round(medium / total, 3),
+            "low": round(low / total, 3)
+        }
+    
+    def _analyze_brightness(self) -> Dict[str, float]:
+        """Analyze brightness distribution (v4 NEW)"""
+        if not self.colors:
+            return {"bright": 0.0, "medium": 0.0, "dark": 0.0}
+        
+        bright = medium = dark = 0
+        for color_info in self.colors:
+            r, g, b = color_info.rgb
+            # Simple brightness calculation
+            brightness = (r + g + b) / (3 * 255)
+            
+            if brightness > 0.6:
+                bright += 1
+            elif brightness > 0.3:
+                medium += 1
+            else:
+                dark += 1
+        
+        total = len(self.colors)
+        return {
+            "bright": round(bright / total, 3),
+            "medium": round(medium / total, 3),
+            "dark": round(dark / total, 3)
+        }
+    
     def _analyze_colors(self) -> Dict[str, Any]:
         """Analyze color palette and usage patterns"""
         
@@ -331,14 +388,18 @@ class CodeBasedDesignAnalyzer:
         
         return {
             "primary_palette": [color for color, _ in most_common],
+            "all_colors": list(color_counts.keys()),  # v4: ALL colors
             "total_colors": num_colors,
             "color_contexts": {k: v[:5] for k, v in context_map.items()},
+            "color_frequency": dict(color_counts),  # v4: Frequency data
             "has_transparency": has_transparency,
             "temperature_distribution": {
-                "warm": warm,
-                "cool": cool,
-                "neutral": neutral
+                "warm": round(warm / len(self.colors), 3) if self.colors else 0,
+                "cool": round(cool / len(self.colors), 3) if self.colors else 0,
+                "neutral": round(neutral / len(self.colors), 3) if self.colors else 0
             },
+            "saturation_distribution": self._analyze_saturation(),  # v4: NEW
+            "brightness_distribution": self._analyze_brightness(),  # v4: NEW
             "confidence": round(confidence, 2)
         }
     
@@ -384,6 +445,7 @@ class CodeBasedDesignAnalyzer:
         
         return {
             "spacing_quantum": quantum,
+            "all_spacings": unique_spacings,  # v4: ALL unique spacing values
             "most_common_spacings": [s for s, _ in most_common],
             "spacing_distribution": distribution,
             "confidence": round(confidence, 2)
@@ -421,9 +483,12 @@ class CodeBasedDesignAnalyzer:
         
         return {
             "font_sizes": unique_sizes,
+            "all_font_sizes": self.font_sizes,  # v4: ALL sizes including duplicates
             "type_scale_ratio": scale_ratio,
             "font_weights": dict(weight_counts),
+            "all_font_weights": list(weight_counts.keys()),  # v4: Unique weights
             "has_varied_weights": has_varied_weights,
+            "size_frequency": dict(Counter(self.font_sizes)),  # v4: Frequency
             "confidence": round(confidence, 2)
         }
     
@@ -451,8 +516,10 @@ class CodeBasedDesignAnalyzer:
         
         return {
             "most_common_radii": [r for r, _ in most_common],
+            "all_radii": unique_radii,  # v4: ALL unique radii
             "has_varied_radii": len(most_common) > 2,
-            "radius_quantum": radius_quantum
+            "radius_quantum": radius_quantum,
+            "radius_distribution": dict(radius_counts)  # v4: Frequency
         }
     
     def _analyze_gradients(self) -> Dict[str, Any]:

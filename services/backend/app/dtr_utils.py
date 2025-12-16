@@ -1,6 +1,6 @@
 """
 DTR Utilities - Extract generative rules from DTR for UI generation
-Handles both v2 and v3 DTR formats with version compatibility
+Handles v2, v3, and v4 DTR formats with version compatibility
 """
 from typing import Dict, Any, Optional
 import json
@@ -9,7 +9,7 @@ import json
 def extract_generative_rules(dtr_json: Dict[str, Any]) -> str:
     """
     Extract generative rules from DTR for UI generation prompt
-    Handles both DTR v2 and v3 formats
+    Handles DTR v2, v3, and v4 formats
     
     Args:
         dtr_json: DTR dictionary
@@ -19,10 +19,137 @@ def extract_generative_rules(dtr_json: Dict[str, Any]) -> str:
     """
     version = dtr_json.get("version", "2.0")
     
-    if version == "3.0":
+    if version == "4.0":
+        return _extract_v4_rules(dtr_json)
+    elif version == "3.0":
         return _extract_v3_rules(dtr_json)
     else:
         return _extract_v2_rules(dtr_json)
+
+
+def _extract_v4_rules(dtr: Dict[str, Any]) -> str:
+    """
+    Extract rules from DTR v4 (comprehensive format)
+    
+    DTR v4 is large and comprehensive, so we extract SELECTIVELY
+    based on what's relevant for the current generation task.
+    
+    This is where context-aware filtering happens!
+    """
+    
+    rules = []
+    
+    # Header
+    rules.append("=== Designer Taste Representation (DTR v4 - Comprehensive) ===\n")
+    
+    # Confidence and coverage
+    if "meta" in dtr:
+        meta = dtr["meta"]
+        if "confidence_scores" in meta:
+            scores = meta["confidence_scores"]
+            rules.append(f"Confidence: Overall {scores.get('overall', 0):.2f}, "
+                        f"Spatial {scores.get('spatial', 0):.2f}, "
+                        f"Color {scores.get('color', 0):.2f}, "
+                        f"Typography {scores.get('typography', 0):.2f}\n")
+        
+        if "coverage_map" in meta:
+            coverage = meta["coverage_map"]
+            rules.append(f"Data Completeness: {coverage.get('data_completeness', 0):.2f}\n")
+    
+    # 1. Spatial Intelligence (same as v3 extraction)
+    if "spatial_intelligence" in dtr:
+        rules.append("\n## Spatial Intelligence ##\n")
+        spatial = dtr["spatial_intelligence"]
+        
+        # Composition
+        if "composition" in spatial:
+            comp = spatial["composition"]
+            rules.append(f"Composition Mode: {comp.get('mode', 'unknown')}")
+            rules.append(f"Spacing Quantum: {comp.get('spacing_quantum', 8)}px")
+            
+            if "spacing_ratios" in comp:
+                rules.append("Spacing Ratios:")
+                for key, value in comp["spacing_ratios"].items():
+                    rules.append(f"  - {key}: {value}")
+        
+        # Hierarchy
+        if "hierarchy" in spatial:
+            hier = spatial["hierarchy"]
+            if "size_scaling" in hier:
+                rules.append("\nSize Scaling:")
+                for level, scale in hier["size_scaling"].items():
+                    rules.append(f"  - {level}: {scale}")
+    
+    # 2. Visual Language (same as v3 extraction)
+    if "visual_language" in dtr:
+        rules.append("\n## Visual Language ##\n")
+        visual = dtr["visual_language"]
+        
+        # Typography
+        if "typography" in visual:
+            typo = visual["typography"]
+            rules.append("Typography:")
+            rules.append(f"  - Scale Ratio: {typo.get('scale_ratio', 1.5)}")
+            
+            if "weight_progression" in typo:
+                rules.append("  - Weight Progression:")
+                for level, weight in typo["weight_progression"].items():
+                    rules.append(f"    • {level}: {weight}")
+        
+        # Color System
+        if "color_system" in visual:
+            color_sys = visual["color_system"]
+            rules.append("\nColor System:")
+            
+            if "roles" in color_sys:
+                rules.append("Color Roles:")
+                for role, data in color_sys["roles"].items():
+                    if isinstance(data, dict):
+                        base = data.get("base", "N/A")
+                        rules.append(f"  - {role}: {base}")
+    
+    # 3. Cognitive Process (same as v3)
+    if "cognitive_process" in dtr:
+        rules.append("\n## Cognitive Process ##\n")
+        cognitive = dtr["cognitive_process"]
+        
+        if "decision_tree" in cognitive:
+            rules.append("Decision Tree:")
+            for i, step in enumerate(cognitive["decision_tree"], 1):
+                rules.append(f"  {i}. {step}")
+        
+        if "constraint_hierarchy" in cognitive:
+            rules.append("\nConstraint Hierarchy:")
+            for constraint in cognitive["constraint_hierarchy"]:
+                level = constraint.get("level", "SHOULD")
+                rule = constraint.get("rule", "")
+                rules.append(f"  [{level}] {rule}")
+    
+    # 4. Statistical Patterns (v4 ADDITION - for DTM but can inform generation)
+    if "statistical_patterns" in dtr:
+        rules.append("\n## Statistical Patterns (Verified) ##\n")
+        patterns = dtr["statistical_patterns"]
+        
+        if "spacing" in patterns:
+            spacing_pat = patterns["spacing"]
+            if spacing_pat.get("quantum"):
+                rules.append(f"Spacing Quantum (statistical): {spacing_pat['quantum']}px")
+        
+        if "colors" in patterns:
+            color_pat = patterns["colors"]
+            rules.append(f"Unique Colors: {color_pat.get('total_unique', 0)}")
+        
+        if "typography" in patterns:
+            typo_pat = patterns["typography"]
+            if typo_pat.get("scale_ratio"):
+                rules.append(f"Type Scale Ratio (statistical): {typo_pat['scale_ratio']}")
+    
+    # 5. Note about comprehensive data
+    rules.append("\n## Note ##")
+    rules.append("This DTR v4 contains comprehensive quantitative data.")
+    rules.append("Full statistical patterns available in 'quantitative_validation' section.")
+    
+    return "\n".join(rules)
 
 
 def _extract_v3_rules(dtr: Dict[str, Any]) -> str:
@@ -232,6 +359,11 @@ def get_dtr_version(dtr_json: Dict[str, Any]) -> str:
     return dtr_json.get("version", "2.0")
 
 
+def is_dtr_v4(dtr_json: Dict[str, Any]) -> bool:
+    """Check if DTR is version 4"""
+    return get_dtr_version(dtr_json) == "4.0"
+
+
 def is_dtr_v3(dtr_json: Dict[str, Any]) -> bool:
     """Check if DTR is version 3"""
     return get_dtr_version(dtr_json) == "3.0"
@@ -239,6 +371,6 @@ def is_dtr_v3(dtr_json: Dict[str, Any]) -> bool:
 
 def get_dtr_confidence(dtr_json: Dict[str, Any]) -> Optional[float]:
     """Get overall confidence score from DTR"""
-    if is_dtr_v3(dtr_json):
+    if is_dtr_v4(dtr_json) or is_dtr_v3(dtr_json):
         return dtr_json.get("meta", {}).get("confidence_scores", {}).get("overall")
     return None

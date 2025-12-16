@@ -473,3 +473,56 @@ def validate_key_ownership(key: str, owner_id: str) -> bool:
     """
     # Keys should follow pattern: tastes/{owner_id}/... or projects/{owner_id}/...
     return f"/{owner_id}/" in key or key.startswith(f"tastes/{owner_id}/") or key.startswith(f"projects/{owner_id}/")
+
+
+"""
+DTM Storage Functions
+These functions manage DTM (Designer Taste Model) storage in S3
+"""
+
+def get_dtm_key(user_id: str, taste_id: str) -> str:
+    """Generate S3 key for DTM JSON"""
+    return f"tastes/{user_id}/{taste_id}/dtm.json"
+
+
+def get_taste_dtm(user_id: str, taste_id: str) -> dict:
+    """Get DTM JSON from taste"""
+    key = get_dtm_key(user_id, taste_id)
+    
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        content = response['Body'].read().decode('utf-8')
+        return json.loads(content)
+    except s3_client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"Error getting DTM: {e}")
+        raise
+
+
+def put_taste_dtm(user_id: str, taste_id: str, dtm_json: dict):
+    """Save DTM JSON to taste"""
+    key = get_dtm_key(user_id, taste_id)
+    
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=key,
+            Body=json.dumps(dtm_json, indent=2),
+            ContentType='application/json'
+        )
+    except Exception as e:
+        print(f"Error saving DTM: {e}")
+        raise
+
+
+def delete_taste_dtm(user_id: str, taste_id: str) -> bool:
+    """Delete DTM for a taste"""
+    key = get_dtm_key(user_id, taste_id)
+    return delete_object(key)
+
+
+def taste_dtm_exists(user_id: str, taste_id: str) -> bool:
+    """Check if DTM exists for a taste"""
+    key = get_dtm_key(user_id, taste_id)
+    return check_object_exists(key)

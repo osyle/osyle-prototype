@@ -23,6 +23,8 @@ from app.unified_dtr_builder import (
     prepare_figma_for_llm
 )
 from app.dtr_utils import extract_generative_rules
+from app.dtm_workflow_integration import handle_dtr_built
+
 
 router = APIRouter(prefix="/api/llm", tags=["llm"])
 
@@ -228,7 +230,7 @@ async def build_dtr(
         print(f"\n[7/9] Calling LLM (DTR v3 prompt)...")
         
         response = await llm.call_claude(
-            prompt_name="build_dtr_v3",
+            prompt_name="build_dtr_v4",
             user_message=content,
             parse_json=True,
         )
@@ -264,7 +266,7 @@ async def build_dtr(
             request.resource_id,
             unified_dtr
         )
-        
+
         # Update resource metadata
         metadata = resource.get("metadata", {})
         metadata["has_dtr"] = True
@@ -274,14 +276,22 @@ async def build_dtr(
             metadata=metadata
         )
         
-        print(f"✓ DTR v3 saved successfully")
+        print(f"✓ DTR v4 saved successfully")
         print(f"{'='*60}\n")
-        
+ 
+        dtm_result = await handle_dtr_built(
+            user_id=user_id,
+            taste_id=request.taste_id,
+            resource_id=request.resource_id,
+            llm_service=llm
+        )
+       
         return {
             "status": "success",
-            "version": "3.0",
-            "dtr": unified_dtr,
-            "confidence": confidence_scores
+            "resource_id": request.resource_id,
+            "dtr_version": "4.0",
+            "confidence": overall_conf,
+            "dtm_status": dtm_result
         }
         
     except HTTPException:
@@ -332,7 +342,15 @@ async def generate_ui(
     llm: LLMService = Depends(get_llm_service),
 ):
     """
-    Generate UI from task description using DTR v3 designer intelligence
+    Generate UI from task description using DTM (Designer Taste Model)
+    
+    Flow:
+    1. Check if DTM exists for selected taste
+    2. If yes: Use filtered DTM (prioritizing selected resources)
+    3. If no: Fall back to individual DTRs (legacy behavior)
+    4. Extract task-relevant rules from DTM
+    5. Generate UI with DTM guidance
+    
     Supports both React and Design ML v2 rendering modes
     """
     user_id = user.get("user_id")
@@ -347,17 +365,76 @@ async def generate_ui(
             raise HTTPException(status_code=403, detail="Not authorized")
         
         print(f"\n{'='*60}")
-        print(f"GENERATE UI v3")
+        print(f"GENERATE UI with DTM")
         print(f"{'='*60}")
         print(f"Project: {request.project_id}")
         print(f"Task: {request.task_description[:80]}...")
         print(f"Rendering mode: {request.rendering_mode}")
         
-        # ✅ CHANGED: Load DTRs from multiple resources
-        dtr_rules = None
-        selected_resource_ids = project.get("selected_resource_ids", [])
+        # Import DTM modules
+        from app.dtm_context_filter import DTMContextFilter
+        from app.dtm_for_generation import DTMForGeneration
         
-        if selected_resource_ids and project.get("selected_taste_id"):
+        # Get selected resources and taste
+        selected_resource_ids = project.get("selected_resource_ids", [])
+        selected_taste_id = project.get("selected_taste_id")
+        
+        dtm_guidance = None
+        
+        # STRATEGY 1: Try to use DTM (preferred)
+        if selected_taste_id:
+            try:
+                print(f"Checking for DTM in taste {selected_taste_id}...")
+                
+                # Get DTM from storage
+                dtm = storage.get_taste_dtm(user_id, selected_taste_id)
+                
+                if dtm:
+                    print(f"✓ DTM found (version {dtm.get('version', '1.0')})")
+                    print(f"  Total resources: {dtm.get('meta', {}).get('total_resources', 0)}")
+                    
+                    # Filter DTM by selected resources if specified
+                    if selected_resource_ids:
+                        print(f"  Filtering DTM by {len(selected_resource_ids)} selected resource(s)")
+                        filter = DTMContextFilter()
+                        dtm = filter.filter_by_resources(
+                            dtm=dtm,
+                            selected_resource_ids=selected_resource_ids,
+                            fallback_to_all=True
+                        )
+                        print(f"  ✓ DTM filtered")
+                    
+                    # Build device context for task inference
+                    platform = "web"
+                    if request.device_info:
+                        platform = request.device_info.platform
+                    
+                    # Extract relevant rules for this task
+                    print(f"  Extracting task-relevant rules...")
+                    extractor = DTMForGeneration()
+                    relevant_rules = extractor.extract_for_task(
+                        dtm=dtm,
+                        task_description=request.task_description,
+                        platform=platform
+                    )
+                    
+                    # Format for prompt
+                    dtm_guidance = extractor.format_for_prompt(relevant_rules)
+                    
+                    print(f"✓ DTM guidance prepared ({len(dtm_guidance):,} chars)")
+                    print(f"  Invariants: {len(relevant_rules.get('invariants', []))}")
+                    print(f"  Contextual rules: {len(relevant_rules.get('contextual_rules', []))}")
+                    print(f"  Meta-rules: {len(relevant_rules.get('meta_rules', []))}")
+                
+                else:
+                    print(f"⚠️  No DTM found for taste {selected_taste_id}")
+            
+            except Exception as e:
+                print(f"⚠️  Could not load DTM: {e}")
+        
+        # STRATEGY 2: Fall back to individual DTRs (legacy)
+        if not dtm_guidance and selected_resource_ids and selected_taste_id:
+            print(f"Falling back to individual DTRs...")
             print(f"Loading DTRs for {len(selected_resource_ids)} resource(s)")
             
             dtr_sections = []
@@ -366,7 +443,7 @@ async def generate_ui(
                 try:
                     dtr_json = storage.get_resource_dtr(
                         user_id,
-                        project["selected_taste_id"],
+                        selected_taste_id,
                         resource_id
                     )
                     
@@ -393,14 +470,12 @@ async def generate_ui(
             # Combine all DTR sections
             if dtr_sections:
                 if len(dtr_sections) > 1:
-                    dtr_rules = "\n\n".join(dtr_sections)
-                    dtr_rules = f"MULTIPLE DESIGN REFERENCES:\nYou have been provided with {len(dtr_sections)} different design styles. Synthesize the best elements from each to create a cohesive design.\n\n{dtr_rules}"
+                    dtm_guidance = "\n\n".join(dtr_sections)
+                    dtm_guidance = f"MULTIPLE DESIGN REFERENCES:\nYou have been provided with {len(dtr_sections)} different design styles. Synthesize the best elements from each to create a cohesive design.\n\n{dtm_guidance}"
                 else:
-                    dtr_rules = dtr_sections[0]
+                    dtm_guidance = dtr_sections[0]
                 
-                print(f"✓ Combined DTR rules ({len(dtr_rules):,} chars)")
-        else:
-            print("⚠️  No resources selected for this project")
+                print(f"✓ Combined DTR rules ({len(dtm_guidance):,} chars)")
         
         # Build device context
         device_dict = None
@@ -413,11 +488,12 @@ async def generate_ui(
             print(f"Device: {device_dict['platform']} {device_dict['width']}x{device_dict['height']}")
         
         # Determine prompt name based on rendering mode
+        # Use v3 prompts (DTM-aware)
         if request.rendering_mode == "react":
-            prompt_name = "generate_ui_react_v2"
+            prompt_name = "generate_ui_react_v3_dtm"
             parse_json = False
         else:  # design-ml
-            prompt_name = "generate_ui_dml_v2"
+            prompt_name = "generate_ui_dml_v3_dtm"
             parse_json = True
         
         # Build user message with structured data
@@ -425,10 +501,10 @@ async def generate_ui(
             f"Task: {request.task_description}"
         ]
         
-        if dtr_rules:
-            user_message_parts.append(f"\n\n{dtr_rules}")  # Already formatted
+        if dtm_guidance:
+            user_message_parts.append(f"\n\n{dtm_guidance}")
         else:
-            user_message_parts.append("\n\n(No DTR available - generate from scratch with best practices)")
+            user_message_parts.append("\n\n(No DTM/DTR available - generate from scratch with best practices)")
         
         if device_dict:
             user_message_parts.append(f"\n\nDevice Context:\n{json.dumps(device_dict, indent=2)}")
@@ -501,37 +577,31 @@ async def generate_ui(
         )
         
         # Update project metadata
-        metadata = project.get("metadata", {})
-        metadata["ui_version"] = new_version
-        metadata["has_ui"] = True
-        metadata["rendering_mode"] = request.rendering_mode
-        
+        updated_metadata = project.get("metadata", {})
+        updated_metadata["ui_version"] = new_version
         db.update_project(
-            request.project_id,
-            metadata=metadata
+            project_id=request.project_id,
+            metadata=updated_metadata
         )
         
         print(f"✓ UI saved (version {new_version})")
-        print(f"{'='*60}\n")
         
         return {
             "status": "success",
-            "type": request.rendering_mode,
-            "ui": ui_output,
+            "project_id": request.project_id,
+            "rendering_mode": request.rendering_mode,
+            "ui_output": ui_output,
             "version": new_version,
-            "dtr_applied": dtr_rules is not None
+            "used_dtm": bool(dtm_guidance and 'DTM' in dtm_guidance)  # Indicate if DTM was used
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"\n❌ ERROR: {str(e)}")
+        print(f"Error generating UI: {e}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate UI: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to generate UI: {str(e)}")
 
 
 # ============================================================================

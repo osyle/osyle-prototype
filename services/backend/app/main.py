@@ -16,6 +16,7 @@ load_dotenv()
 from app.routers import tastes, projects, mobbin
 from app.llm_routes import router as llm_router
 from app.websocket_routes import router as ws_router
+from app.dtm_routes import router as dtm_router
 
 app = FastAPI(title="Osyle API", version="1.0.0")
 
@@ -158,6 +159,7 @@ app.include_router(projects.router)
 app.include_router(mobbin.router)
 app.include_router(llm_router)
 app.include_router(ws_router)
+app.include_router(dtm_router)
 
 # Create Mangum handler for HTTP events
 mangum_handler = Mangum(app)
