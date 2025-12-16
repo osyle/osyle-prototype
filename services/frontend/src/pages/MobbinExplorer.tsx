@@ -27,16 +27,16 @@ interface Flow {
   screen_count: number
 }
 
+interface MobbinStatus {
+  configured: boolean
+  authenticated: boolean
+  email: string | null
+}
+
 export default function MobbinExplorer() {
   const navigate = useNavigate()
-  const [mobbinEmail, setMobbinEmail] = useState('')
-  const [mobbinPassword, setMobbinPassword] = useState('')
-  const [verificationCode, setVerificationCode] = useState('')
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [authStep, setAuthStep] = useState<
-    'email' | 'password' | 'code' | 'authenticated'
-  >('email')
-  const [loading, setLoading] = useState(false)
+  const [status, setStatus] = useState<MobbinStatus | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   // Apps state
@@ -54,173 +54,33 @@ export default function MobbinExplorer() {
   // Auth token from localStorage
   const token = localStorage.getItem('token')
 
-  // Check auth status on load
+  // Check Mobbin service status on load
   useEffect(() => {
-    const savedEmail = localStorage.getItem('mobbin_email')
-    if (savedEmail) {
-      checkAuthStatus(savedEmail)
-    }
+    checkStatus()
   }, [])
 
-  const checkAuthStatus = async (email: string) => {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/mobbin/auth/status?email=${encodeURIComponent(email)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      )
-      const data = await response.json()
-      if (data.authenticated && !data.token_expired) {
-        setMobbinEmail(email)
-        setIsAuthenticated(true)
-        setAuthStep('authenticated')
-        loadApps(email, 1)
-      }
-    } catch (err) {
-      console.error('Failed to check auth status:', err)
-    }
-  }
-
-  const checkAuthMethod = async () => {
+  const checkStatus = async () => {
     setLoading(true)
-    setError('')
-
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/mobbin/auth/check-method`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ email: mobbinEmail }),
-        },
-      )
-
-      if (!response.ok) {
-        throw new Error('Failed to check authentication method')
-      }
-
-      const data = await response.json()
-
-      if (data.requires_password) {
-        setAuthStep('password')
-      } else {
-        // Send magic link code
-        await handleSendCode()
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleSendCode = async () => {
-    setLoading(true)
-    setError('')
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/mobbin/auth/send-code`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ email: mobbinEmail }),
-        },
-      )
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.detail || 'Failed to send code')
-      }
-
-      setAuthStep('code')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleVerifyCode = async () => {
-    setLoading(true)
-    setError('')
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/mobbin/auth/verify`, {
-        method: 'POST',
+      const response = await fetch(`${API_BASE_URL}/api/mobbin/status`, {
         headers: {
-          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          email: mobbinEmail,
-          code: verificationCode,
-        }),
       })
+      const data = await response.json()
+      setStatus(data)
 
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.detail || 'Verification failed')
+      if (data.authenticated) {
+        loadApps(1)
       }
-
-      localStorage.setItem('mobbin_email', mobbinEmail)
-      setIsAuthenticated(true)
-      setAuthStep('authenticated')
-      loadApps(mobbinEmail, 1)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      setError(err instanceof Error ? err.message : 'Failed to check status')
     } finally {
       setLoading(false)
     }
   }
 
-  const handlePasswordLogin = async () => {
-    setLoading(true)
-    setError('')
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/mobbin/auth/login-password`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            email: mobbinEmail,
-            password: mobbinPassword,
-          }),
-        },
-      )
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.detail || 'Login failed')
-      }
-
-      localStorage.setItem('mobbin_email', mobbinEmail)
-      setIsAuthenticated(true)
-      setAuthStep('authenticated')
-      setMobbinPassword('') // Clear password
-      loadApps(mobbinEmail, 1)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadApps = async (email: string, page: number) => {
+  const loadApps = async (page: number) => {
     setLoadingApps(true)
     setError('')
 
@@ -232,7 +92,6 @@ export default function MobbinExplorer() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          email,
           page,
           page_size: 24,
           platform: 'ios',
@@ -260,7 +119,7 @@ export default function MobbinExplorer() {
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/mobbin/apps/${app.id}/screens?email=${encodeURIComponent(mobbinEmail)}`,
+        `${API_BASE_URL}/api/mobbin/apps/${app.id}/screens`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -289,7 +148,7 @@ export default function MobbinExplorer() {
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/mobbin/apps/${app.id}/flows?email=${encodeURIComponent(mobbinEmail)}`,
+        `${API_BASE_URL}/api/mobbin/apps/${app.id}/flows`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -312,16 +171,12 @@ export default function MobbinExplorer() {
     }
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem('mobbin_email')
-    setIsAuthenticated(false)
-    setAuthStep('email')
-    setMobbinEmail('')
-    setMobbinPassword('')
-    setVerificationCode('')
-    setApps([])
-    setScreens([])
-    setFlows([])
+  if (loading && !status) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+      </div>
+    )
   }
 
   return (
@@ -340,13 +195,33 @@ export default function MobbinExplorer() {
               Mobbin Explorer
             </h1>
           </div>
-          {isAuthenticated && (
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-            >
-              Logout from Mobbin
-            </button>
+          {status && (
+            <div className="flex items-center space-x-4">
+              <div className="text-sm">
+                {status.authenticated ? (
+                  <span className="text-green-600 flex items-center">
+                    <span className="w-2 h-2 bg-green-600 rounded-full mr-2" />
+                    Connected as {status.email}
+                  </span>
+                ) : status.configured ? (
+                  <span className="text-yellow-600 flex items-center">
+                    <span className="w-2 h-2 bg-yellow-600 rounded-full mr-2" />
+                    Authentication failed
+                  </span>
+                ) : (
+                  <span className="text-red-600 flex items-center">
+                    <span className="w-2 h-2 bg-red-600 rounded-full mr-2" />
+                    Not configured
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={checkStatus}
+                className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+              >
+                Refresh
+              </button>
+            </div>
           )}
         </div>
       </header>
@@ -359,127 +234,49 @@ export default function MobbinExplorer() {
           </div>
         )}
 
-        {/* Authentication Flow */}
-        {!isAuthenticated && (
-          <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-8">
-            <h2 className="text-xl font-semibold mb-6">
-              Authenticate with Mobbin
+        {/* Not Configured Message */}
+        {status && !status.configured && (
+          <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8">
+            <h2 className="text-xl font-semibold mb-4">
+              Mobbin Not Configured
             </h2>
+            <p className="text-gray-600 mb-4">
+              To use Mobbin integration, please set the following environment
+              variables in your backend:
+            </p>
+            <div className="bg-gray-100 p-4 rounded font-mono text-sm">
+              MOBBIN_EMAIL=your@email.com
+              <br />
+              MOBBIN_PASSWORD=your_password
+            </div>
+            <p className="text-gray-600 mt-4">
+              Then restart your backend server.
+            </p>
+          </div>
+        )}
 
-            {authStep === 'email' && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Mobbin Email
-                  </label>
-                  <input
-                    type="email"
-                    value={mobbinEmail}
-                    onChange={e => setMobbinEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <button
-                  onClick={checkAuthMethod}
-                  disabled={loading || !mobbinEmail}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Checking...' : 'Continue'}
-                </button>
-              </div>
-            )}
-
-            {authStep === 'password' && (
-              <div className="space-y-4">
-                <p className="text-sm text-gray-600 mb-4">
-                  This account requires password authentication
-                </p>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={mobbinEmail}
-                    disabled
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-100"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    value={mobbinPassword}
-                    onChange={e => setMobbinPassword(e.target.value)}
-                    placeholder="Enter your Mobbin password"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    onKeyPress={e => {
-                      if (e.key === 'Enter' && mobbinPassword) {
-                        handlePasswordLogin()
-                      }
-                    }}
-                  />
-                </div>
-                <button
-                  onClick={handlePasswordLogin}
-                  disabled={loading || !mobbinPassword}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Logging in...' : 'Login'}
-                </button>
-                <button
-                  onClick={() => {
-                    setAuthStep('email')
-                    setMobbinPassword('')
-                  }}
-                  className="w-full px-4 py-2 text-gray-600 hover:text-gray-900"
-                >
-                  Use Different Email
-                </button>
-              </div>
-            )}
-
-            {authStep === 'code' && (
-              <div className="space-y-4">
-                <p className="text-sm text-gray-600 mb-4">
-                  A verification code has been sent to {mobbinEmail}
-                </p>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Verification Code
-                  </label>
-                  <input
-                    type="text"
-                    value={verificationCode}
-                    onChange={e => setVerificationCode(e.target.value)}
-                    placeholder="123456"
-                    maxLength={6}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <button
-                  onClick={handleVerifyCode}
-                  disabled={loading || !verificationCode}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Verifying...' : 'Verify Code'}
-                </button>
-                <button
-                  onClick={() => setAuthStep('email')}
-                  className="w-full px-4 py-2 text-gray-600 hover:text-gray-900"
-                >
-                  Use Different Email
-                </button>
-              </div>
-            )}
+        {/* Not Authenticated Message */}
+        {status && status.configured && !status.authenticated && (
+          <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8">
+            <h2 className="text-xl font-semibold mb-4">
+              Authentication Failed
+            </h2>
+            <p className="text-gray-600 mb-4">
+              Failed to authenticate with Mobbin using the configured
+              credentials. Please check your environment variables and ensure
+              the credentials are correct.
+            </p>
+            <button
+              onClick={checkStatus}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Retry Authentication
+            </button>
           </div>
         )}
 
         {/* Authenticated Content */}
-        {isAuthenticated && (
+        {status && status.authenticated && (
           <>
             {/* View Mode Tabs */}
             {viewMode !== 'apps' && (
@@ -520,7 +317,7 @@ export default function MobbinExplorer() {
                   <h2 className="text-xl font-semibold">iOS Apps</h2>
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => loadApps(mobbinEmail, currentPage - 1)}
+                      onClick={() => loadApps(currentPage - 1)}
                       disabled={currentPage === 1 || loadingApps}
                       className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
@@ -530,7 +327,7 @@ export default function MobbinExplorer() {
                       Page {currentPage}
                     </span>
                     <button
-                      onClick={() => loadApps(mobbinEmail, currentPage + 1)}
+                      onClick={() => loadApps(currentPage + 1)}
                       disabled={!hasMore || loadingApps}
                       className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >

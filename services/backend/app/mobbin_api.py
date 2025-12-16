@@ -192,10 +192,6 @@ class MobbinAPI:
         if not self.email:
             raise ValueError("Email is required")
         
-        # Check if password is required
-        if await self.should_use_password():
-            raise ValueError("This email requires password authentication. Please use login_with_password() instead.")
-        
         url = f"{self.SUPABASE_URL}/auth/v1/otp"
         headers = await self._get_headers(include_auth=False)
         headers["Content-Type"] = "text/plain;charset=UTF-8"
@@ -284,6 +280,8 @@ class MobbinAPI:
         """Get count of iOS apps using RPC endpoint"""
         url = f"{self.SUPABASE_URL}/rest/v1/rpc/get_content_count"
         headers = await self._get_headers()
+        headers["Content-Profile"] = "public"
+        headers["Accept-Profile"] = "public"
         
         data = {"filter_app_platform": "ios"}
         
@@ -311,6 +309,13 @@ class MobbinAPI:
         
         url = f"{self.SUPABASE_URL}/rest/v1/rpc/get_apps_with_preview_screens_filter?select=*"
         headers = await self._get_headers()
+        headers["Content-Profile"] = "public"
+        headers["Accept-Profile"] = "public"
+        
+        print("DEBUG: Request URL:", url)
+        print("DEBUG: Token present:", bool(self.token))
+        print("DEBUG: Access token (first 50 chars):", self.token.access_token[:50] if self.token else "None")
+        print("DEBUG: Headers:", {k: v[:50] + "..." if len(v) > 50 else v for k, v in headers.items()})
         
         # Build request body matching Swift implementation
         body = {
@@ -327,6 +332,11 @@ class MobbinAPI:
         }
         
         response = await self.client.post(url, json=body, headers=headers)
+        
+        print("DEBUG: Response status:", response.status_code)
+        if response.status_code != 200:
+            print("DEBUG: Response body:", response.text[:500])
+        
         response.raise_for_status()
         
         apps_data = response.json()
