@@ -57,7 +57,7 @@ export interface Project {
   name: string
   task_description: string
   selected_taste_id?: string
-  selected_resource_id?: string
+  selected_resource_ids: string[] // ✅ CHANGED: Now an array
   outputs: string[]
   metadata: Record<string, unknown>
   created_at: string
@@ -353,7 +353,7 @@ export const projectsAPI = {
     name: string
     task_description?: string
     selected_taste_id?: string
-    selected_resource_id?: string
+    selected_resource_ids?: string[] // ✅ CHANGED: Now an array
     metadata?: Record<string, unknown>
   }): Promise<Project> => {
     return apiRequest<Project>('/api/projects/', {
@@ -385,7 +385,7 @@ export const projectsAPI = {
       name?: string
       task_description?: string
       selected_taste_id?: string
-      selected_resource_id?: string
+      selected_resource_ids?: string[] // ✅ CHANGED: Now an array
       metadata?: Record<string, unknown>
     },
   ): Promise<Project> => {

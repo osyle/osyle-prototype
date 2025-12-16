@@ -353,32 +353,54 @@ async def generate_ui(
         print(f"Task: {request.task_description[:80]}...")
         print(f"Rendering mode: {request.rendering_mode}")
         
-        # Load DTR from resource if available
-        dtr_json = None
+        # ✅ CHANGED: Load DTRs from multiple resources
         dtr_rules = None
+        selected_resource_ids = project.get("selected_resource_ids", [])
         
-        if project.get("selected_resource_id"):
-            try:
-                dtr_json = storage.get_resource_dtr(
-                    user_id,
-                    project["selected_taste_id"],
-                    project["selected_resource_id"]
-                )
-                
-                if dtr_json:
-                    dtr_version = dtr_json.get('version', 'unknown')
-                    print(f"✓ Loaded DTR (version: {dtr_version})")
+        if selected_resource_ids and project.get("selected_taste_id"):
+            print(f"Loading DTRs for {len(selected_resource_ids)} resource(s)")
+            
+            dtr_sections = []
+            
+            for idx, resource_id in enumerate(selected_resource_ids):
+                try:
+                    dtr_json = storage.get_resource_dtr(
+                        user_id,
+                        project["selected_taste_id"],
+                        resource_id
+                    )
                     
-                    # Extract generative rules from DTR
-                    dtr_rules = extract_generative_rules(dtr_json)
-                    print(f"✓ Extracted generative rules ({len(dtr_rules)} chars)")
+                    if dtr_json:
+                        dtr_version = dtr_json.get('version', 'unknown')
+                        print(f"✓ Loaded DTR {idx+1}/{len(selected_resource_ids)} (version: {dtr_version})")
+                        
+                        # Extract rules for this resource
+                        rules = extract_generative_rules(dtr_json)
+                        
+                        # Add header for multi-resource case
+                        if len(selected_resource_ids) > 1:
+                            resource = db.get_resource(resource_id)
+                            resource_name = resource.get("name", f"Resource {idx+1}") if resource else f"Resource {idx+1}"
+                            dtr_sections.append(f"\n=== DTR from: {resource_name} ===\n{rules}")
+                        else:
+                            dtr_sections.append(rules)
+                    else:
+                        print(f"⚠️  No DTR found for resource {resource_id}")
+                        
+                except Exception as e:
+                    print(f"⚠️  Could not load DTR for resource {resource_id}: {e}")
+            
+            # Combine all DTR sections
+            if dtr_sections:
+                if len(dtr_sections) > 1:
+                    dtr_rules = "\n\n".join(dtr_sections)
+                    dtr_rules = f"MULTIPLE DESIGN REFERENCES:\nYou have been provided with {len(dtr_sections)} different design styles. Synthesize the best elements from each to create a cohesive design.\n\n{dtr_rules}"
                 else:
-                    print("⚠️  No DTR available")
-                    
-            except Exception as e:
-                print(f"⚠️  Could not load DTR: {e}")
+                    dtr_rules = dtr_sections[0]
+                
+                print(f"✓ Combined DTR rules ({len(dtr_rules):,} chars)")
         else:
-            print("⚠️  No resource selected for this project")
+            print("⚠️  No resources selected for this project")
         
         # Build device context
         device_dict = None

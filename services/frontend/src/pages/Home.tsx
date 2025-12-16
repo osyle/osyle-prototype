@@ -4,870 +4,34 @@ import {
   Plus,
   Link,
   Palette,
-  X,
   Sparkles,
   Sprout,
   Layers,
   Eye,
 } from 'lucide-react'
-import React, { useState, useMemo, useEffect, useRef } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ConfigurationMenu from '../components/ConfigurationMenu'
-import DesignMLv2Renderer from '../components/DesignMLRenderer'
-import DynamicReactRenderer from '../components/DynamicReactRenderer'
+
+// New component imports
+import CreateNewCard from '../components/CreateNewCard'
+import CreateProjectModal from '../components/CreateProjectModal'
+import CreateResourceModal from '../components/CreateResourceModal'
+import CreateTasteModal from '../components/CreateTasteModal'
+import ProfileDropdown from '../components/ProfileDropdown'
+import ProjectCardPreview from '../components/ProjectCardPreview'
+import StyleCard from '../components/StyleCard'
+import TasteCard from '../components/TasteCard'
+
 import api from '../services/api'
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-interface UserInfo {
-  name: string
-  email: string
-  initials: string
-  picture?: string
-}
-
-interface ResourceDisplay {
-  resource_id: string
-  name: string
-  imageUrl: string | null
-  has_image: boolean
-  has_figma: boolean
-}
-
-interface TasteDisplay {
-  taste_id: string
-  name: string
-  resources: ResourceDisplay[]
-}
-
-interface ProjectDisplay {
-  project_id: string
-  name: string
-  rendering_mode: string // 'react' | 'design-ml'
-  created_at: string
-  ui?: unknown // The actual UI data (Design ML JSON or React JSX string)
-  ui_loading?: boolean
-  ui_error?: boolean
-}
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Get initials from a name (first letter capitalized)
- */
-function getInitials(name: string): string {
-  return name.charAt(0).toUpperCase()
-}
-
-/**
- * Select up to 3 resources for display, prioritizing those with images
- */
-function selectDisplayResources(
-  resources: ResourceDisplay[],
-): ResourceDisplay[] {
-  // Separate resources with and without images
-  const withImages = resources.filter(r => r.has_image && r.imageUrl)
-  const withoutImages = resources.filter(r => !r.has_image || !r.imageUrl)
-
-  // Prioritize resources with images
-  const selected: ResourceDisplay[] = []
-
-  // First add up to 3 with images
-  selected.push(...withImages.slice(0, 3))
-
-  // If we have less than 3, fill with resources without images
-  if (selected.length < 3) {
-    selected.push(...withoutImages.slice(0, 3 - selected.length))
-  }
-
-  return selected
-}
-
-// ============================================================================
-// PROJECT CARD PREVIEW COMPONENT
-// ============================================================================
-
-interface ProjectCardPreviewProps {
-  project: ProjectDisplay
-  cardHeight: number
-}
-
-const ProjectCardPreview: React.FC<ProjectCardPreviewProps> = ({
-  project,
-  cardHeight,
-}) => {
-  if (project.ui_loading) {
-    return (
-      <div
-        className="w-full h-full flex items-center justify-center"
-        style={{ backgroundColor: '#F7F5F3' }}
-      >
-        <div className="text-sm" style={{ color: '#929397' }}>
-          Loading preview...
-        </div>
-      </div>
-    )
-  }
-
-  if (project.ui_error || !project.ui) {
-    return (
-      <div
-        className="w-full h-full flex items-center justify-center"
-        style={{ backgroundColor: '#F7F5F3' }}
-      >
-        <div className="text-sm" style={{ color: '#929397' }}>
-          Preview unavailable
-        </div>
-      </div>
-    )
-  }
-
-  // Calculate scale to fit the UI in the card
-  // Assume typical design is 1024x768 or phone size 375x812
-  const isDesignML = project.rendering_mode === 'design-ml'
-  const baseWidth = isDesignML ? 1024 : 375
-  const baseHeight = isDesignML ? 768 : 812
-
-  // Card content area height (subtract footer height ~70px)
-  const availableHeight = cardHeight - 70
-  const availableWidth = 280 // Card width
-
-  // Calculate scale to fit with 1.2x zoom for better visibility
-  const scaleX = (availableWidth / baseWidth) * 1.2
-  const scaleY = (availableHeight / baseHeight) * 1.2
-  const scale = Math.min(scaleX, scaleY, 0.6) // Max scale of 0.6 (increased from 0.5)
-
-  return (
-    <div
-      className="w-full h-full flex items-center justify-center overflow-hidden"
-      style={{ backgroundColor: '#F7F5F3' }}
-    >
-      <div
-        style={{
-          transform: `scale(${scale})`,
-          transformOrigin: 'center center',
-          width: baseWidth,
-          height: baseHeight,
-          pointerEvents: 'none', // Disable interactions in preview
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        {project.rendering_mode === 'design-ml' ? (
-          <DesignMLv2Renderer document={project.ui} />
-        ) : (
-          <DynamicReactRenderer jsxCode={project.ui as string} />
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ============================================================================
-// TASTE CARD COMPONENT
-// ============================================================================
-
-interface TasteCardProps {
-  taste: TasteDisplay
-  isSelected: boolean
-  onClick: () => void
-}
-
-const TasteCard: React.FC<TasteCardProps> = ({
-  taste,
-  isSelected,
-  onClick,
-}) => {
-  const [isHovered, setIsHovered] = useState(false)
-  const displayResources = selectDisplayResources(taste.resources)
-
-  return (
-    <div
-      className="relative h-full cursor-pointer transition-all duration-300"
-      onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={{
-        // Add padding to contain the selection ring
-        padding: '8px',
-      }}
-    >
-      <div
-        className="h-full rounded-xl p-4 flex flex-col justify-between transition-all duration-300 relative"
-        style={{
-          backgroundColor: '#FFFFFF',
-          boxShadow: isSelected
-            ? '0 8px 24px rgba(74, 144, 226, 0.2)'
-            : isHovered
-              ? '0 4px 16px rgba(0,0,0,0.12)'
-              : '0 2px 12px rgba(0,0,0,0.08)',
-          transform:
-            isHovered && !isSelected ? 'translateY(-2px)' : 'translateY(0)',
-          // Selection ring as box-shadow (stays within bounds)
-          outline: isSelected ? '3px solid #4A90E2' : 'none',
-          outlineOffset: '-3px',
-        }}
-      >
-        <div>
-          <div
-            className="text-sm font-medium mb-3"
-            style={{ color: '#3B3B3B' }}
-          >
-            {taste.name}
-          </div>
-          <div className="flex items-center">
-            {displayResources.map((resource, index) => (
-              <div
-                key={resource.resource_id}
-                className="w-12 h-12 rounded-full border-2 border-white flex items-center justify-center overflow-hidden"
-                style={{
-                  marginLeft: index === 0 ? 0 : -16,
-                  zIndex: displayResources.length - index,
-                  backgroundColor: resource.has_image
-                    ? 'transparent'
-                    : '#F4F4F4',
-                }}
-              >
-                {resource.has_image && resource.imageUrl ? (
-                  <img
-                    src={resource.imageUrl}
-                    alt={resource.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span
-                    className="text-sm font-medium"
-                    style={{ color: '#4F515A' }}
-                  >
-                    {getInitials(resource.name)}
-                  </span>
-                )}
-              </div>
-            ))}
-            {taste.resources.length > 3 && (
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center text-xs font-medium border-2 border-white"
-                style={{
-                  marginLeft: -16,
-                  backgroundColor: '#F4F4F4',
-                  color: '#4F515A',
-                  zIndex: 0,
-                }}
-              >
-                +{taste.resources.length - 3}
-              </div>
-            )}
-            {taste.resources.length === 0 && (
-              <div className="text-xs italic" style={{ color: '#929397' }}>
-                No resources
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ============================================================================
-// CREATE NEW CARD COMPONENT
-// ============================================================================
-
-interface CreateNewCardProps {
-  onClick: () => void
-}
-
-const CreateNewCard: React.FC<CreateNewCardProps> = ({ onClick }) => {
-  return (
-    <div
-      className="h-full rounded-xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-105 cursor-pointer"
-      onClick={onClick}
-      style={{
-        backgroundColor: '#FFFFFF',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-      }}
-    >
-      <div>
-        <div className="text-sm font-medium mb-3" style={{ color: '#3B3B3B' }}>
-          Create new
-        </div>
-        <button
-          className="w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105"
-          style={{ backgroundColor: '#F4F4F4' }}
-        >
-          <Plus size={24} style={{ color: '#929397' }} />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ============================================================================
-// CREATE RESOURCE MODAL COMPONENT
-// ============================================================================
-
-interface CreateResourceModalProps {
-  isOpen: boolean
-  onClose: () => void
-  // eslint-disable-next-line no-unused-vars
-  onConfirm: (resourceName: string) => void
-  isLoading: boolean
-  fileCount: number
-}
-
-const CreateResourceModal: React.FC<CreateResourceModalProps> = ({
-  isOpen,
-  onClose,
-  onConfirm,
-  isLoading,
-  fileCount,
-}) => {
-  const [resourceName, setResourceName] = useState('')
-
-  useEffect(() => {
-    if (isOpen) {
-      setResourceName('')
-    }
-  }, [isOpen])
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (resourceName.trim()) {
-      onConfirm(resourceName.trim())
-    }
-  }
-
-  if (!isOpen) return null
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
-    >
-      <div
-        className="rounded-2xl p-6 w-full max-w-md"
-        style={{
-          backgroundColor: '#FFFFFF',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-        }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium" style={{ color: '#3B3B3B' }}>
-            Name Your Resource
-          </h3>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-105"
-            style={{ backgroundColor: '#F4F4F4' }}
-            disabled={isLoading}
-          >
-            <X size={18} style={{ color: '#929397' }} />
-          </button>
-        </div>
-
-        <p className="text-sm mb-4" style={{ color: '#929397' }}>
-          {fileCount} file{fileCount !== 1 ? 's' : ''} will be uploaded to this
-          resource
-        </p>
-
-        <form onSubmit={handleSubmit}>
-          <div className="mb-6">
-            <label
-              className="block text-sm font-medium mb-2"
-              style={{ color: '#3B3B3B' }}
-            >
-              Resource Name
-            </label>
-            <input
-              type="text"
-              value={resourceName}
-              onChange={e => setResourceName(e.target.value)}
-              placeholder="e.g., Hero Design v1"
-              className="w-full px-4 py-3 rounded-xl focus:outline-none transition-all"
-              style={{
-                backgroundColor: '#F7F5F3',
-                color: '#3B3B3B',
-                border: '2px solid transparent',
-              }}
-              onFocus={e => {
-                e.target.style.borderColor = '#F5C563'
-              }}
-              onBlur={e => {
-                e.target.style.borderColor = 'transparent'
-              }}
-              disabled={isLoading}
-              autoFocus
-            />
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105"
-              style={{
-                backgroundColor: '#F4F4F4',
-                color: '#3B3B3B',
-              }}
-              disabled={isLoading}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105 disabled:opacity-50"
-              style={{
-                backgroundColor: '#F5C563',
-                color: '#1F1F20',
-                boxShadow: '0 2px 12px rgba(245, 197, 99, 0.3)',
-              }}
-              disabled={isLoading || !resourceName.trim()}
-            >
-              {isLoading ? 'Creating...' : 'Continue'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-// ============================================================================
-// CREATE PROJECT MODAL COMPONENT
-// ============================================================================
-
-interface CreateProjectModalProps {
-  isOpen: boolean
-  onClose: () => void
-  // eslint-disable-next-line no-unused-vars
-  onConfirm: (projectName: string) => void
-  isLoading: boolean
-}
-
-const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
-  isOpen,
-  onClose,
-  onConfirm,
-  isLoading,
-}) => {
-  const [projectName, setProjectName] = useState('')
-
-  useEffect(() => {
-    if (isOpen) {
-      setProjectName('')
-    }
-  }, [isOpen])
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (projectName.trim()) {
-      onConfirm(projectName.trim())
-    }
-  }
-
-  if (!isOpen) return null
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
-    >
-      <div
-        className="rounded-2xl p-6 w-full max-w-md"
-        style={{
-          backgroundColor: '#FFFFFF',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-        }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium" style={{ color: '#3B3B3B' }}>
-            Name Your Project
-          </h3>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-105"
-            style={{ backgroundColor: '#F4F4F4' }}
-            disabled={isLoading}
-          >
-            <X size={18} style={{ color: '#929397' }} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          <div className="mb-6">
-            <label
-              className="block text-sm font-medium mb-2"
-              style={{ color: '#3B3B3B' }}
-            >
-              Project Name
-            </label>
-            <input
-              type="text"
-              value={projectName}
-              onChange={e => setProjectName(e.target.value)}
-              placeholder="e.g., Q1 Landing Page"
-              className="w-full px-4 py-3 rounded-xl focus:outline-none transition-all"
-              style={{
-                backgroundColor: '#F7F5F3',
-                color: '#3B3B3B',
-                border: '2px solid transparent',
-              }}
-              onFocus={e => {
-                e.target.style.borderColor = '#F5C563'
-              }}
-              onBlur={e => {
-                e.target.style.borderColor = 'transparent'
-              }}
-              disabled={isLoading}
-              autoFocus
-            />
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105"
-              style={{
-                backgroundColor: '#F4F4F4',
-                color: '#3B3B3B',
-              }}
-              disabled={isLoading}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105 disabled:opacity-50"
-              style={{
-                backgroundColor: '#F5C563',
-                color: '#1F1F20',
-                boxShadow: '0 2px 12px rgba(245, 197, 99, 0.3)',
-              }}
-              disabled={isLoading || !projectName.trim()}
-            >
-              {isLoading ? 'Creating...' : 'Create Project'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-interface CreateTasteModalProps {
-  isOpen: boolean
-  onClose: () => void
-  // eslint-disable-next-line no-unused-vars
-  onConfirm: (tasteName: string) => void
-  isLoading: boolean
-}
-
-const CreateTasteModal: React.FC<CreateTasteModalProps> = ({
-  isOpen,
-  onClose,
-  onConfirm,
-  isLoading,
-}) => {
-  const [tasteName, setTasteName] = useState('')
-
-  useEffect(() => {
-    if (isOpen) {
-      setTasteName('')
-    }
-  }, [isOpen])
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (tasteName.trim()) {
-      onConfirm(tasteName.trim())
-    }
-  }
-
-  if (!isOpen) return null
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
-    >
-      <div
-        className="rounded-2xl p-6 w-full max-w-md"
-        style={{
-          backgroundColor: '#FFFFFF',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-        }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium" style={{ color: '#3B3B3B' }}>
-            Create New Taste
-          </h3>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-105"
-            style={{ backgroundColor: '#F4F4F4' }}
-            disabled={isLoading}
-          >
-            <X size={18} style={{ color: '#929397' }} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          <div className="mb-6">
-            <label
-              className="block text-sm font-medium mb-2"
-              style={{ color: '#3B3B3B' }}
-            >
-              Taste Name
-            </label>
-            <input
-              type="text"
-              value={tasteName}
-              onChange={e => setTasteName(e.target.value)}
-              placeholder="e.g., Minimalist Nordic"
-              className="w-full px-4 py-3 rounded-xl focus:outline-none transition-all"
-              style={{
-                backgroundColor: '#F7F5F3',
-                color: '#3B3B3B',
-                border: '2px solid transparent',
-              }}
-              onFocus={e => {
-                e.target.style.borderColor = '#F5C563'
-              }}
-              onBlur={e => {
-                e.target.style.borderColor = 'transparent'
-              }}
-              disabled={isLoading}
-              autoFocus
-            />
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105"
-              style={{
-                backgroundColor: '#F4F4F4',
-                color: '#3B3B3B',
-              }}
-              disabled={isLoading}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105 disabled:opacity-50"
-              style={{
-                backgroundColor: '#F5C563',
-                color: '#1F1F20',
-                boxShadow: '0 2px 12px rgba(245, 197, 99, 0.3)',
-              }}
-              disabled={isLoading || !tasteName.trim()}
-            >
-              {isLoading ? 'Creating...' : 'Create'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-// ============================================================================
-// STYLE CARD COMPONENT (Resources)
-// ============================================================================
-
-interface StyleCardProps {
-  resource: ResourceDisplay
-  isSelected: boolean
-  onClick: () => void
-}
-
-const StyleCard: React.FC<StyleCardProps> = ({
-  resource,
-  isSelected,
-  onClick,
-}) => {
-  const [isHovered, setIsHovered] = useState(false)
-
-  return (
-    <div
-      className="relative cursor-pointer transition-all duration-300 flex-none"
-      onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={{
-        width: '240px',
-        height: '340px',
-      }}
-    >
-      {/* Main card container with background color */}
-      <div
-        className="rounded-3xl transition-all duration-300 relative h-full"
-        style={{
-          backgroundColor: '#E8EBED',
-          boxShadow: isSelected
-            ? '0 12px 32px rgba(74, 144, 226, 0.3)'
-            : isHovered
-              ? '0 8px 24px rgba(0,0,0,0.15)'
-              : '0 4px 16px rgba(0,0,0,0.1)',
-          transform:
-            isHovered && !isSelected ? 'translateY(-4px)' : 'translateY(0)',
-          outline: isSelected ? '3px solid #4A90E2' : 'none',
-          outlineOffset: '-3px',
-          overflow: 'hidden',
-        }}
-      >
-        {/* 3D Card Stack Container */}
-        <div
-          className="absolute"
-          style={{
-            left: '50%',
-            top: '48%',
-            transform: 'translate(-50%, -50%)',
-            width: '180px',
-            height: '240px',
-          }}
-        >
-          {/* Back card (furthest) - smaller, positioned HIGHER so it peeks out on top */}
-          <div
-            className="absolute rounded-2xl"
-            style={{
-              width: '150px',
-              height: '210px',
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-              left: '50%',
-              top: '40%', // Moved down (was 35%)
-              transform: 'translate(-50%, -50%)',
-              zIndex: 1,
-            }}
-          />
-
-          {/* Middle card - medium size, positioned between back and front, also peeks out on top */}
-          <div
-            className="absolute rounded-2xl"
-            style={{
-              width: '165px',
-              height: '225px',
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
-              left: '50%',
-              top: '45%', // Moved down (was 42%)
-              transform: 'translate(-50%, -50%)',
-              zIndex: 2,
-            }}
-          />
-
-          {/* Front card with resource image - full size, positioned lowest */}
-          <div
-            className="absolute rounded-2xl overflow-hidden"
-            style={{
-              width: '180px',
-              height: '240px',
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 8px 20px rgba(0,0,0,0.15)',
-              left: '50%',
-              top: '50%', // Stays the same
-              transform: 'translate(-50%, -50%)',
-              zIndex: 3,
-            }}
-          >
-            {resource.imageUrl ? (
-              <img
-                src={resource.imageUrl}
-                alt={resource.name}
-                className="w-full h-full object-cover"
-                onError={e => {
-                  // Fallback if image fails to load
-                  e.currentTarget.style.display = 'none'
-                  const parent = e.currentTarget.parentElement
-                  if (parent) {
-                    parent.style.display = 'flex'
-                    parent.style.alignItems = 'center'
-                    parent.style.justifyContent = 'center'
-                    parent.style.backgroundColor = '#F4F4F4'
-                    parent.innerHTML = `<span style="color: #929397; font-size: 48px; font-weight: bold;">${getInitials(resource.name)}</span>`
-                  }
-                }}
-              />
-            ) : (
-              <div
-                className="w-full h-full flex items-center justify-center"
-                style={{ backgroundColor: '#F4F4F4' }}
-              >
-                <span
-                  className="text-5xl font-bold"
-                  style={{ color: '#929397' }}
-                >
-                  {getInitials(resource.name)}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Bottom blur envelope with PROPER DEPRESSION/DIP in middle */}
-        <div
-          className="absolute left-0 right-0"
-          style={{
-            bottom: 0,
-            height: '35%',
-            zIndex: 5,
-          }}
-        >
-          {/* Frosted glass with depression - the middle third dips DOWN creating envelope shape */}
-          <div
-            style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: '100%',
-              background: 'rgba(255, 255, 255, 0.75)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              // Creates a depression with subtle depth: flat left → dip down → dip stays down → back up → flat right
-              clipPath:
-                'polygon(0 0, 32% 0, 37% 20%, 63% 20%, 68% 0, 100% 0, 100% 100%, 0 100%)',
-              willChange: 'clip-path',
-            }}
-          />
-
-          {/* Text content over the blur */}
-          <div
-            className="absolute left-0 right-0 bottom-0 px-5 pb-5 pt-7"
-            style={{
-              zIndex: 6,
-            }}
-          >
-            <h3
-              className="text-base font-semibold mb-1 truncate"
-              style={{ color: '#1F1F20' }}
-            >
-              {resource.name}
-            </h3>
-            <p className="text-xs truncate" style={{ color: '#929397' }}>
-              by Milkinside
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
+// Type imports
+import type {
+  UserInfo,
+  TasteDisplay,
+  ResourceDisplay,
+  ProjectDisplay,
+} from '../types/home.types'
 
 // ============================================================================
 // MAIN HOME COMPONENT
@@ -886,7 +50,6 @@ export default function Home() {
 
   // User state
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
-  const [showProfileMenu, setShowProfileMenu] = useState(false)
 
   // UI state
   // const [toggleOn, setToggleOn] = useState(false)
@@ -914,9 +77,7 @@ export default function Home() {
   // Accordion state
   const [expandedStage, setExpandedStage] = useState<number | null>(1)
   const [selectedTasteId, setSelectedTasteId] = useState<string | null>(null)
-  const [selectedResourceId, setSelectedResourceId] = useState<string | null>(
-    null,
-  )
+  const [selectedResourceIds, setSelectedResourceIds] = useState<string[]>([]) // ✅ CHANGED: Now array
 
   // Modal state
   const [isCreateTasteModalOpen, setIsCreateTasteModalOpen] = useState(false)
@@ -932,17 +93,13 @@ export default function Home() {
 
   // Stage 3 state
   const [ideaText, setIdeaText] = useState('')
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
-  const [isDragging, setIsDragging] = useState(false)
+  // ✅ REMOVED: uploadedFiles and isDragging (no longer needed in Stage 3)
 
   // Continue project state
   const [hasActiveProject, setHasActiveProject] = useState(false)
   const [activeProjectName, setActiveProjectName] = useState<string | null>(
     null,
   )
-
-  // Refs
-  const menuRef = useRef<HTMLDivElement>(null)
 
   // ============================================================================
   // COMPUTED VALUES
@@ -1147,23 +304,12 @@ export default function Home() {
   useEffect(() => {
     const stateToSave = {
       selectedTasteId,
-      selectedResourceId,
+      selectedResourceIds,
       ideaText,
-      uploadedFiles: uploadedFiles.map(f => ({
-        name: f.name,
-        type: f.type,
-        size: f.size,
-      })),
       expandedStage,
     }
     sessionStorage.setItem('home_state', JSON.stringify(stateToSave))
-  }, [
-    selectedTasteId,
-    selectedResourceId,
-    ideaText,
-    uploadedFiles,
-    expandedStage,
-  ])
+  }, [selectedTasteId, selectedResourceIds, ideaText, expandedStage])
 
   // Restore state from sessionStorage on mount
   useEffect(() => {
@@ -1172,12 +318,10 @@ export default function Home() {
       try {
         const parsed = JSON.parse(savedState)
         if (parsed.selectedTasteId) setSelectedTasteId(parsed.selectedTasteId)
-        if (parsed.selectedResourceId)
-          setSelectedResourceId(parsed.selectedResourceId)
+        if (parsed.selectedResourceIds)
+          setSelectedResourceIds(parsed.selectedResourceIds)
         if (parsed.ideaText) setIdeaText(parsed.ideaText)
         if (parsed.expandedStage) setExpandedStage(parsed.expandedStage)
-        // Note: Files cannot be restored from sessionStorage
-        // User will need to re-upload if they navigate back
       } catch (err) {
         console.error('Failed to restore home state:', err)
       }
@@ -1198,20 +342,6 @@ export default function Home() {
 
     // Clear the came_from_editor flag after checking
     sessionStorage.removeItem('came_from_editor')
-  }, [])
-
-  // Close profile menu when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setShowProfileMenu(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
   }, [])
 
   // ============================================================================
@@ -1246,10 +376,10 @@ export default function Home() {
 
       // Select the new taste
       setSelectedTasteId(newTaste.taste_id)
-      setSelectedResourceId(null)
+      setSelectedResourceIds([]) // ✅ CHANGED: Reset to empty array
 
-      // Since it has no resources, expand stage 3 directly
-      setExpandedStage(3)
+      // ✅ CHANGED: Go to Stage 2 (resources), not Stage 3
+      setExpandedStage(2)
 
       // Close modal
       setIsCreateTasteModalOpen(false)
@@ -1271,7 +401,12 @@ export default function Home() {
     }
   }
 
-  const handleCreateResource = async (resourceName: string) => {
+  // ✅ NEW: Handler for creating resource from Stage 2 modal
+  const handleCreateResource = async (
+    resourceName: string,
+    figmaFile: File | null,
+    imageFile: File | null,
+  ) => {
     if (!selectedTasteId) return
 
     try {
@@ -1284,69 +419,63 @@ export default function Home() {
         {},
       )
 
-      // Separate files by type
-      const imageFile = uploadedFiles.find(
-        f =>
-          f.type.startsWith('image/') || f.name.toLowerCase().endsWith('.png'),
-      )
-      const figmaFile = uploadedFiles.find(
-        f =>
-          f.type === 'application/json' ||
-          f.name.toLowerCase().endsWith('.json'),
-      )
-
       // Upload files if they exist
       let hasFigma = false
       let hasImage = false
 
+      const uploads: Promise<void>[] = []
+
       if (figmaFile && upload_urls.figma_put_url) {
-        try {
-          const figmaText = await figmaFile.text()
-          const figmaJson = JSON.parse(figmaText)
-          await api.resources.uploadFiles(
-            { figma_put_url: upload_urls.figma_put_url },
-            figmaJson,
-            undefined,
-          )
-          hasFigma = true
-          console.log('Figma file uploaded successfully')
-        } catch (err) {
-          console.error('Failed to upload figma file:', err)
-        }
+        const figmaText = await figmaFile.text()
+        const figmaJson = JSON.parse(figmaText)
+        uploads.push(
+          api.resources
+            .uploadFiles(
+              { figma_put_url: upload_urls.figma_put_url },
+              figmaJson,
+              undefined,
+            )
+            .then(() => {
+              hasFigma = true
+              console.log('Figma file uploaded successfully')
+            })
+            .catch(err => {
+              console.error('Failed to upload figma file:', err)
+              throw err
+            }),
+        )
       }
 
       if (imageFile && upload_urls.image_put_url) {
-        try {
-          await api.resources.uploadFiles(
-            { image_put_url: upload_urls.image_put_url },
-            undefined,
-            imageFile as File,
-          )
-          hasImage = true
-          console.log('Image file uploaded successfully')
-        } catch (err) {
-          console.error('Failed to upload image file:', err)
-        }
-      }
-
-      // CRITICAL: Mark files as uploaded BEFORE proceeding
-      if (hasFigma || hasImage) {
-        await api.resources.markUploaded(
-          selectedTasteId,
-          resource.resource_id,
-          hasFigma,
-          hasImage,
+        uploads.push(
+          api.resources
+            .uploadFiles(
+              { image_put_url: upload_urls.image_put_url },
+              undefined,
+              imageFile,
+            )
+            .then(() => {
+              hasImage = true
+              console.log('Image file uploaded successfully')
+            })
+            .catch(err => {
+              console.error('Failed to upload image file:', err)
+              throw err
+            }),
         )
-        console.log('Resource marked as uploaded:', {
-          resource_id: resource.resource_id,
-          hasFigma,
-          hasImage,
-        })
-      } else {
-        console.warn('No files were successfully uploaded')
       }
 
-      // Update local taste with new resource
+      await Promise.all(uploads)
+
+      // Mark files as uploaded
+      await api.resources.markUploaded(
+        selectedTasteId,
+        resource.resource_id,
+        hasFigma,
+        hasImage,
+      )
+
+      // Get image download URL if image was uploaded
       const imageUrl =
         hasImage && upload_urls.image_put_url
           ? await api.resources
@@ -1363,6 +492,7 @@ export default function Home() {
         has_figma: hasFigma,
       }
 
+      // Update local state
       setTastes(
         tastes.map(t =>
           t.taste_id === selectedTasteId
@@ -1371,23 +501,16 @@ export default function Home() {
         ),
       )
 
-      // Set this as selected resource
-      setSelectedResourceId(resource.resource_id)
+      // ✅ CHANGED: Auto-select the new resource
+      setSelectedResourceIds(prev => [...prev, resource.resource_id])
 
-      // Close resource modal and stop loading
-      setIsCreatingResource(false)
+      // Close modal
       setIsCreateResourceModalOpen(false)
-
-      // ONLY open project modal after everything is complete
-      setIsCreateProjectModalOpen(true)
-
-      return resource.resource_id
     } catch (err) {
       console.error('Failed to create resource:', err)
       alert('Failed to create resource. Please try again.')
+    } finally {
       setIsCreatingResource(false)
-      setIsCreateResourceModalOpen(false)
-      throw err
     }
   }
 
@@ -1397,12 +520,12 @@ export default function Home() {
     try {
       setIsCreatingProject(true)
 
-      // Create project
+      // ✅ CHANGED: Create project with array of resource IDs
       const project = await api.projects.create({
         name: projectName,
         task_description: ideaText,
         selected_taste_id: selectedTasteId,
-        selected_resource_id: selectedResourceId || undefined,
+        selected_resource_ids: selectedResourceIds, // ✅ Now array
         metadata: {},
       })
 
@@ -1414,7 +537,7 @@ export default function Home() {
           project_name: project.name,
           task_description: project.task_description,
           selected_taste_id: project.selected_taste_id,
-          selected_resource_id: project.selected_resource_id,
+          selected_resource_ids: project.selected_resource_ids, // ✅ Array
         }),
       )
 
@@ -1423,8 +546,7 @@ export default function Home() {
 
       // Reset form and clear active project flag
       setIdeaText('')
-      setUploadedFiles([])
-      setSelectedResourceId(null)
+      setSelectedResourceIds([]) // ✅ Reset array
       setHasActiveProject(false)
       setActiveProjectName(null)
 
@@ -1458,7 +580,7 @@ export default function Home() {
           project_name: projectDetails.name,
           task_description: projectDetails.task_description,
           selected_taste_id: projectDetails.selected_taste_id,
-          selected_resource_id: projectDetails.selected_resource_id,
+          selected_resource_ids: projectDetails.selected_resource_ids, // ✅ Array
         }),
       )
 
@@ -1474,17 +596,8 @@ export default function Home() {
     if (!ideaText.trim()) return
     if (!selectedTasteId) return
 
-    // If there are files, create resource first
-    if (uploadedFiles.length > 0) {
-      setIsCreateResourceModalOpen(true)
-    } else {
-      // No files, skip resource creation and go straight to project
-      setIsCreateProjectModalOpen(true)
-    }
-  }
-
-  const handleRemoveFile = (index: number) => {
-    setUploadedFiles(files => files.filter((_, i) => i !== index))
+    // Resources are selected in Stage 2, go straight to project
+    setIsCreateProjectModalOpen(true)
   }
 
   // ============================================================================
@@ -1551,14 +664,10 @@ export default function Home() {
                   isSelected={selectedTasteId === taste.taste_id}
                   onClick={() => {
                     setSelectedTasteId(taste.taste_id)
-                    setSelectedResourceId(null)
+                    setSelectedResourceIds([])
 
-                    // If taste has resources, expand stage 2; otherwise expand stage 3
-                    if (taste.resources.length > 0) {
-                      setExpandedStage(2)
-                    } else {
-                      setExpandedStage(3)
-                    }
+                    // Always go to Stage 2 after selecting taste
+                    setExpandedStage(2)
                   }}
                 />
               </div>
@@ -1586,10 +695,18 @@ export default function Home() {
 
     if (selectedTaste.resources.length === 0) {
       return (
-        <div className="p-6 flex items-center justify-center min-h-[200px]">
-          <div className="text-center" style={{ color: '#929397' }}>
+        <div className="p-6 flex flex-col items-center justify-center min-h-[200px]">
+          <div className="text-center mb-4" style={{ color: '#929397' }}>
             No resources available for this taste
           </div>
+          <button
+            onClick={() => setIsCreateResourceModalOpen(true)}
+            className="px-4 py-2 rounded-lg flex items-center gap-2 transition-all hover:scale-105"
+            style={{ backgroundColor: '#F5C563', color: '#1F1F20' }}
+          >
+            <Plus size={16} />
+            <span className="text-sm font-medium">Add Resource</span>
+          </button>
         </div>
       )
     }
@@ -1613,32 +730,50 @@ export default function Home() {
               <StyleCard
                 key={resource.resource_id}
                 resource={resource}
-                isSelected={selectedResourceId === resource.resource_id}
+                isSelected={selectedResourceIds.includes(resource.resource_id)} // ✅ CHANGED
                 onClick={() => {
-                  setSelectedResourceId(resource.resource_id)
-                  setExpandedStage(3)
+                  // ✅ CHANGED: Toggle selection instead of single select
+                  setSelectedResourceIds(prev =>
+                    prev.includes(resource.resource_id)
+                      ? prev.filter(id => id !== resource.resource_id)
+                      : [...prev, resource.resource_id],
+                  )
                 }}
               />
             ))}
           </div>
         </div>
+
+        {/* ✅ NEW: Continue button when resources are selected */}
+        {selectedResourceIds.length > 0 && (
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={() => setExpandedStage(3)}
+              className="px-6 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105"
+              style={{
+                backgroundColor: '#4A90E2',
+                color: '#FFFFFF',
+                boxShadow: '0 4px 12px rgba(74, 144, 226, 0.3)',
+              }}
+            >
+              Continue ({selectedResourceIds.length} selected)
+            </button>
+          </div>
+        )}
       </div>
     )
-  }, [selectedTaste, selectedResourceId])
+  }, [selectedTaste, selectedResourceIds]) // ✅ CHANGED: Depend on array
 
   // ============================================================================
   // STAGE LOGIC
   // ============================================================================
 
-  const canOpenStage2 =
-    selectedTasteId !== null &&
-    selectedTaste !== undefined &&
-    selectedTaste.resources.length > 0
+  // Stage 2 unlocks as soon as a taste is selected (so user can create/select resources)
+  const canOpenStage2 = selectedTasteId !== null
 
+  // Stage 3 opens when resources are selected
   const canOpenStage3 =
-    selectedTasteId !== null &&
-    (selectedResourceId !== null ||
-      (selectedTaste !== undefined && selectedTaste.resources.length === 0))
+    selectedTasteId !== null && selectedResourceIds.length > 0
 
   const stages = [
     {
@@ -1653,7 +788,7 @@ export default function Home() {
       id: 2,
       title: 'Choose a style',
       icon: Palette,
-      hasNewButton: false, // NOTE: Set to true later when implementing resource creation from Stage 2
+      hasNewButton: true, // ✅ CHANGED: Enable New button
       content: chooseStyleContent,
       canOpen: canOpenStage2,
     },
@@ -1663,228 +798,56 @@ export default function Home() {
       icon: Link,
       hasNewButton: false,
       content: (
-        <div
-          className="p-6"
-          onDragEnter={e => {
-            e.preventDefault()
-            setIsDragging(true)
-          }}
-          onDragLeave={e => {
-            e.preventDefault()
-            if (e.currentTarget === e.target) {
-              setIsDragging(false)
-            }
-          }}
-          onDragOver={e => {
-            e.preventDefault()
-          }}
-          onDrop={e => {
-            e.preventDefault()
-            setIsDragging(false)
-            const files = Array.from(e.dataTransfer.files)
-            setUploadedFiles(prev => [
-              ...prev,
-              ...files.slice(0, 200 - prev.length),
-            ])
-          }}
-        >
-          {!isDragging ? (
-            <>
-              {/* Text area with Enter hint */}
-              <div className="relative mb-4">
-                <textarea
-                  placeholder="Describe your idea..."
-                  value={ideaText}
-                  onChange={e => setIdeaText(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.shiftKey && ideaText.trim()) {
-                      e.preventDefault()
-                      handleSubmitIdea()
-                    }
-                  }}
-                  className="w-full px-4 py-3 rounded-lg resize-none focus:outline-none"
-                  style={{
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    color: '#3B3B3B',
-                    fontSize: '14px',
-                    minHeight: '80px',
-                  }}
-                  rows={3}
-                />
-                {ideaText.length > 0 && (
-                  <div
-                    className="absolute bottom-3 right-4 px-2 py-1 rounded text-xs"
-                    style={{ backgroundColor: '#F4F4F4', color: '#929397' }}
-                  >
-                    ⏎ Enter
-                  </div>
-                )}
-              </div>
-
-              {/* File upload area */}
-              <div
-                className="mb-4 rounded-xl p-4 transition-all border-2 border-dashed"
-                style={{
-                  borderColor: uploadedFiles.length > 0 ? '#F5C563' : '#E8E1DD',
-                  backgroundColor:
-                    uploadedFiles.length > 0
-                      ? 'rgba(245, 197, 99, 0.05)'
-                      : '#F7F5F3',
-                }}
-              >
-                <div className="text-center mb-3">
-                  <div className="text-xs mb-1" style={{ color: '#929397' }}>
-                    Drag & drop files here (up to 200)
-                  </div>
-                  <div className="text-xs" style={{ color: '#929397' }}>
-                    Supported: JSON, PNG, JPG, PDF, DOC
-                  </div>
-                </div>
-
-                {/* Uploaded files display */}
-                {uploadedFiles.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {uploadedFiles.map((file, index) => {
-                      const extension = (file.name.split('.').pop() ?? '')
-                        .toUpperCase()
-                        .slice(0, 3)
-                      const isImage = file.type.startsWith('image/')
-
-                      return (
-                        <div
-                          key={index}
-                          className="group relative rounded-lg overflow-hidden transition-all hover:scale-105"
-                          style={{
-                            width: '80px',
-                            height: '80px',
-                            backgroundColor: '#FFFFFF',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                          }}
-                        >
-                          {isImage ? (
-                            <img
-                              src={URL.createObjectURL(file)}
-                              alt={file.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <span
-                                className="text-xs font-bold"
-                                style={{ color: '#4F515A' }}
-                              >
-                                {extension}
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Remove button on hover */}
-                          <button
-                            onClick={() => handleRemoveFile(index)}
-                            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                            style={{
-                              backgroundColor: 'rgba(0,0,0,0.7)',
-                            }}
-                          >
-                            <X size={24} style={{ color: '#FFFFFF' }} />
-                          </button>
-
-                          {/* Filename tooltip */}
-                          <div
-                            className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-xs truncate opacity-0 group-hover:opacity-100 transition-opacity"
-                            style={{
-                              backgroundColor: 'rgba(0,0,0,0.8)',
-                              color: '#FFFFFF',
-                              fontSize: '9px',
-                            }}
-                            title={file.name}
-                          >
-                            {file.name}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Bottom row with file count and Create button */}
-              <div className="flex items-center justify-between gap-3">
-                {/* File count */}
-                {uploadedFiles.length > 0 && (
-                  <div className="text-sm" style={{ color: '#929397' }}>
-                    {uploadedFiles.length} file
-                    {uploadedFiles.length !== 1 ? 's' : ''} ready
-                  </div>
-                )}
-
-                {/* Spacer */}
-                <div className="flex-1" />
-
-                {/* Create button */}
-                <button
-                  onClick={handleSubmitIdea}
-                  disabled={!ideaText.trim()}
-                  className="px-6 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{
-                    backgroundColor: ideaText.trim() ? '#F5C563' : '#E8E1DD',
-                    color: ideaText.trim() ? '#1F1F20' : '#929397',
-                    boxShadow: ideaText.trim()
-                      ? '0 2px 12px rgba(245, 197, 99, 0.3)'
-                      : 'none',
-                  }}
-                >
-                  Create
-                </button>
-              </div>
-            </>
-          ) : (
-            <div
-              className="rounded-2xl flex flex-col items-center justify-center"
+        <div className="p-6">
+          {/* ✅ SIMPLIFIED: Just textarea, no file upload */}
+          <div className="relative mb-4">
+            <textarea
+              placeholder="Describe your idea..."
+              value={ideaText}
+              onChange={e => setIdeaText(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey && ideaText.trim()) {
+                  e.preventDefault()
+                  handleSubmitIdea()
+                }
+              }}
+              className="w-full px-4 py-3 rounded-lg resize-none focus:outline-none"
               style={{
-                border: '2px dashed #F5C563',
-                minHeight: '240px',
-                backgroundColor: 'rgba(245, 197, 99, 0.1)',
+                backgroundColor: 'transparent',
+                border: 'none',
+                color: '#3B3B3B',
+                fontSize: '14px',
+                minHeight: '120px',
+              }}
+              rows={5}
+            />
+            {ideaText.length > 0 && (
+              <div
+                className="absolute bottom-3 right-4 px-2 py-1 rounded text-xs"
+                style={{ backgroundColor: '#F4F4F4', color: '#929397' }}
+              >
+                ⏎ Enter
+              </div>
+            )}
+          </div>
+
+          {/* Submit button */}
+          <div className="flex justify-end">
+            <button
+              onClick={handleSubmitIdea}
+              disabled={!ideaText.trim()}
+              className="px-6 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: ideaText.trim() ? '#F5C563' : '#E8E1DD',
+                color: ideaText.trim() ? '#1F1F20' : '#929397',
+                boxShadow: ideaText.trim()
+                  ? '0 4px 12px rgba(245, 197, 99, 0.3)'
+                  : 'none',
               }}
             >
-              <div className="text-xs mb-4" style={{ color: '#929397' }}>
-                Up to 200 files
-              </div>
-              <div
-                className="text-lg font-medium mb-6"
-                style={{ color: '#3B3B3B' }}
-              >
-                Drop here
-              </div>
-              <div className="flex gap-3">
-                <div
-                  className="px-3 py-1.5 rounded-md text-xs font-medium"
-                  style={{ backgroundColor: '#FFFFFF', color: '#4F515A' }}
-                >
-                  JSON
-                </div>
-                <div
-                  className="px-3 py-1.5 rounded-md text-xs font-medium"
-                  style={{ backgroundColor: '#FFFFFF', color: '#4F515A' }}
-                >
-                  PNG
-                </div>
-                <div
-                  className="px-3 py-1.5 rounded-md text-xs font-medium"
-                  style={{ backgroundColor: '#FFFFFF', color: '#4F515A' }}
-                >
-                  PDF
-                </div>
-                <div
-                  className="px-3 py-1.5 rounded-md text-xs font-medium"
-                  style={{ backgroundColor: '#FFFFFF', color: '#4F515A' }}
-                >
-                  DOC
-                </div>
-              </div>
-            </div>
-          )}
+              Generate UI →
+            </button>
+          </div>
         </div>
       ),
       canOpen: canOpenStage3,
@@ -1966,14 +929,18 @@ export default function Home() {
                       <button
                         onClick={e => {
                           e.stopPropagation()
+                          setIsCreateResourceModalOpen(true) // ✅ Open modal
                         }}
                         className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all hover:scale-105"
-                        style={{ backgroundColor: '#F4F4F4' }}
+                        style={{ backgroundColor: '#F5C563' }}
                       >
-                        <span className="text-sm" style={{ color: '#3B3B3B' }}>
+                        <span
+                          className="text-sm font-medium"
+                          style={{ color: '#1F1F20' }}
+                        >
                           New
                         </span>
-                        <Plus size={16} style={{ color: '#3B3B3B' }} />
+                        <Plus size={16} style={{ color: '#1F1F20' }} />
                       </button>
                     )}
                     <div
@@ -2288,7 +1255,6 @@ export default function Home() {
         onClose={() => setIsCreateResourceModalOpen(false)}
         onConfirm={handleCreateResource}
         isLoading={isCreatingResource}
-        fileCount={uploadedFiles.length}
       />
 
       {/* Create Project Modal */}
@@ -2413,148 +1379,7 @@ export default function Home() {
         >
           <ConfigurationMenu />
 
-          {/* Profile Dropdown */}
-          <div className="relative" ref={menuRef}>
-            <button
-              onClick={() => setShowProfileMenu(!showProfileMenu)}
-              className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm transition-all hover:scale-105"
-              style={{ backgroundColor: '#3B3B3B', color: '#FFFFFF' }}
-              title={
-                userInfo ? `${userInfo.name || userInfo.email}` : 'Profile'
-              }
-            >
-              {userInfo?.picture ? (
-                <img
-                  src={userInfo.picture}
-                  alt={userInfo.name || userInfo.email}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    borderRadius: '50%',
-                  }}
-                />
-              ) : (
-                userInfo?.initials || 'NI'
-              )}
-            </button>
-
-            {/* Dropdown Menu */}
-            {showProfileMenu && userInfo && (
-              <div
-                className="absolute right-0 mt-2 w-64 rounded-2xl overflow-hidden"
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                  zIndex: 1000,
-                }}
-              >
-                {/* User Info Header */}
-                <div
-                  className="p-4"
-                  style={{ borderBottom: '1px solid #E8E1DD' }}
-                >
-                  <div className="flex items-center gap-3 mb-3">
-                    <div
-                      className="w-12 h-12 rounded-full flex items-center justify-center font-semibold"
-                      style={{ backgroundColor: '#3B3B3B', color: '#FFFFFF' }}
-                    >
-                      {userInfo.picture ? (
-                        <img
-                          src={userInfo.picture}
-                          alt={userInfo.name || userInfo.email}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            borderRadius: '50%',
-                          }}
-                        />
-                      ) : (
-                        userInfo.initials
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div
-                        className="text-sm font-medium mb-0.5 truncate"
-                        style={{ color: '#3B3B3B' }}
-                      >
-                        {userInfo.name || 'User'}
-                      </div>
-                      <div
-                        className="text-xs truncate"
-                        style={{ color: '#929397' }}
-                      >
-                        {userInfo.email}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Menu Items */}
-                <div className="py-2">
-                  <button
-                    onClick={() => {
-                      setShowProfileMenu(false)
-                      console.log('Navigate to settings')
-                    }}
-                    className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors"
-                    style={{ color: '#3B3B3B' }}
-                    onMouseEnter={e =>
-                      (e.currentTarget.style.backgroundColor = '#F7F5F3')
-                    }
-                    onMouseLeave={e =>
-                      (e.currentTarget.style.backgroundColor = 'transparent')
-                    }
-                  >
-                    <span style={{ fontSize: '16px' }}>⚙️</span>
-                    <span>Settings</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setShowProfileMenu(false)
-                      console.log('Navigate to help')
-                    }}
-                    className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors"
-                    style={{ color: '#3B3B3B' }}
-                    onMouseEnter={e =>
-                      (e.currentTarget.style.backgroundColor = '#F7F5F3')
-                    }
-                    onMouseLeave={e =>
-                      (e.currentTarget.style.backgroundColor = 'transparent')
-                    }
-                  >
-                    <span style={{ fontSize: '16px' }}>❓</span>
-                    <span>Help & Support</span>
-                  </button>
-
-                  <div
-                    style={{
-                      height: '1px',
-                      backgroundColor: '#E8E1DD',
-                      margin: '8px 0',
-                    }}
-                  ></div>
-
-                  <button
-                    onClick={handleSignOut}
-                    className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors"
-                    style={{ color: '#3B3B3B' }}
-                    onMouseEnter={e =>
-                      (e.currentTarget.style.backgroundColor = '#FEE2E2')
-                    }
-                    onMouseLeave={e =>
-                      (e.currentTarget.style.backgroundColor = 'transparent')
-                    }
-                  >
-                    <span style={{ fontSize: '16px' }}>🚪</span>
-                    <span>Sign Out</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          <ProfileDropdown userInfo={userInfo} onSignOut={handleSignOut} />
         </div>
       </div>
 

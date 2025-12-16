@@ -31,7 +31,7 @@ async def create_project(
     - **name**: Name of the project
     - **task_description**: Optional description of the task
     - **selected_taste_id**: Optional ID of selected taste
-    - **selected_resource_id**: Optional ID of selected resource (must belong to selected_taste)
+    - **selected_resource_ids**: Optional list of resource IDs (must all belong to selected_taste)
     """
     # Ensure user exists in database
     db.ensure_user(
@@ -49,24 +49,32 @@ async def create_project(
         if taste.get("owner_id") != user["user_id"]:
             raise HTTPException(status_code=403, detail="Selected taste does not belong to you")
     
-    # Validate resource ownership if provided
-    if payload.selected_resource_id:
+    # ✅ CHANGED: Validate multiple resources
+    if payload.selected_resource_ids:
         if not payload.selected_taste_id:
             raise HTTPException(
                 status_code=400,
-                detail="Cannot select a resource without selecting a taste"
+                detail="Cannot select resources without selecting a taste"
             )
         
-        resource = db.get_resource(payload.selected_resource_id)
-        if not resource:
-            raise HTTPException(status_code=404, detail="Selected resource not found")
-        if resource.get("owner_id") != user["user_id"]:
-            raise HTTPException(status_code=403, detail="Selected resource does not belong to you")
-        if resource.get("taste_id") != payload.selected_taste_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Selected resource does not belong to the selected taste"
-            )
+        # Validate each resource
+        for resource_id in payload.selected_resource_ids:
+            resource = db.get_resource(resource_id)
+            if not resource:
+                raise HTTPException(
+                    status_code=404, 
+                    detail=f"Resource {resource_id} not found"
+                )
+            if resource.get("owner_id") != user["user_id"]:
+                raise HTTPException(
+                    status_code=403, 
+                    detail=f"Resource {resource_id} does not belong to you"
+                )
+            if resource.get("taste_id") != payload.selected_taste_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Resource {resource_id} does not belong to the selected taste"
+                )
     
     # Create project
     project = db.create_project(
@@ -74,7 +82,7 @@ async def create_project(
         name=payload.name,
         task_description=payload.task_description,
         selected_taste_id=payload.selected_taste_id,
-        selected_resource_id=payload.selected_resource_id,
+        selected_resource_ids=payload.selected_resource_ids or [],  # ✅ CHANGED
         metadata=payload.metadata
     )
     
@@ -135,28 +143,36 @@ async def update_project(
             if taste.get("owner_id") != user["user_id"]:
                 raise HTTPException(status_code=403, detail="Selected taste does not belong to you")
     
-    # Validate resource ownership if being updated
-    if payload.selected_resource_id is not None:
-        if payload.selected_resource_id:  # Not empty string
+    # ✅ CHANGED: Validate multiple resources if being updated
+    if payload.selected_resource_ids is not None:
+        if payload.selected_resource_ids:  # Not empty list
             # Get the taste_id (either from payload or existing project)
             taste_id = payload.selected_taste_id if payload.selected_taste_id is not None else project.get("selected_taste_id")
             
             if not taste_id:
                 raise HTTPException(
                     status_code=400,
-                    detail="Cannot select a resource without selecting a taste"
+                    detail="Cannot select resources without selecting a taste"
                 )
             
-            resource = db.get_resource(payload.selected_resource_id)
-            if not resource:
-                raise HTTPException(status_code=404, detail="Selected resource not found")
-            if resource.get("owner_id") != user["user_id"]:
-                raise HTTPException(status_code=403, detail="Selected resource does not belong to you")
-            if resource.get("taste_id") != taste_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Selected resource does not belong to the selected taste"
-                )
+            # Validate each resource
+            for resource_id in payload.selected_resource_ids:
+                resource = db.get_resource(resource_id)
+                if not resource:
+                    raise HTTPException(
+                        status_code=404, 
+                        detail=f"Resource {resource_id} not found"
+                    )
+                if resource.get("owner_id") != user["user_id"]:
+                    raise HTTPException(
+                        status_code=403, 
+                        detail=f"Resource {resource_id} does not belong to you"
+                    )
+                if resource.get("taste_id") != taste_id:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Resource {resource_id} does not belong to the selected taste"
+                    )
     
     # Update project
     updated = db.update_project(
@@ -164,7 +180,7 @@ async def update_project(
         name=payload.name,
         task_description=payload.task_description,
         selected_taste_id=payload.selected_taste_id,
-        selected_resource_id=payload.selected_resource_id,
+        selected_resource_ids=payload.selected_resource_ids,  # ✅ CHANGED
         metadata=payload.metadata
     )
     

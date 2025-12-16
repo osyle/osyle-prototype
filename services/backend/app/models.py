@@ -83,7 +83,7 @@ class ResourceOut(BaseModel):
     has_image: bool = False
     metadata: dict
     created_at: str
-    download_urls: Optional[ResourceDownloadUrls] = None  # ✅ ADDED THIS FIELD
+    download_urls: Optional[ResourceDownloadUrls] = None
 
 
 class ResourceUploadUrls(BaseModel):
@@ -115,7 +115,7 @@ class ProjectCreate(BaseModel):
     name: str
     task_description: Optional[str] = ""
     selected_taste_id: Optional[str] = None
-    selected_resource_id: Optional[str] = None
+    selected_resource_ids: Optional[List[str]] = []  # ✅ CHANGED: Now a list
     metadata: Optional[dict] = {}
 
 
@@ -126,7 +126,7 @@ class ProjectOut(BaseModel):
     name: str
     task_description: str
     selected_taste_id: Optional[str] = None
-    selected_resource_id: Optional[str] = None
+    selected_resource_ids: List[str] = []  # ✅ CHANGED: Now a list
     outputs: List[str] = []  # List of S3 keys
     metadata: dict
     created_at: str
@@ -138,7 +138,7 @@ class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     task_description: Optional[str] = None
     selected_taste_id: Optional[str] = None
-    selected_resource_id: Optional[str] = None
+    selected_resource_ids: Optional[List[str]] = None  # ✅ CHANGED: Now a list
     metadata: Optional[dict] = None
 
 

@@ -181,7 +181,7 @@ def delete_taste(taste_id: str) -> bool:
 # ============================================================================
 
 def create_resource(
-    resource_id: str,  # ✅ FIX: Accept resource_id as parameter
+    resource_id: str,
     taste_id: str,
     owner_id: str,
     name: str,
@@ -192,15 +192,12 @@ def create_resource(
     """
     Create a new resource
     
-    ✅ FIX: Now accepts resource_id as a parameter instead of generating it
-    This ensures the resource_id matches the S3 keys generated beforehand
+    Accepts resource_id as a parameter to ensure it matches S3 keys
     """
-    # ✅ FIX: Use provided resource_id instead of generating a new one
-    # resource_id = generate_uuid()  # OLD (WRONG)
     now = get_timestamp()
     
     item = {
-        "resource_id": resource_id,  # Use the provided ID
+        "resource_id": resource_id,
         "taste_id": taste_id,
         "owner_id": owner_id,
         "name": name,
@@ -297,7 +294,7 @@ def create_project(
     name: str,
     task_description: str = "",
     selected_taste_id: str = None,
-    selected_resource_id: str = None,
+    selected_resource_ids: List[str] = None,  # ✅ CHANGED: Now a list
     metadata: dict = None
 ) -> Dict[str, Any]:
     """Create a new project"""
@@ -310,7 +307,7 @@ def create_project(
         "name": name,
         "task_description": task_description,
         "selected_taste_id": selected_taste_id or "",
-        "selected_resource_id": selected_resource_id or "",
+        "selected_resource_ids": selected_resource_ids or [],  # ✅ CHANGED: Now a list
         "outputs": [],
         "metadata": metadata or {},
         "created_at": now,
@@ -348,7 +345,7 @@ def update_project(
     name: str = None,
     task_description: str = None,
     selected_taste_id: str = None,
-    selected_resource_id: str = None,
+    selected_resource_ids: List[str] = None,  # ✅ CHANGED: Now a list
     metadata: dict = None
 ) -> Dict[str, Any]:
     """Update a project"""
@@ -368,9 +365,9 @@ def update_project(
         update_expr_parts.append("selected_taste_id = :taste")
         expr_attr_values[":taste"] = selected_taste_id
     
-    if selected_resource_id is not None:
-        update_expr_parts.append("selected_resource_id = :resource")
-        expr_attr_values[":resource"] = selected_resource_id
+    if selected_resource_ids is not None:  # ✅ CHANGED: Handle list
+        update_expr_parts.append("selected_resource_ids = :resources")
+        expr_attr_values[":resources"] = selected_resource_ids
     
     if metadata is not None:
         update_expr_parts.append("metadata = :metadata")
