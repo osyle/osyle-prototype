@@ -8,14 +8,12 @@ import {
   RotateCcw,
   Palette,
   Sparkles,
-  Brain,
-  Wand2,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import DeviceFrame from '../components/DeviceFrame'
 import { type UINode } from '../components/DeviceRenderer'
 import DeviceRenderer from '../components/DeviceRenderer'
+import InfiniteCanvas from '../components/InfiniteCanvas'
 import { useDeviceContext } from '../hooks/useDeviceContext'
 import api from '../services/api'
 
@@ -73,30 +71,7 @@ export default function Editor() {
   const getEnergyValue = () => Math.max(1, Math.round((energyValue / 100) * 10))
   const getCraftValue = () => Math.max(1, Math.round((craftValue / 100) * 10))
 
-  // Scale device dimensions to fit within max constraints while maintaining aspect ratio
-  const getScaledDimensions = () => {
-    const maxWidth = 1024
-    const maxHeight = 650
-    const { width, height } = device_info.screen
-
-    // If both dimensions are within limits, return original
-    if (width <= maxWidth && height <= maxHeight) {
-      return { width, height, scale: 1 }
-    }
-
-    // Calculate scale factors for both dimensions
-    const widthScale = maxWidth / width
-    const heightScale = maxHeight / height
-
-    // Use the smaller scale factor to ensure both dimensions fit
-    const scale = Math.min(widthScale, heightScale)
-
-    return {
-      width: Math.floor(width * scale),
-      height: Math.floor(height * scale),
-      scale,
-    }
-  }
+  // Note: getScaledDimensions removed - InfiniteCanvas handles all sizing at true dimensions
 
   const handleBackToHome = () => {
     // Only allow navigation back if generation is complete or in error state
@@ -218,97 +193,9 @@ export default function Editor() {
 
   // Render device content based on generation stage
   const renderDeviceContent = () => {
-    if (generationStage === 'learning') {
-      return (
-        <div
-          className="flex flex-col items-center justify-center h-full gap-6 px-8"
-          style={{ backgroundColor: '#EDEBE9' }}
-        >
-          <div className="relative">
-            <Brain
-              size={64}
-              className="animate-pulse"
-              style={{ color: '#4A90E2' }}
-            />
-            <div className="absolute -bottom-2 -right-2">
-              <Sparkles size={24} style={{ color: '#F5C563' }} />
-            </div>
-          </div>
-          <div className="text-center">
-            <h3
-              className="text-xl font-semibold mb-2"
-              style={{ color: '#3B3B3B' }}
-            >
-              Learning your design taste
-            </h3>
-            <p className="text-sm max-w-md" style={{ color: '#929397' }}>
-              Analyzing your reference designs to understand your style
-              preferences...
-            </p>
-          </div>
-          <div className="flex gap-2">
-            {[0, 1, 2].map(i => (
-              <div
-                key={i}
-                className="w-2 h-2 rounded-full animate-bounce"
-                style={{
-                  backgroundColor: '#4A90E2',
-                  animationDelay: `${i * 0.2}s`,
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      )
-    }
-
-    if (generationStage === 'generating') {
-      return (
-        <div
-          className="flex flex-col items-center justify-center h-full gap-6 px-8"
-          style={{ backgroundColor: '#EDEBE9' }}
-        >
-          <div className="relative">
-            <Wand2
-              size={64}
-              className="animate-spin"
-              style={{ color: '#F5C563' }}
-            />
-            <div className="absolute -top-2 -right-2">
-              <Sparkles
-                size={24}
-                className="animate-pulse"
-                style={{ color: '#4A90E2' }}
-              />
-            </div>
-          </div>
-          <div className="text-center">
-            <h3
-              className="text-xl font-semibold mb-2"
-              style={{ color: '#3B3B3B' }}
-            >
-              Generating your design
-            </h3>
-            <p className="text-sm max-w-md" style={{ color: '#929397' }}>
-              Creating a beautiful{' '}
-              {rendering_mode === 'react' ? 'React' : 'DesignML'} design based
-              on your task description...
-            </p>
-          </div>
-          <div className="flex gap-2">
-            {[0, 1, 2, 3].map(i => (
-              <div
-                key={i}
-                className="w-3 h-3 rounded-full"
-                style={{
-                  backgroundColor: '#F5C563',
-                  animation: `pulse 1.5s ease-in-out ${i * 0.2}s infinite`,
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      )
+    // Loading states are now handled by InfiniteCanvas
+    if (generationStage === 'learning' || generationStage === 'generating') {
+      return null
     }
 
     if (generationStage === 'error') {
@@ -513,20 +400,23 @@ export default function Editor() {
         </div>
       </div>
 
-      {/* Device Frame - Centered in available space */}
-      <div
-        className="fixed top-1/2 -translate-y-1/2 transition-all duration-300 z-30"
-        style={{
-          left: '80px',
-          right: isRightPanelCollapsed ? '0' : '20%',
-          display: 'flex',
-          justifyContent: 'center',
-        }}
+      {/* Infinite Canvas - Fullscreen background layer */}
+      <InfiniteCanvas
+        width={device_info.screen.width}
+        height={device_info.screen.height}
+        isLoading={
+          generationStage === 'learning' || generationStage === 'generating'
+        }
+        loadingStage={
+          generationStage === 'learning'
+            ? 'Learning from designs...'
+            : generationStage === 'generating'
+              ? 'Generating design...'
+              : undefined
+        }
       >
-        <DeviceFrame scaledDimensions={getScaledDimensions()}>
-          {renderDeviceContent()}
-        </DeviceFrame>
-      </div>
+        {renderDeviceContent()}
+      </InfiniteCanvas>
 
       {/* Bottom Control Bar - Fixed bottom center (responsive to right panel) */}
       <div
