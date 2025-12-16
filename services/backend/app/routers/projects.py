@@ -410,3 +410,127 @@ async def get_output_download_url(
         "download_url": download_url,
         "filename": filename
     }
+
+
+# ============================================================================
+# INSPIRATION IMAGES ENDPOINTS
+# ============================================================================
+
+@router.get("/{project_id}/inspiration-images", response_model=List[dict])
+async def get_inspiration_images(
+    project_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Get all inspiration images for a project with presigned download URLs
+    
+    Returns list of objects with: { key, url, filename }
+    """
+    # Check ownership
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.get("owner_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get inspiration image keys from project
+    image_keys = project.get("inspiration_image_keys", [])
+    
+    # Generate presigned URLs for each image
+    images = []
+    for key in image_keys:
+        url = storage.generate_presigned_get_url(key)
+        if url:
+            # Extract filename from key (projects/{user}/{project}/inspiration/{filename})
+            filename = key.split('/')[-1]
+            images.append({
+                "key": key,
+                "url": url,
+                "filename": filename
+            })
+    
+    return images
+
+
+@router.post("/{project_id}/inspiration-images", response_model=ProjectOut)
+async def add_inspiration_images(
+    project_id: str,
+    inspiration_images: List[UploadFile] = File(...),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Add new inspiration images to an existing project
+    
+    - **inspiration_images**: List of image files to add (max 5 total per project)
+    """
+    # Check ownership
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.get("owner_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get current inspiration image count
+    current_images = project.get("inspiration_image_keys", [])
+    current_count = len(current_images)
+    
+    # Validate max 5 images total
+    if current_count + len(inspiration_images) > 5:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximum 5 inspiration images allowed. Currently have {current_count}, trying to add {len(inspiration_images)}"
+        )
+    
+    # Upload new images
+    new_keys = []
+    for idx, image_file in enumerate(inspiration_images):
+        # Validate it's an image
+        if not image_file.content_type or not image_file.content_type.startswith('image/'):
+            raise HTTPException(
+                status_code=400,
+                detail=f"File {image_file.filename} is not an image"
+            )
+        
+        # Get file extension
+        ext = image_file.filename.split('.')[-1] if '.' in image_file.filename else 'png'
+        filename = f"img_{current_count + idx}.{ext}"
+        
+        # Generate S3 key
+        s3_key = storage.get_inspiration_image_key(
+            user["user_id"],
+            project_id,
+            filename
+        )
+        
+        # Upload to S3
+        try:
+            content = await image_file.read()
+            storage.s3_client.put_object(
+                Bucket=storage.S3_BUCKET,
+                Key=s3_key,
+                Body=content,
+                ContentType=image_file.content_type
+            )
+            new_keys.append(s3_key)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to upload image {image_file.filename}: {str(e)}"
+            )
+    
+    # Update project with new image keys
+    updated_keys = current_images + new_keys
+    
+    response = db.projects_table.update_item(
+        Key={"project_id": project_id},
+        UpdateExpression="SET inspiration_image_keys = :keys, updated_at = :updated",
+        ExpressionAttributeValues={
+            ":keys": updated_keys,
+            ":updated": db.get_timestamp()
+        },
+        ReturnValues="ALL_NEW"
+    )
+    
+    return response.get("Attributes", {})

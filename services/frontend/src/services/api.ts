@@ -514,6 +514,52 @@ export const projectsAPI = {
       `/api/projects/${projectId}/outputs/${filename}/download`,
     )
   },
+
+  /**
+   * Get inspiration images for a project with presigned URLs
+   */
+  getInspirationImages: async (
+    projectId: string,
+  ): Promise<Array<{ key: string; url: string; filename: string }>> => {
+    return apiRequest<Array<{ key: string; url: string; filename: string }>>(
+      `/api/projects/${projectId}/inspiration-images`,
+    )
+  },
+
+  /**
+   * Add inspiration images to a project
+   */
+  addInspirationImages: async (
+    projectId: string,
+    images: File[],
+  ): Promise<Project> => {
+    const token = await getAuthToken()
+    const formData = new FormData()
+
+    images.forEach(file => {
+      formData.append('inspiration_images', file, file.name)
+    })
+
+    const response = await fetch(
+      `${API_BASE_URL}/api/projects/${projectId}/inspiration-images`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+        body: formData,
+      },
+    )
+
+    if (!response.ok) {
+      const error = (await response.json().catch(() => ({
+        detail: 'Request failed',
+      }))) as { detail: string }
+      throw new Error(error.detail || `HTTP ${response.status}`)
+    }
+
+    return response.json() as Promise<Project>
+  },
 }
 
 // ============================================================================

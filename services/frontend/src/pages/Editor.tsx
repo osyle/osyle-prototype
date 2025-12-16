@@ -8,16 +8,18 @@ import {
   RotateCcw,
   Palette,
   Sparkles,
+  Plus,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import AddInspirationModal from '../components/AddInspirationModal'
 import { type UINode } from '../components/DeviceRenderer'
 import DeviceRenderer from '../components/DeviceRenderer'
 import InfiniteCanvas from '../components/InfiniteCanvas'
 import { useDeviceContext } from '../hooks/useDeviceContext'
 import api from '../services/api'
 
-type GenerationStage = 'idle' | 'learning' | 'generating' | 'complete' | 'error'
+type GenerationStage = 'idle' | 'generating' | 'complete' | 'error'
 
 export default function Editor() {
   const navigate = useNavigate()
@@ -44,6 +46,14 @@ export default function Editor() {
 
   // Right panel collapsed state
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false)
+
+  // Inspiration images state
+  const [inspirationImages, setInspirationImages] = useState<
+    Array<{ key: string; url: string; filename: string }>
+  >([])
+  const [isAddInspirationModalOpen, setIsAddInspirationModalOpen] =
+    useState(false)
+  const [isAddingInspiration, setIsAddingInspiration] = useState(false)
 
   const tabs = ['Concept', 'Prototype', 'Video pitch', 'Presentation']
 
@@ -98,6 +108,7 @@ export default function Editor() {
   // Start generation process on mount (only if not already generated)
   useEffect(() => {
     checkAndStartGeneration()
+    loadInspirationImages()
   }, [])
 
   const checkAndStartGeneration = async () => {
@@ -118,10 +129,6 @@ export default function Editor() {
         return
       }
 
-      if (!project.selected_resource_id) {
-        console.log('No resource selected - will generate UI from scratch')
-      }
-
       // Check if UI already exists for this project
       try {
         const existingUIData = await api.llm.getUI(project.project_id)
@@ -133,20 +140,8 @@ export default function Editor() {
         console.log('No existing UI found, will generate new one:', err)
       }
 
-      // Decide whether to build DTR
-      const hasResource =
-        project.selected_resource_id && project.selected_taste_id
-      let shouldBuildDtr = false
-
-      if (hasResource) {
-        const dtrCheck = await api.llm.checkDtrExists(
-          project.selected_resource_id,
-          project.selected_taste_id,
-        )
-        shouldBuildDtr = !dtrCheck.dtr_exists
-      }
-
-      startGeneration(shouldBuildDtr)
+      // DTR learning is now done on Home screen, so we skip directly to UI generation
+      startGeneration()
     } catch (err) {
       console.error('Error checking for existing UI:', err)
       setError(err instanceof Error ? err.message : 'Unknown error occurred')
@@ -154,7 +149,7 @@ export default function Editor() {
     }
   }
 
-  const startGeneration = async (shouldBuildDtr: boolean) => {
+  const startGeneration = async () => {
     try {
       const currentProject = localStorage.getItem('current_project')
       if (!currentProject) {
@@ -165,15 +160,8 @@ export default function Editor() {
 
       const project = JSON.parse(currentProject)
 
-      if (shouldBuildDtr && project.selected_resource_id) {
-        setGenerationStage('learning')
-        await api.llm.buildDtr(
-          project.selected_resource_id,
-          project.selected_taste_id,
-        )
-        await new Promise(resolve => setTimeout(resolve, 1000))
-      }
-
+      // DTR learning already happened on Home screen
+      // Jump straight to UI generation
       setGenerationStage('generating')
 
       const uiData = await api.llm.generateUI(
@@ -191,10 +179,44 @@ export default function Editor() {
     }
   }
 
+  const loadInspirationImages = async () => {
+    try {
+      const currentProject = localStorage.getItem('current_project')
+      if (!currentProject) return
+
+      const project = JSON.parse(currentProject)
+      const images = await api.projects.getInspirationImages(project.project_id)
+      setInspirationImages(images)
+    } catch (err) {
+      console.error('Failed to load inspiration images:', err)
+    }
+  }
+
+  const handleAddInspiration = async (files: File[]) => {
+    try {
+      setIsAddingInspiration(true)
+      const currentProject = localStorage.getItem('current_project')
+      if (!currentProject) return
+
+      const project = JSON.parse(currentProject)
+      await api.projects.addInspirationImages(project.project_id, files)
+
+      // Reload inspiration images
+      await loadInspirationImages()
+
+      setIsAddInspirationModalOpen(false)
+    } catch (err) {
+      console.error('Failed to add inspiration images:', err)
+      alert(err instanceof Error ? err.message : 'Failed to add images')
+    } finally {
+      setIsAddingInspiration(false)
+    }
+  }
+
   // Render device content based on generation stage
   const renderDeviceContent = () => {
     // Loading states are now handled by InfiniteCanvas
-    if (generationStage === 'learning' || generationStage === 'generating') {
+    if (generationStage === 'generating') {
       return null
     }
 
@@ -315,36 +337,31 @@ export default function Editor() {
           </div>
         </button>
 
-        {/* Image square 1 */}
-        <button
-          className="rounded-xl transition-all hover:scale-105"
-          style={{
-            width: '56px',
-            height: '56px',
-            backgroundColor: '#FFFFFF',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            overflow: 'hidden',
-          }}
-        >
-          <div className="w-full h-full bg-gradient-to-br from-orange-400 to-pink-400" />
-        </button>
-
-        {/* Image square 2 */}
-        <button
-          className="rounded-xl transition-all hover:scale-105"
-          style={{
-            width: '56px',
-            height: '56px',
-            backgroundColor: '#FFFFFF',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            overflow: 'hidden',
-          }}
-        >
-          <div className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500" />
-        </button>
+        {/* Inspiration Images (max 3 most recent) */}
+        {inspirationImages.slice(-3).map(image => (
+          <button
+            key={image.key}
+            className="rounded-xl transition-all hover:scale-105"
+            style={{
+              width: '56px',
+              height: '56px',
+              backgroundColor: '#FFFFFF',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              overflow: 'hidden',
+            }}
+            title={image.filename}
+          >
+            <img
+              src={image.url}
+              alt={image.filename}
+              className="w-full h-full object-cover"
+            />
+          </button>
+        ))}
 
         {/* Add button */}
         <button
+          onClick={() => setIsAddInspirationModalOpen(true)}
           className="rounded-xl flex items-center justify-center transition-all hover:scale-105"
           style={{
             width: '56px',
@@ -352,18 +369,9 @@ export default function Editor() {
             backgroundColor: '#FFFFFF',
             boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
           }}
+          title="Add inspiration images"
         >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#929397"
-            strokeWidth="2"
-          >
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
+          <Plus size={24} style={{ color: '#929397' }} />
         </button>
       </div>
 
@@ -404,15 +412,9 @@ export default function Editor() {
       <InfiniteCanvas
         width={device_info.screen.width}
         height={device_info.screen.height}
-        isLoading={
-          generationStage === 'learning' || generationStage === 'generating'
-        }
+        isLoading={generationStage === 'generating'}
         loadingStage={
-          generationStage === 'learning'
-            ? 'Learning from designs...'
-            : generationStage === 'generating'
-              ? 'Generating design...'
-              : undefined
+          generationStage === 'generating' ? 'Generating design...' : undefined
         }
       >
         {renderDeviceContent()}
@@ -873,6 +875,16 @@ export default function Editor() {
           />
         </button>
       )}
+
+      {/* Add Inspiration Modal */}
+      <AddInspirationModal
+        isOpen={isAddInspirationModalOpen}
+        onClose={() => setIsAddInspirationModalOpen(false)}
+        onConfirm={handleAddInspiration}
+        isLoading={isAddingInspiration}
+        maxImages={5}
+        currentCount={inspirationImages.length}
+      />
     </div>
   )
 }
