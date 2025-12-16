@@ -95,6 +95,17 @@ export interface BuildDTRResponse {
   confidence?: Record<string, unknown>
 }
 
+export interface UpdateDTMResponse {
+  message: string
+  taste_id: string
+  total_resources: number
+  confidence: number
+  incremental?: boolean
+  status?: string
+  reason?: string
+  total_dtrs?: number
+}
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -644,6 +655,46 @@ export const llmAPI = {
 }
 
 // ============================================================================
+// DTM API
+// ============================================================================
+
+export const dtmAPI = {
+  /**
+   * Auto-update DTM after DTR is created
+   * Decides whether to build new DTM or update existing one
+   */
+  updateDtm: async (
+    tasteId: string,
+    resourceId: string,
+  ): Promise<UpdateDTMResponse> => {
+    return apiRequest<UpdateDTMResponse>('/api/dtm/update-dtm', {
+      method: 'POST',
+      body: JSON.stringify({
+        taste_id: tasteId,
+        resource_id: resourceId,
+        resynthesize: false, // Fast incremental update
+      }),
+    })
+  },
+
+  /**
+   * Get DTM for a taste
+   */
+  get: async (tasteId: string): Promise<Record<string, unknown>> => {
+    return apiRequest<Record<string, unknown>>(`/api/dtm/${tasteId}`)
+  },
+
+  /**
+   * Delete DTM for a taste
+   */
+  delete: async (tasteId: string): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(`/api/dtm/${tasteId}`, {
+      method: 'DELETE',
+    })
+  },
+}
+
+// ============================================================================
 // EXPORT DEFAULT API OBJECT
 // ============================================================================
 
@@ -652,6 +703,7 @@ const api = {
   resources: resourcesAPI,
   projects: projectsAPI,
   llm: llmAPI,
+  dtm: dtmAPI,
 }
 
 export default api

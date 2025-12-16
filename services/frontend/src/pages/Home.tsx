@@ -19,6 +19,13 @@ import CreateNewCard from '../components/CreateNewCard'
 import CreateProjectModal from '../components/CreateProjectModal'
 import CreateResourceModal from '../components/CreateResourceModal'
 import CreateTasteModal from '../components/CreateTasteModal'
+import DtmTrainingModal, {
+  type DtmTrainingState,
+} from '../components/DtmTrainingModal'
+import DtrLearningModal, {
+  type DtrLearningState,
+} from '../components/DtrLearningModal'
+
 import ProfileDropdown from '../components/ProfileDropdown'
 import ProjectCardPreview from '../components/ProjectCardPreview'
 import StyleCard from '../components/StyleCard'
@@ -102,6 +109,24 @@ export default function Home() {
   const [activeProjectName, setActiveProjectName] = useState<string | null>(
     null,
   )
+
+  // DTR Learning state
+  const [isDtrLearningModalOpen, setIsDtrLearningModalOpen] = useState(false)
+  const [dtrLearningState, setDtrLearningState] =
+    useState<DtrLearningState>('learning')
+  const [dtrLearningResourceName, setDtrLearningResourceName] = useState('')
+  const [dtrLearningError, setDtrLearningError] = useState<string | null>(null)
+  const [pendingResourceData, setPendingResourceData] = useState<{
+    tasteId: string
+    resourceId: string
+  } | null>(null)
+
+  // DTM Training state
+  const [isDtmTrainingModalOpen, setIsDtmTrainingModalOpen] = useState(false)
+  const [dtmTrainingState, setDtmTrainingState] =
+    useState<DtmTrainingState>('training')
+  const [dtmResourceCount, setDtmResourceCount] = useState(0)
+  const [dtmTrainingError, setDtmTrainingError] = useState<string | null>(null)
 
   // ============================================================================
   // COMPUTED VALUES
@@ -510,12 +535,128 @@ export default function Home() {
 
       // Close modal
       setIsCreateResourceModalOpen(false)
+
+      // ✅ NEW: Start DTR learning process
+      setDtrLearningResourceName(resourceName)
+      setPendingResourceData({
+        tasteId: selectedTasteId,
+        resourceId: resource.resource_id,
+      })
+      setDtrLearningState('learning')
+      setDtrLearningError(null)
+      setIsDtrLearningModalOpen(true)
+
+      // Trigger DTR learning
+      buildDtrForResource(selectedTasteId, resource.resource_id)
     } catch (err) {
       console.error('Failed to create resource:', err)
       alert('Failed to create resource. Please try again.')
     } finally {
       setIsCreatingResource(false)
     }
+  }
+
+  // ============================================================================
+  // DTR LEARNING HANDLERS
+  // ============================================================================
+
+  const buildDtrForResource = async (tasteId: string, resourceId: string) => {
+    try {
+      // Check if DTR already exists
+      const dtrCheck = await api.llm.checkDtrExists(resourceId, tasteId)
+
+      if (dtrCheck.dtr_exists) {
+        console.log('DTR already exists for this resource')
+        setDtrLearningState('success')
+      } else {
+        // Build DTR
+        console.log('Building DTR for resource:', resourceId)
+        await api.llm.buildDtr(resourceId, tasteId)
+
+        // Success!
+        setDtrLearningState('success')
+        console.log('DTR learning completed successfully')
+      }
+
+      // Wait a moment for user to see success
+      await new Promise(resolve => setTimeout(resolve, 1500))
+
+      // Phase 2: Start DTM training
+      await trainDtmAfterDtr(tasteId, resourceId)
+    } catch (err) {
+      console.error('Failed to build DTR:', err)
+      setDtrLearningState('error')
+      setDtrLearningError(
+        err instanceof Error ? err.message : 'Failed to learn design taste',
+      )
+    }
+  }
+
+  const trainDtmAfterDtr = async (tasteId: string, resourceId: string) => {
+    try {
+      // Close DTR modal
+      setIsDtrLearningModalOpen(false)
+
+      // Get resource count for display
+      const taste = tastes.find(t => t.taste_id === tasteId)
+      const resourceCount = taste?.resources.length || 1
+
+      // Open DTM training modal
+      setDtmResourceCount(resourceCount)
+      setDtmTrainingState('training')
+      setDtmTrainingError(null)
+      setIsDtmTrainingModalOpen(true)
+
+      // Call update-dtm endpoint
+      console.log('Updating DTM...')
+      await api.dtm.updateDtm(tasteId, resourceId)
+
+      // Success!
+      setDtmTrainingState('success')
+      console.log('DTM training completed successfully')
+    } catch (err) {
+      console.error('Failed to train DTM:', err)
+      setDtmTrainingState('error')
+      setDtmTrainingError(
+        err instanceof Error ? err.message : 'Failed to train design model',
+      )
+    }
+  }
+
+  const handleDtrRetry = async () => {
+    if (!pendingResourceData) return
+
+    setDtrLearningState('learning')
+    setDtrLearningError(null)
+
+    await buildDtrForResource(
+      pendingResourceData.tasteId,
+      pendingResourceData.resourceId,
+    )
+  }
+
+  const handleDtrClose = () => {
+    setIsDtrLearningModalOpen(false)
+    setPendingResourceData(null)
+    setDtrLearningError(null)
+  }
+
+  const handleDtmRetry = async () => {
+    if (!pendingResourceData) return
+
+    setDtmTrainingState('training')
+    setDtmTrainingError(null)
+
+    await trainDtmAfterDtr(
+      pendingResourceData.tasteId,
+      pendingResourceData.resourceId,
+    )
+  }
+
+  const handleDtmClose = () => {
+    setIsDtmTrainingModalOpen(false)
+    setDtmTrainingError(null)
+    setPendingResourceData(null)
   }
 
   const handleCreateProject = async (projectName: string) => {
@@ -1398,6 +1539,26 @@ export default function Home() {
         onClose={() => setIsCreateResourceModalOpen(false)}
         onConfirm={handleCreateResource}
         isLoading={isCreatingResource}
+      />
+
+      {/* DTR Learning Modal */}
+      <DtrLearningModal
+        isOpen={isDtrLearningModalOpen}
+        state={dtrLearningState}
+        resourceName={dtrLearningResourceName}
+        errorMessage={dtrLearningError || undefined}
+        onRetry={handleDtrRetry}
+        onClose={handleDtrClose}
+      />
+
+      {/* DTM Training Modal */}
+      <DtmTrainingModal
+        isOpen={isDtmTrainingModalOpen}
+        state={dtmTrainingState}
+        resourceCount={dtmResourceCount}
+        errorMessage={dtmTrainingError || undefined}
+        onRetry={handleDtmRetry}
+        onClose={handleDtmClose}
       />
 
       {/* Create Project Modal */}

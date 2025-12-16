@@ -23,7 +23,6 @@ from app.unified_dtr_builder import (
     prepare_figma_for_llm
 )
 from app.dtr_utils import extract_generative_rules
-from app.dtm_workflow_integration import handle_dtr_built
 
 
 router = APIRouter(prefix="/api/llm", tags=["llm"])
@@ -278,20 +277,12 @@ async def build_dtr(
         
         print(f"✓ DTR v4 saved successfully")
         print(f"{'='*60}\n")
- 
-        dtm_result = await handle_dtr_built(
-            user_id=user_id,
-            taste_id=request.taste_id,
-            resource_id=request.resource_id,
-            llm_service=llm
-        )
        
         return {
             "status": "success",
             "resource_id": request.resource_id,
             "dtr_version": "4.0",
-            "confidence": overall_conf,
-            "dtm_status": dtm_result
+            "confidence": overall_conf
         }
         
     except HTTPException:

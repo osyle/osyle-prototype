@@ -180,6 +180,68 @@ async def update_dtm(
     }
 
 
+@router.post("/update-dtm")
+async def update_dtm(
+    request: UpdateDTMRequest,
+    user: dict = Depends(get_current_user),
+    llm: LLMService = Depends(get_llm_service)
+):
+    """
+    Build or update DTM after DTR is created
+    
+    Logic:
+    - If no DTM exists → Build new DTM
+    - If DTM exists → Incrementally update DTM
+    
+    Triggered by: Frontend after DTR learning completes
+    """
+    user_id = user["user_id"]
+    
+    # Check taste ownership
+    taste = db.get_taste(request.taste_id)
+    if not taste or taste.get("owner_id") != user_id:
+        raise HTTPException(status_code=404, detail="Taste not found")
+    
+    # Check if DTM exists
+    try:
+        dtm = storage.get_taste_dtm(user_id, request.taste_id)
+        dtm_exists = True
+    except:
+        dtm_exists = False
+    
+    # Count total resources with DTRs
+    resources = db.list_resources_for_taste(request.taste_id)
+    resources_with_dtr = [
+        r for r in resources 
+        if storage.resource_dtr_exists(user_id, request.taste_id, r["resource_id"])
+    ]
+    
+    total_dtrs = len(resources_with_dtr)
+    
+    print(f"Update DTM: {total_dtrs} DTRs, DTM exists: {dtm_exists}")
+    
+    # Decision logic
+    if not dtm_exists and total_dtrs >= 1:
+        # Build new DTM (first time or after deletion)
+        print("Building new DTM...")
+        return await build_dtm(
+            BuildDTMRequest(taste_id=request.taste_id),
+            user,
+            llm
+        )
+    elif dtm_exists:
+        # Incrementally update existing DTM
+        print(f"Updating existing DTM with resource {request.resource_id}...")
+        return await update_dtm(request, user, llm)
+    else:
+        # Edge case: No DTRs yet
+        return {
+            "status": "skipped",
+            "reason": "No DTRs available to build DTM",
+            "total_dtrs": total_dtrs
+        }
+
+
 @router.get("/{taste_id}")
 async def get_dtm(
     taste_id: str,
