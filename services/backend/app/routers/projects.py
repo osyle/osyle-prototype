@@ -1,8 +1,8 @@
 """
 Projects API endpoints
 """
-from fastapi import APIRouter, Depends, HTTPException
-from typing import List
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
+from typing import List, Optional
 from app.auth import get_current_user
 from app import db, storage
 from app.models import (
@@ -11,6 +11,8 @@ from app.models import (
     ProjectUpdate,
     MessageResponse
 )
+import json
+import uuid
 
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -22,7 +24,12 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 @router.post("/", response_model=ProjectOut, status_code=201)
 async def create_project(
-    payload: ProjectCreate,
+    name: str = Form(...),
+    task_description: Optional[str] = Form(""),
+    selected_taste_id: Optional[str] = Form(None),
+    selected_resource_ids: Optional[List[str]] = Form(None),
+    inspiration_images: List[UploadFile] = File(default=[]),
+    metadata: Optional[str] = Form(None),
     user: dict = Depends(get_current_user)
 ):
     """
@@ -32,6 +39,8 @@ async def create_project(
     - **task_description**: Optional description of the task
     - **selected_taste_id**: Optional ID of selected taste
     - **selected_resource_ids**: Optional list of resource IDs (must all belong to selected_taste)
+    - **inspiration_images**: Optional list of image files for visual inspiration (max 5)
+    - **metadata**: Optional JSON metadata
     """
     # Ensure user exists in database
     db.ensure_user(
@@ -41,24 +50,30 @@ async def create_project(
         picture=user.get("picture")
     )
     
+    # Parse metadata if provided
+    metadata_dict = json.loads(metadata) if metadata else {}
+    
+    # Parse selected_resource_ids if it's a string
+    resource_ids = selected_resource_ids or []
+    
     # Validate taste ownership if provided
-    if payload.selected_taste_id:
-        taste = db.get_taste(payload.selected_taste_id)
+    if selected_taste_id:
+        taste = db.get_taste(selected_taste_id)
         if not taste:
             raise HTTPException(status_code=404, detail="Selected taste not found")
         if taste.get("owner_id") != user["user_id"]:
             raise HTTPException(status_code=403, detail="Selected taste does not belong to you")
     
-    # ✅ CHANGED: Validate multiple resources
-    if payload.selected_resource_ids:
-        if not payload.selected_taste_id:
+    # Validate multiple resources
+    if resource_ids:
+        if not selected_taste_id:
             raise HTTPException(
                 status_code=400,
                 detail="Cannot select resources without selecting a taste"
             )
         
         # Validate each resource
-        for resource_id in payload.selected_resource_ids:
+        for resource_id in resource_ids:
             resource = db.get_resource(resource_id)
             if not resource:
                 raise HTTPException(
@@ -70,20 +85,69 @@ async def create_project(
                     status_code=403, 
                     detail=f"Resource {resource_id} does not belong to you"
                 )
-            if resource.get("taste_id") != payload.selected_taste_id:
+            if resource.get("taste_id") != selected_taste_id:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Resource {resource_id} does not belong to the selected taste"
                 )
     
-    # Create project
+    # Handle inspiration images
+    project_id = str(uuid.uuid4())  # Generate ID upfront for S3 consistency
+    inspiration_keys = []
+    
+    if inspiration_images:
+        # Validate max 5 images
+        if len(inspiration_images) > 5:
+            raise HTTPException(
+                status_code=400,
+                detail="Maximum 5 inspiration images allowed"
+            )
+        
+        for idx, image_file in enumerate(inspiration_images):
+            # Validate it's an image
+            if not image_file.content_type or not image_file.content_type.startswith('image/'):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File {image_file.filename} is not an image"
+                )
+            
+            # Get file extension
+            ext = image_file.filename.split('.')[-1] if '.' in image_file.filename else 'png'
+            filename = f"img_{idx}.{ext}"
+            
+            # Generate S3 key
+            s3_key = storage.get_inspiration_image_key(
+                user["user_id"],
+                project_id,
+                filename
+            )
+            
+            # Upload to S3
+            try:
+                content = await image_file.read()
+                storage.s3_client.put_object(
+                    Bucket=storage.S3_BUCKET,
+                    Key=s3_key,
+                    Body=content,
+                    ContentType=image_file.content_type
+                )
+                inspiration_keys.append(s3_key)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to upload image {image_file.filename}: {str(e)}"
+                )
+    
+    # Create project with explicit project_id
     project = db.create_project(
         owner_id=user["user_id"],
-        name=payload.name,
-        task_description=payload.task_description,
-        selected_taste_id=payload.selected_taste_id,
-        selected_resource_ids=payload.selected_resource_ids or [],  # ✅ CHANGED
-        metadata=payload.metadata
+        name=name,
+        task_description=task_description,
+        selected_taste_id=selected_taste_id,
+        selected_resource_ids=resource_ids,
+        inspiration_image_keys=inspiration_keys,
+        metadata=metadata_dict,
+        project_id=project_id
     )
     
     return project

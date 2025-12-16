@@ -2,12 +2,13 @@ import { signOut, fetchAuthSession, getCurrentUser } from 'aws-amplify/auth'
 import {
   ChevronDown,
   Plus,
-  Link,
   Palette,
   Sparkles,
   Sprout,
   Layers,
   Eye,
+  Image as ImageIcon,
+  X,
 } from 'lucide-react'
 import React, { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -93,7 +94,8 @@ export default function Home() {
 
   // Stage 3 state
   const [ideaText, setIdeaText] = useState('')
-  // ✅ REMOVED: uploadedFiles and isDragging (no longer needed in Stage 3)
+  const [inspirationImages, setInspirationImages] = useState<File[]>([])
+  const [isDragging, setIsDragging] = useState(false)
 
   // Continue project state
   const [hasActiveProject, setHasActiveProject] = useState(false)
@@ -244,8 +246,10 @@ export default function Home() {
           .map(p => ({
             project_id: p.project_id,
             name: p.name,
+            task_description: p.task_description,
             rendering_mode:
-              (p.metadata?.['rendering_mode'] as string) || 'design-ml',
+              (p.metadata?.['rendering_mode'] as 'design-ml' | 'react') ||
+              'design-ml',
             created_at: p.created_at,
             ui: undefined,
             ui_loading: true,
@@ -261,13 +265,13 @@ export default function Home() {
         setProjects(displayProjects)
 
         // Fetch UI data for each project in parallel
-        const projectsWithUI = await Promise.all(
+        const projectsWithUI: ProjectDisplay[] = await Promise.all(
           displayProjects.map(async project => {
             try {
               const uiResponse = await api.llm.getUI(project.project_id)
               return {
                 ...project,
-                ui: uiResponse.ui,
+                ui: uiResponse.ui as Record<string, unknown> | string,
                 ui_loading: false,
                 ui_error: false,
               }
@@ -526,6 +530,7 @@ export default function Home() {
         task_description: ideaText,
         selected_taste_id: selectedTasteId,
         selected_resource_ids: selectedResourceIds, // ✅ Now array
+        inspiration_images: inspirationImages, // ✅ NEW: Add inspiration images
         metadata: {},
       })
 
@@ -547,6 +552,7 @@ export default function Home() {
       // Reset form and clear active project flag
       setIdeaText('')
       setSelectedResourceIds([]) // ✅ Reset array
+      setInspirationImages([]) // ✅ NEW: Clear inspiration images
       setHasActiveProject(false)
       setActiveProjectName(null)
 
@@ -794,15 +800,21 @@ export default function Home() {
     },
     {
       id: 3,
-      title: 'Link your idea',
-      icon: Link,
+      title: 'Describe & Inspire',
+      icon: Sparkles,
       hasNewButton: false,
       content: (
         <div className="p-6">
-          {/* ✅ SIMPLIFIED: Just textarea, no file upload */}
-          <div className="relative mb-4">
+          {/* Task description textarea */}
+          <div className="relative mb-6">
+            <label
+              className="block text-sm font-medium mb-2"
+              style={{ color: '#3B3B3B' }}
+            >
+              Task Description
+            </label>
             <textarea
-              placeholder="Describe your idea..."
+              placeholder="Describe what you want to create..."
               value={ideaText}
               onChange={e => setIdeaText(e.target.value)}
               onKeyDown={e => {
@@ -811,27 +823,158 @@ export default function Home() {
                   handleSubmitIdea()
                 }
               }}
-              className="w-full px-4 py-3 rounded-lg resize-none focus:outline-none"
+              className="w-full px-4 py-3 rounded-xl resize-none focus:outline-none transition-all"
               style={{
-                backgroundColor: 'transparent',
-                border: 'none',
+                backgroundColor: '#F7F5F3',
                 color: '#3B3B3B',
+                border: '2px solid transparent',
                 fontSize: '14px',
-                minHeight: '120px',
+                minHeight: '100px',
               }}
-              rows={5}
+              onFocus={e => {
+                e.target.style.borderColor = '#F5C563'
+              }}
+              onBlur={e => {
+                e.target.style.borderColor = 'transparent'
+              }}
+              rows={4}
             />
             {ideaText.length > 0 && (
               <div
                 className="absolute bottom-3 right-4 px-2 py-1 rounded text-xs"
-                style={{ backgroundColor: '#F4F4F4', color: '#929397' }}
+                style={{ backgroundColor: '#FFFFFF', color: '#929397' }}
               >
                 ⏎ Enter
               </div>
             )}
           </div>
 
-          {/* Submit button */}
+          {/* Inspiration images drag-drop area */}
+          <div className="mb-6">
+            <label
+              className="block text-sm font-medium mb-2"
+              style={{ color: '#3B3B3B' }}
+            >
+              Inspiration Images{' '}
+              <span style={{ color: '#929397' }}>(optional)</span>
+            </label>
+            <div
+              className="rounded-xl border-2 border-dashed transition-all cursor-pointer"
+              style={{
+                borderColor: isDragging
+                  ? '#F5C563'
+                  : inspirationImages.length > 0
+                    ? '#4A90E2'
+                    : '#E8E1DD',
+                backgroundColor: isDragging
+                  ? '#FFF9E6'
+                  : inspirationImages.length > 0
+                    ? '#F0F7FF'
+                    : '#FAFAFA',
+                minHeight: '120px',
+              }}
+              onDragEnter={e => {
+                e.preventDefault()
+                setIsDragging(true)
+              }}
+              onDragLeave={e => {
+                e.preventDefault()
+                if (e.currentTarget === e.target) {
+                  setIsDragging(false)
+                }
+              }}
+              onDragOver={e => {
+                e.preventDefault()
+              }}
+              onDrop={e => {
+                e.preventDefault()
+                setIsDragging(false)
+                const files = Array.from(e.dataTransfer.files).filter(f =>
+                  f.type.startsWith('image/'),
+                )
+                if (files.length > 0) {
+                  setInspirationImages(prev => [
+                    ...prev,
+                    ...files.slice(0, 5 - prev.length),
+                  ])
+                }
+              }}
+              onClick={() =>
+                document.getElementById('inspiration-input')?.click()
+              }
+            >
+              <input
+                id="inspiration-input"
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={e => {
+                  const files = Array.from(e.target.files || [])
+                  setInspirationImages(prev => [
+                    ...prev,
+                    ...files.slice(0, 5 - prev.length),
+                  ])
+                }}
+                className="hidden"
+              />
+
+              {inspirationImages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-6">
+                  <ImageIcon
+                    size={32}
+                    style={{ color: '#929397', marginBottom: '8px' }}
+                  />
+                  <p
+                    className="text-sm font-medium mb-1"
+                    style={{ color: '#3B3B3B' }}
+                  >
+                    Add inspiration images
+                  </p>
+                  <p className="text-xs" style={{ color: '#929397' }}>
+                    Drop images here or click to browse (max 5)
+                  </p>
+                </div>
+              ) : (
+                <div className="p-4">
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {inspirationImages.map((file, index) => (
+                      <div
+                        key={index}
+                        className="relative w-20 h-20 rounded-lg overflow-hidden"
+                        style={{ backgroundColor: '#E8E1DD' }}
+                      >
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt={`Inspiration ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          onClick={e => {
+                            e.stopPropagation()
+                            setInspirationImages(prev =>
+                              prev.filter((_, i) => i !== index),
+                            )
+                          }}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center transition-all hover:scale-110"
+                          style={{
+                            backgroundColor: 'rgba(0,0,0,0.6)',
+                            color: '#FFFFFF',
+                          }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs" style={{ color: '#929397' }}>
+                    {inspirationImages.length} / 5 images • Click to add more
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Generate button */}
           <div className="flex justify-end">
             <button
               onClick={handleSubmitIdea}

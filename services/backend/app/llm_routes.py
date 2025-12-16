@@ -435,11 +435,48 @@ async def generate_ui(
         
         user_message = "\n".join(user_message_parts)
         
+        # Load inspiration images if they exist
+        inspiration_images = []
+        inspiration_keys = project.get("inspiration_image_keys", [])
+        if inspiration_keys:
+            print(f"Loading {len(inspiration_keys)} inspiration image(s)...")
+            inspiration_images = storage.get_inspiration_images(
+                user_id,
+                request.project_id,
+                inspiration_keys
+            )
+            print(f"✓ Loaded {len(inspiration_images)} inspiration image(s)")
+        
+        # Build message content with images if present
+        if inspiration_images:
+            # If images exist, use content array format
+            message_content = [{"type": "text", "text": user_message}]
+            
+            # Add separator text
+            message_content.append({
+                "type": "text",
+                "text": "\n\nInspiration Images (for visual reference):"
+            })
+            
+            # Add each inspiration image
+            for img in inspiration_images:
+                message_content.append({
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": img['media_type'],
+                        "data": img['data']
+                    }
+                })
+        else:
+            # No images, use simple text message
+            message_content = user_message
+        
         # Call LLM with appropriate prompt
         print(f"Calling LLM with {prompt_name}...")
         response = await llm.call_claude(
             prompt_name=prompt_name,
-            user_message=user_message,
+            user_message=message_content,
             parse_json=parse_json,
         )
         

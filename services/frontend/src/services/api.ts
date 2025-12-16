@@ -57,7 +57,9 @@ export interface Project {
   name: string
   task_description: string
   selected_taste_id?: string
-  selected_resource_ids: string[] // ✅ CHANGED: Now an array
+  selected_resource_ids: string[]
+  inspiration_image_keys?: string[] // S3 keys
+  inspiration_image_urls?: string[] // Presigned URLs (when requested)
   outputs: string[]
   metadata: Record<string, unknown>
   created_at: string
@@ -353,9 +355,56 @@ export const projectsAPI = {
     name: string
     task_description?: string
     selected_taste_id?: string
-    selected_resource_ids?: string[] // ✅ CHANGED: Now an array
+    selected_resource_ids?: string[]
+    inspiration_images?: File[]
     metadata?: Record<string, unknown>
   }): Promise<Project> => {
+    const token = await getAuthToken()
+
+    // If inspiration images exist, use FormData
+    if (data.inspiration_images && data.inspiration_images.length > 0) {
+      const formData = new FormData()
+      formData.append('name', data.name)
+
+      if (data.task_description) {
+        formData.append('task_description', data.task_description)
+      }
+      if (data.selected_taste_id) {
+        formData.append('selected_taste_id', data.selected_taste_id)
+      }
+      if (data.selected_resource_ids) {
+        data.selected_resource_ids.forEach(id => {
+          formData.append('selected_resource_ids', id)
+        })
+      }
+      if (data.metadata) {
+        formData.append('metadata', JSON.stringify(data.metadata))
+      }
+
+      // Append inspiration images
+      data.inspiration_images.forEach(file => {
+        formData.append('inspiration_images', file, file.name)
+      })
+
+      const response = await fetch(`${API_BASE_URL}/api/projects/`, {
+        method: 'POST',
+        headers: {
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const error = (await response.json().catch(() => ({
+          detail: 'Request failed',
+        }))) as { detail: string }
+        throw new Error(error.detail || `HTTP ${response.status}`)
+      }
+
+      return response.json() as Promise<Project>
+    }
+
+    // No inspiration images - use JSON
     return apiRequest<Project>('/api/projects/', {
       method: 'POST',
       body: JSON.stringify(data),

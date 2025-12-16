@@ -115,7 +115,8 @@ class ProjectCreate(BaseModel):
     name: str
     task_description: Optional[str] = ""
     selected_taste_id: Optional[str] = None
-    selected_resource_ids: Optional[List[str]] = []  # ✅ CHANGED: Now a list
+    selected_resource_ids: Optional[List[str]] = []
+    inspiration_image_keys: Optional[List[str]] = []  # S3 keys for inspiration images
     metadata: Optional[dict] = {}
 
 
@@ -126,7 +127,8 @@ class ProjectOut(BaseModel):
     name: str
     task_description: str
     selected_taste_id: Optional[str] = None
-    selected_resource_ids: List[str] = []  # ✅ CHANGED: Now a list
+    selected_resource_ids: List[str] = []
+    inspiration_image_keys: List[str] = []  # S3 keys for inspiration images
     outputs: List[str] = []  # List of S3 keys
     metadata: dict
     created_at: str

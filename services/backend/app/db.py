@@ -294,11 +294,14 @@ def create_project(
     name: str,
     task_description: str = "",
     selected_taste_id: str = None,
-    selected_resource_ids: List[str] = None,  # ✅ CHANGED: Now a list
-    metadata: dict = None
+    selected_resource_ids: List[str] = None,
+    inspiration_image_keys: List[str] = None,  # S3 keys for inspiration images
+    metadata: dict = None,
+    project_id: str = None  # Optional: pass explicit ID for S3 consistency
 ) -> Dict[str, Any]:
     """Create a new project"""
-    project_id = generate_uuid()
+    if project_id is None:
+        project_id = generate_uuid()
     now = get_timestamp()
     
     item = {
@@ -307,7 +310,8 @@ def create_project(
         "name": name,
         "task_description": task_description,
         "selected_taste_id": selected_taste_id or "",
-        "selected_resource_ids": selected_resource_ids or [],  # ✅ CHANGED: Now a list
+        "selected_resource_ids": selected_resource_ids or [],
+        "inspiration_image_keys": inspiration_image_keys or [],  # S3 keys
         "outputs": [],
         "metadata": metadata or {},
         "created_at": now,

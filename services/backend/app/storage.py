@@ -8,7 +8,7 @@ import json
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
-from typing import Optional
+from typing import Optional, List
 
 
 # ============================================================================
@@ -53,6 +53,11 @@ def get_image_key(owner_id: str, taste_id: str, resource_id: str) -> str:
 def get_project_output_key(owner_id: str, project_id: str, filename: str) -> str:
     """Generate S3 key for project output file"""
     return f"projects/{owner_id}/{project_id}/outputs/{filename}"
+
+
+def get_inspiration_image_key(owner_id: str, project_id: str, filename: str) -> str:
+    """Generate S3 key for project inspiration image"""
+    return f"projects/{owner_id}/{project_id}/inspiration/{filename}"
 
 
 # ============================================================================
@@ -299,6 +304,20 @@ def get_resource_image(user_id: str, taste_id: str, resource_id: str) -> bytes:
         raise
 
 
+def get_inspiration_image(user_id: str, project_id: str, filename: str) -> bytes:
+    """Get inspiration image bytes from project"""
+    key = get_inspiration_image_key(user_id, project_id, filename)
+    
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        return response['Body'].read()
+    except s3_client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"Error getting inspiration image: {e}")
+        raise
+
+
 def get_resource_dtr(user_id: str, taste_id: str, resource_id: str) -> dict:
     """Get DTR JSON from resource"""
     key = f"tastes/{user_id}/{taste_id}/resources/{resource_id}/dtr.json"
@@ -400,6 +419,36 @@ def list_project_ui_versions(user_id: str, project_id: str) -> list:
     except Exception as e:
         print(f"Error listing UI versions: {e}")
         return []
+
+
+def get_inspiration_images(user_id: str, project_id: str, image_keys: List[str]) -> List[dict]:
+    """
+    Get inspiration images for a project
+    
+    Returns list of dicts with base64 data and media_type
+    """
+    images = []
+    
+    for key in image_keys:
+        try:
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+            image_bytes = response['Body'].read()
+            
+            # Encode as base64
+            import base64
+            base64_data = base64.b64encode(image_bytes).decode('utf-8')
+            
+            # Get content type
+            content_type = response.get('ContentType', 'image/png')
+            
+            images.append({
+                'data': base64_data,
+                'media_type': content_type
+            })
+        except Exception as e:
+            print(f"Error loading inspiration image {key}: {e}")
+    
+    return images
 
 
 # ============================================================================
