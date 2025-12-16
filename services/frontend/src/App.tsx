@@ -14,6 +14,7 @@ import { config } from './config/env'
 import Editor from './pages/Editor'
 import Home from './pages/Home'
 import LoginScreen from './pages/Login'
+import MobbinExplorer from './pages/MobbinExplorer'
 
 // AWS Amplify configuration using centralized config
 Amplify.configure({
@@ -154,6 +155,10 @@ function AppContent() {
       <Route
         path="/editor"
         element={user ? <Editor /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/mobbin"
+        element={user ? <MobbinExplorer /> : <Navigate to="/login" replace />}
       />
     </Routes>
   )

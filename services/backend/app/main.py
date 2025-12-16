@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import routers
-from app.routers import tastes, projects
+from app.routers import tastes, projects, mobbin
 from app.llm_routes import router as llm_router
 from app.websocket_routes import router as ws_router
 
@@ -155,6 +155,7 @@ async def user_profile(user: dict = Depends(verify_token)):
 # Include routers
 app.include_router(tastes.router)
 app.include_router(projects.router)
+app.include_router(mobbin.router)
 app.include_router(llm_router)
 app.include_router(ws_router)
 
