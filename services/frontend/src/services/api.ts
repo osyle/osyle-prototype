@@ -758,6 +758,233 @@ export const dtmAPI = {
   },
 }
 
+/**
+ * Mobbin API Client Module
+ */
+
+// ============================================================================
+// MOBBIN TYPES
+// ============================================================================
+
+export interface MobbinSearchRequest {
+  query: string
+  platform: 'ios' | 'android'
+  content_type?: 'apps' | 'screens' | 'ui-elements' | 'flows'
+}
+
+export interface MobbinAppSearchResult {
+  id: string
+  name: string
+  logo_url: string | null
+  platform: string
+  version_id: string | null
+  url: string
+  base_url: string
+}
+
+export interface MobbinSearchResponse {
+  query: string
+  platform: string
+  content_type: string
+  apps: MobbinAppSearchResult[]
+  total: number
+}
+
+export interface MobbinScreen {
+  id: string
+  screen_number: number
+  image_url: string
+  thumbnail_url: string
+  title: string | null
+  tags: string[] | null
+}
+
+export interface MobbinUIElement {
+  id: string
+  element_number: number
+  image_url: string
+  thumbnail_url: string
+  title: string | null
+  category: string | null
+  tags: string[] | null
+}
+
+export interface MobbinFlow {
+  id: string
+  flow_number: number | null
+  title: string
+  thumbnail_url: string | null
+  url: string | null
+  metadata: string | null
+  tags: string[] | null
+}
+
+export interface MobbinFlowTreeNode {
+  id: string
+  type?: string
+  position?: { x: number; y: number }
+  data?: Record<string, unknown>
+}
+
+export interface MobbinFlowTreeEdge {
+  id: string
+  source: string
+  target: string
+  type?: string
+}
+
+export interface MobbinFlowTree {
+  nodes?: MobbinFlowTreeNode[]
+  edges?: MobbinFlowTreeEdge[]
+  [key: string]: unknown
+}
+
+export interface MobbinFlowDetails {
+  title: string | null
+  description: string | null
+  screens: Array<{
+    screen_number: number
+    image_url: string
+    label: string | null
+  }>
+  flow_tree: MobbinFlowTree | null
+  metadata: Record<string, unknown>
+}
+
+// ============================================================================
+// MOBBIN API
+// ============================================================================
+
+export const mobbinAPI = {
+  /**
+   * Search for apps on Mobbin
+   */
+  search: async (
+    params: MobbinSearchRequest,
+  ): Promise<MobbinSearchResponse> => {
+    return apiRequest<MobbinSearchResponse>('/api/mobbin/search', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: params.query,
+        platform: params.platform,
+        content_type: params.content_type || 'apps',
+      }),
+    })
+  },
+
+  /**
+   * Get screens for a specific app
+   */
+  getScreens: async (
+    appId: string,
+    versionId?: string,
+    limit?: number,
+  ): Promise<{
+    app_id: string
+    version_id: string | null
+    screens: MobbinScreen[]
+    total: number
+  }> => {
+    const params = new URLSearchParams()
+    if (versionId) params.append('version_id', versionId)
+    if (limit) params.append('limit', limit.toString())
+
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return apiRequest<{
+      app_id: string
+      version_id: string | null
+      screens: MobbinScreen[]
+      total: number
+    }>(`/api/mobbin/apps/${appId}/screens${query}`)
+  },
+
+  /**
+   * Get UI elements for a specific app
+   */
+  getUIElements: async (
+    appId: string,
+    versionId?: string,
+    limit?: number,
+  ): Promise<{
+    app_id: string
+    version_id: string | null
+    ui_elements: MobbinUIElement[]
+    total: number
+  }> => {
+    const params = new URLSearchParams()
+    if (versionId) params.append('version_id', versionId)
+    if (limit) params.append('limit', limit.toString())
+
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return apiRequest<{
+      app_id: string
+      version_id: string | null
+      ui_elements: MobbinUIElement[]
+      total: number
+    }>(`/api/mobbin/apps/${appId}/ui-elements${query}`)
+  },
+
+  /**
+   * Get flows for a specific app
+   */
+  getFlows: async (
+    appId: string,
+    versionId?: string,
+    limit?: number,
+  ): Promise<{
+    app_id: string
+    version_id: string | null
+    flows: MobbinFlow[]
+    total: number
+  }> => {
+    const params = new URLSearchParams()
+    if (versionId) params.append('version_id', versionId)
+    if (limit) params.append('limit', limit.toString())
+
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return apiRequest<{
+      app_id: string
+      version_id: string | null
+      flows: MobbinFlow[]
+      total: number
+    }>(`/api/mobbin/apps/${appId}/flows${query}`)
+  },
+
+  /**
+   * Get detailed information about a specific flow
+   */
+  getFlowDetails: async (
+    appId: string,
+    versionId: string,
+    flowId: string,
+  ): Promise<MobbinFlowDetails> => {
+    const params = new URLSearchParams()
+    params.append('version_id', versionId)
+    params.append('flow_id', flowId)
+
+    return apiRequest<MobbinFlowDetails>(
+      `/api/mobbin/apps/${appId}/flows/${flowId}?${params.toString()}`,
+    )
+  },
+
+  /**
+   * Get Mobbin service status
+   */
+  getStatus: async (): Promise<{
+    configured: boolean
+    method: string
+    browser: string
+    note: string
+  }> => {
+    return apiRequest<{
+      configured: boolean
+      method: string
+      browser: string
+      note: string
+    }>('/api/mobbin/status')
+  },
+}
+
 // ============================================================================
 // EXPORT DEFAULT API OBJECT
 // ============================================================================
@@ -768,6 +995,7 @@ const api = {
   projects: projectsAPI,
   llm: llmAPI,
   dtm: dtmAPI,
+  mobbin: mobbinAPI,
 }
 
 export default api

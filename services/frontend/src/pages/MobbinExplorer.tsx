@@ -1,474 +1,717 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Search, Loader2, Image, Layers, GitBranch } from 'lucide-react'
+import { useState } from 'react'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-interface App {
+interface AppSearchResult {
   id: string
   name: string
-  category: string
-  logo_url: string
-  tagline: string
+  logo_url: string | null
   platform: string
-  preview_urls: string[]
+  version_id: string | null
+  url: string
+  base_url: string
 }
 
 interface Screen {
   id: string
-  number: number
-  url: string
-  elements: string[] | null
-  patterns: string[] | null
+  screen_number: number
+  image_url: string
+  thumbnail_url: string
+  title: string | null
+  tags: string[] | null
+}
+
+interface UIElement {
+  id: string
+  element_number: number
+  image_url: string
+  thumbnail_url: string
+  title: string | null
+  category: string | null
+  tags: string[] | null
 }
 
 interface Flow {
   id: string
-  name: string
-  screen_count: number
+  flow_number: number | null
+  title: string
+  thumbnail_url: string | null
+  url: string | null
+  metadata: string | null
+  tags: string[] | null
 }
 
-interface MobbinStatus {
-  configured: boolean
-  authenticated: boolean
-  email: string | null
+interface FlowTreeNode {
+  id: string
+  type?: string
+  position?: { x: number; y: number }
+  data?: Record<string, unknown>
+}
+
+interface FlowTreeEdge {
+  id: string
+  source: string
+  target: string
+  type?: string
+}
+
+interface FlowTree {
+  nodes?: FlowTreeNode[]
+  edges?: FlowTreeEdge[]
+  [key: string]: unknown
+}
+
+interface FlowDetails {
+  title: string | null
+  description: string | null
+  screens: Array<{
+    screen_number: number
+    image_url: string
+    label: string | null
+  }>
+  flow_tree: FlowTree | null
+  metadata: Record<string, unknown>
 }
 
 export default function MobbinExplorer() {
-  const navigate = useNavigate()
-  const [status, setStatus] = useState<MobbinStatus | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [platform, setPlatform] = useState<'ios' | 'android'>('ios')
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Apps state
-  const [apps, setApps] = useState<App[]>([])
-  const [currentPage, setCurrentPage] = useState(1)
-  const [hasMore, setHasMore] = useState(true)
-  const [loadingApps, setLoadingApps] = useState(false)
+  // Search results
+  const [searchResults, setSearchResults] = useState<AppSearchResult[]>([])
 
-  // Selected app state
-  const [selectedApp, setSelectedApp] = useState<App | null>(null)
+  // Selected app and content
+  const [selectedApp, setSelectedApp] = useState<AppSearchResult | null>(null)
+  const [contentType, setContentType] = useState<
+    'screens' | 'ui-elements' | 'flows'
+  >('screens')
+
+  // Content data
   const [screens, setScreens] = useState<Screen[]>([])
+  const [uiElements, setUIElements] = useState<UIElement[]>([])
   const [flows, setFlows] = useState<Flow[]>([])
-  const [viewMode, setViewMode] = useState<'apps' | 'screens' | 'flows'>('apps')
+  const [selectedFlow, setSelectedFlow] = useState<FlowDetails | null>(null)
+
+  // Loading states
+  const [loadingContent, setLoadingContent] = useState(false)
 
   // Auth token from localStorage
   const token = localStorage.getItem('token')
 
-  // Check Mobbin service status on load
-  useEffect(() => {
-    checkStatus()
-  }, [])
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return
 
-  const checkStatus = async () => {
     setLoading(true)
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/mobbin/status`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      const data = await response.json()
-      setStatus(data)
-
-      if (data.authenticated) {
-        loadApps(1)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to check status')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadApps = async (page: number) => {
-    setLoadingApps(true)
     setError('')
+    setSearchResults([])
+    setSelectedApp(null)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/mobbin/apps/query`, {
+      const response = await fetch(`${API_BASE_URL}/api/mobbin/search`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          page,
-          page_size: 24,
-          platform: 'ios',
+          query: searchQuery,
+          platform: platform,
+          content_type: 'apps', // Always search for apps, not screens
         }),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to load apps')
+        throw new Error(`Search failed: ${response.statusText}`)
       }
 
       const data = await response.json()
-      setApps(data.apps)
-      setHasMore(data.has_more)
-      setCurrentPage(page)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoadingApps(false)
-    }
-  }
+      setSearchResults(data.apps || [])
 
-  const loadScreens = async (app: App) => {
-    setLoading(true)
-    setError('')
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/mobbin/apps/${app.id}/screens`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      )
-
-      if (!response.ok) {
-        throw new Error('Failed to load screens')
+      if (data.apps && data.apps.length === 0) {
+        setError('No results found')
       }
-
-      const data = await response.json()
-      setScreens(data.screens)
-      setSelectedApp(app)
-      setViewMode('screens')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      setError(err instanceof Error ? err.message : 'Search failed')
+      console.error('Search error:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  const loadFlows = async (app: App) => {
-    setLoading(true)
+  const loadScreens = async (app: AppSearchResult) => {
+    setLoadingContent(true)
     setError('')
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/mobbin/apps/${app.id}/flows`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      const url = new URL(`${API_BASE_URL}/api/mobbin/apps/${app.id}/screens`)
+      if (app.version_id) {
+        url.searchParams.append('version_id', app.version_id)
+      }
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-      )
+      })
 
       if (!response.ok) {
-        throw new Error('Failed to load flows')
+        throw new Error(`Failed to load screens: ${response.statusText}`)
       }
 
       const data = await response.json()
-      setFlows(data.flows)
-      setSelectedApp(app)
-      setViewMode('flows')
+      setScreens(data.screens || [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      setError(err instanceof Error ? err.message : 'Failed to load screens')
+      console.error('Load screens error:', err)
     } finally {
-      setLoading(false)
+      setLoadingContent(false)
     }
   }
 
-  if (loading && !status) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-      </div>
-    )
+  const loadUIElements = async (app: AppSearchResult) => {
+    setLoadingContent(true)
+    setError('')
+
+    try {
+      const url = new URL(
+        `${API_BASE_URL}/api/mobbin/apps/${app.id}/ui-elements`,
+      )
+      if (app.version_id) {
+        url.searchParams.append('version_id', app.version_id)
+      }
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to load UI elements: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      setUIElements(data.ui_elements || [])
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to load UI elements',
+      )
+      console.error('Load UI elements error:', err)
+    } finally {
+      setLoadingContent(false)
+    }
+  }
+
+  const loadFlows = async (app: AppSearchResult) => {
+    setLoadingContent(true)
+    setError('')
+
+    try {
+      const url = new URL(`${API_BASE_URL}/api/mobbin/apps/${app.id}/flows`)
+      if (app.version_id) {
+        url.searchParams.append('version_id', app.version_id)
+      }
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to load flows: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      setFlows(data.flows || [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load flows')
+      console.error('Load flows error:', err)
+    } finally {
+      setLoadingContent(false)
+    }
+  }
+
+  const loadFlowDetails = async (app: AppSearchResult, flowId: string) => {
+    if (!app.version_id) {
+      setError('Version ID required for flow details')
+      return
+    }
+
+    setLoadingContent(true)
+    setError('')
+
+    try {
+      const url = new URL(
+        `${API_BASE_URL}/api/mobbin/apps/${app.id}/flows/${flowId}`,
+      )
+      url.searchParams.append('version_id', app.version_id)
+      url.searchParams.append('flow_id', flowId)
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to load flow details: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      setSelectedFlow(data)
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to load flow details',
+      )
+      console.error('Load flow details error:', err)
+    } finally {
+      setLoadingContent(false)
+    }
+  }
+
+  const handleAppSelect = (app: AppSearchResult) => {
+    setSelectedApp(app)
+    setScreens([])
+    setUIElements([])
+    setFlows([])
+    setSelectedFlow(null)
+    setError('')
+
+    // Load the selected content type
+    if (contentType === 'screens') {
+      loadScreens(app)
+    } else if (contentType === 'ui-elements') {
+      loadUIElements(app)
+    } else if (contentType === 'flows') {
+      loadFlows(app)
+    }
+  }
+
+  const handleContentTypeChange = (
+    type: 'screens' | 'ui-elements' | 'flows',
+  ) => {
+    setContentType(type)
+    setSelectedFlow(null)
+
+    if (!selectedApp) return
+
+    // Load the new content type
+    if (type === 'screens') {
+      if (screens.length === 0) loadScreens(selectedApp)
+    } else if (type === 'ui-elements') {
+      if (uiElements.length === 0) loadUIElements(selectedApp)
+    } else if (type === 'flows') {
+      if (flows.length === 0) loadFlows(selectedApp)
+    }
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => navigate('/')}
-              className="text-gray-600 hover:text-gray-900"
-            >
-              ← Back to Home
-            </button>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Mobbin Explorer
-            </h1>
-          </div>
-          {status && (
-            <div className="flex items-center space-x-4">
-              <div className="text-sm">
-                {status.authenticated ? (
-                  <span className="text-green-600 flex items-center">
-                    <span className="w-2 h-2 bg-green-600 rounded-full mr-2" />
-                    Connected as {status.email}
-                  </span>
-                ) : status.configured ? (
-                  <span className="text-yellow-600 flex items-center">
-                    <span className="w-2 h-2 bg-yellow-600 rounded-full mr-2" />
-                    Authentication failed
-                  </span>
-                ) : (
-                  <span className="text-red-600 flex items-center">
-                    <span className="w-2 h-2 bg-red-600 rounded-full mr-2" />
-                    Not configured
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={checkStatus}
-                className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-              >
-                Refresh
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">
+            Mobbin Explorer
+          </h1>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Search Bar */}
+          <div className="flex gap-3">
+            <div className="flex-1 flex gap-2">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                placeholder="Search for apps (e.g., Instagram, Uber)..."
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+
+              <select
+                value={platform}
+                onChange={e => setPlatform(e.target.value as 'ios' | 'android')}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="ios">iOS</option>
+                <option value="android">Android</option>
+              </select>
+            </div>
+
+            <button
+              onClick={handleSearch}
+              disabled={loading || !searchQuery.trim()}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4" />
+                  Search
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Error Message */}
         {error && (
-          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
             {error}
           </div>
         )}
 
-        {/* Not Configured Message */}
-        {status && !status.configured && (
-          <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8">
-            <h2 className="text-xl font-semibold mb-4">
-              Mobbin Not Configured
+        {/* Search Results */}
+        {searchResults.length > 0 && !selectedApp && (
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              Search Results ({searchResults.length})
             </h2>
-            <p className="text-gray-600 mb-4">
-              To use Mobbin integration, please set the following environment
-              variables in your backend:
-            </p>
-            <div className="bg-gray-100 p-4 rounded font-mono text-sm">
-              MOBBIN_EMAIL=your@email.com
-              <br />
-              MOBBIN_PASSWORD=your_password
-            </div>
-            <p className="text-gray-600 mt-4">
-              Then restart your backend server.
-            </p>
-          </div>
-        )}
 
-        {/* Not Authenticated Message */}
-        {status && status.configured && !status.authenticated && (
-          <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8">
-            <h2 className="text-xl font-semibold mb-4">
-              Authentication Failed
-            </h2>
-            <p className="text-gray-600 mb-4">
-              Failed to authenticate with Mobbin using the configured
-              credentials. Please check your environment variables and ensure
-              the credentials are correct.
-            </p>
-            <button
-              onClick={checkStatus}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Retry Authentication
-            </button>
-          </div>
-        )}
-
-        {/* Authenticated Content */}
-        {status && status.authenticated && (
-          <>
-            {/* View Mode Tabs */}
-            {viewMode !== 'apps' && (
-              <div className="mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {searchResults.map(app => (
                 <button
-                  onClick={() => {
-                    setViewMode('apps')
-                    setSelectedApp(null)
-                    setScreens([])
-                    setFlows([])
-                  }}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                  key={app.id}
+                  onClick={() => handleAppSelect(app)}
+                  className="flex flex-col items-center p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all"
                 >
-                  ← Back to Apps
-                </button>
-                {selectedApp && (
-                  <div className="mt-4 flex items-center space-x-4">
+                  {app.logo_url ? (
                     <img
-                      src={selectedApp.logo_url}
-                      alt={selectedApp.name}
-                      className="w-16 h-16 rounded-lg"
+                      src={app.logo_url}
+                      alt={app.name}
+                      className="w-16 h-16 rounded-xl mb-2 object-cover"
                     />
-                    <div>
-                      <h2 className="text-xl font-semibold">
-                        {selectedApp.name}
-                      </h2>
-                      <p className="text-gray-600">{selectedApp.category}</p>
+                  ) : (
+                    <div className="w-16 h-16 rounded-xl mb-2 bg-gray-200 flex items-center justify-center">
+                      <Image className="w-8 h-8 text-gray-400" />
                     </div>
-                  </div>
+                  )}
+
+                  <span className="text-sm font-medium text-gray-900 text-center line-clamp-2">
+                    {app.name}
+                  </span>
+
+                  <span className="text-xs text-gray-500 mt-1">
+                    {app.platform.toUpperCase()}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* App Content View */}
+        {selectedApp && (
+          <div>
+            {/* App Header */}
+            <div className="flex items-center gap-4 mb-6">
+              <button
+                onClick={() => {
+                  setSelectedApp(null)
+                  setScreens([])
+                  setUIElements([])
+                  setFlows([])
+                  setSelectedFlow(null)
+                }}
+                className="text-blue-600 hover:text-blue-700"
+              >
+                ← Back to results
+              </button>
+
+              <div className="flex items-center gap-3 flex-1">
+                {selectedApp.logo_url && (
+                  <img
+                    src={selectedApp.logo_url}
+                    alt={selectedApp.name}
+                    className="w-12 h-12 rounded-lg"
+                  />
                 )}
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    {selectedApp.name}
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    {selectedApp.platform.toUpperCase()}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content Type Tabs */}
+            <div className="flex gap-2 mb-6 border-b border-gray-200">
+              <button
+                onClick={() => handleContentTypeChange('screens')}
+                className={`px-4 py-2 font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                  contentType === 'screens'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Image className="w-4 h-4" />
+                Screens
+                {screens.length > 0 && (
+                  <span className="text-xs">({screens.length})</span>
+                )}
+              </button>
+
+              <button
+                onClick={() => handleContentTypeChange('ui-elements')}
+                className={`px-4 py-2 font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                  contentType === 'ui-elements'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Layers className="w-4 h-4" />
+                UI Elements
+                {uiElements.length > 0 && (
+                  <span className="text-xs">({uiElements.length})</span>
+                )}
+              </button>
+
+              <button
+                onClick={() => handleContentTypeChange('flows')}
+                className={`px-4 py-2 font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                  contentType === 'flows'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <GitBranch className="w-4 h-4" />
+                Flows
+                {flows.length > 0 && (
+                  <span className="text-xs">({flows.length})</span>
+                )}
+              </button>
+            </div>
+
+            {/* Loading Indicator */}
+            {loadingContent && (
+              <div className="flex justify-center items-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
               </div>
             )}
 
-            {/* Apps Grid */}
-            {viewMode === 'apps' && (
-              <>
-                <div className="mb-6 flex justify-between items-center">
-                  <h2 className="text-xl font-semibold">iOS Apps</h2>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => loadApps(currentPage - 1)}
-                      disabled={currentPage === 1 || loadingApps}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            {/* Screens Grid */}
+            {!loadingContent &&
+              contentType === 'screens' &&
+              screens.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {screens.map(screen => (
+                    <div
+                      key={screen.id}
+                      className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
                     >
-                      Previous
-                    </button>
-                    <span className="px-4 py-2 bg-gray-100 rounded-md">
-                      Page {currentPage}
-                    </span>
-                    <button
-                      onClick={() => loadApps(currentPage + 1)}
-                      disabled={!hasMore || loadingApps}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    >
-                      Next
-                    </button>
-                  </div>
+                      <img
+                        src={screen.image_url}
+                        alt={screen.title || `Screen ${screen.screen_number}`}
+                        className="w-full h-auto object-cover"
+                      />
+                      {screen.title && (
+                        <div className="p-2">
+                          <p className="text-xs text-gray-600 truncate">
+                            {screen.title}
+                          </p>
+                        </div>
+                      )}
+                      {screen.tags && screen.tags.length > 0 && (
+                        <div className="px-2 pb-2 flex flex-wrap gap-1">
+                          {screen.tags.map((tag, idx) => (
+                            <span
+                              key={idx}
+                              className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
+              )}
 
-                {loadingApps ? (
-                  <div className="flex justify-center py-12">
-                    <div className="w-12 h-12 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {apps.map(app => (
-                      <div
-                        key={app.id}
-                        className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-4"
-                      >
+            {/* UI Elements Grid */}
+            {!loadingContent &&
+              contentType === 'ui-elements' &&
+              uiElements.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {uiElements.map(element => (
+                    <div
+                      key={element.id}
+                      className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
+                    >
+                      <img
+                        src={element.image_url}
+                        alt={
+                          element.title || `Element ${element.element_number}`
+                        }
+                        className="w-full h-auto object-cover"
+                      />
+                      <div className="p-2">
+                        {element.title && (
+                          <p className="text-xs font-medium text-gray-900 truncate">
+                            {element.title}
+                          </p>
+                        )}
+                        {element.category && (
+                          <p className="text-xs text-gray-500">
+                            {element.category}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+            {/* Flows Grid */}
+            {!loadingContent &&
+              contentType === 'flows' &&
+              flows.length > 0 &&
+              !selectedFlow && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {flows.map(flow => (
+                    <button
+                      key={flow.id}
+                      onClick={() => loadFlowDetails(selectedApp, flow.id)}
+                      className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow text-left"
+                    >
+                      {flow.thumbnail_url && (
                         <img
-                          src={app.logo_url}
-                          alt={app.name}
-                          className="w-full h-32 object-contain mb-4"
+                          src={flow.thumbnail_url}
+                          alt={flow.title}
+                          className="w-full h-48 object-cover"
                         />
-                        <h3 className="font-semibold text-lg mb-2">
-                          {app.name}
+                      )}
+                      <div className="p-4">
+                        <h3 className="font-medium text-gray-900 mb-1">
+                          {flow.title}
                         </h3>
-                        <p className="text-sm text-gray-600 mb-2">
-                          {app.category}
-                        </p>
-                        <p className="text-sm text-gray-500 mb-4 line-clamp-2">
-                          {app.tagline}
-                        </p>
-
-                        {/* Preview Images */}
-                        {app.preview_urls.length > 0 && (
-                          <div className="grid grid-cols-3 gap-2 mb-4">
-                            {app.preview_urls.slice(0, 3).map((url, idx) => (
-                              <img
+                        {flow.metadata && (
+                          <p className="text-sm text-gray-500">
+                            {flow.metadata}
+                          </p>
+                        )}
+                        {flow.tags && flow.tags.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {flow.tags.map((tag, idx) => (
+                              <span
                                 key={idx}
-                                src={url}
-                                alt={`Preview ${idx + 1}`}
-                                className="w-full h-20 object-cover rounded"
-                              />
+                                className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded"
+                              >
+                                {tag}
+                              </span>
                             ))}
                           </div>
                         )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
 
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => loadScreens(app)}
-                            className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+            {/* Flow Details */}
+            {!loadingContent && selectedFlow && (
+              <div>
+                <button
+                  onClick={() => setSelectedFlow(null)}
+                  className="mb-4 text-blue-600 hover:text-blue-700"
+                >
+                  ← Back to flows
+                </button>
+
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  {selectedFlow.title && (
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">
+                      {selectedFlow.title}
+                    </h3>
+                  )}
+
+                  {selectedFlow.description && (
+                    <p className="text-gray-600 mb-4">
+                      {selectedFlow.description}
+                    </p>
+                  )}
+
+                  {selectedFlow.flow_tree && (
+                    <div className="mb-6">
+                      <h4 className="font-semibold text-gray-900 mb-2">
+                        Flow Tree
+                      </h4>
+                      <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-xs">
+                        {JSON.stringify(selectedFlow.flow_tree, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+
+                  {selectedFlow.screens && selectedFlow.screens.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-3">
+                        Flow Screens ({selectedFlow.screens.length})
+                      </h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        {selectedFlow.screens.map(screen => (
+                          <div
+                            key={screen.screen_number}
+                            className="bg-gray-50 rounded-lg overflow-hidden"
                           >
-                            View Screens
-                          </button>
-                          <button
-                            onClick={() => loadFlows(app)}
-                            className="flex-1 px-3 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700"
-                          >
-                            View Flows
-                          </button>
-                        </div>
+                            <img
+                              src={screen.image_url}
+                              alt={
+                                screen.label || `Screen ${screen.screen_number}`
+                              }
+                              className="w-full h-auto object-cover"
+                            />
+                            {screen.label && (
+                              <div className="p-2">
+                                <p className="text-xs text-gray-600 truncate">
+                                  {screen.label}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
 
-            {/* Screens View */}
-            {viewMode === 'screens' && (
-              <>
-                <h2 className="text-xl font-semibold mb-6">
-                  Screens ({screens.length})
-                </h2>
-                {loading ? (
-                  <div className="flex justify-center py-12">
-                    <div className="w-12 h-12 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                    {screens.map(screen => (
-                      <div
-                        key={screen.id}
-                        className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden"
-                      >
-                        <img
-                          src={screen.url}
-                          alt={`Screen ${screen.number}`}
-                          className="w-full h-auto"
-                        />
-                        <div className="p-3">
-                          <p className="text-sm font-semibold">
-                            Screen {screen.number}
-                          </p>
-                          {screen.patterns && screen.patterns.length > 0 && (
-                            <p className="text-xs text-gray-600 mt-1">
-                              {screen.patterns.join(', ')}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Flows View */}
-            {viewMode === 'flows' && (
-              <>
-                <h2 className="text-xl font-semibold mb-6">
-                  Flows ({flows.length})
-                </h2>
-                {loading ? (
-                  <div className="flex justify-center py-12">
-                    <div className="w-12 h-12 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {flows.map(flow => (
-                      <div
-                        key={flow.id}
-                        className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
-                      >
-                        <h3 className="text-lg font-semibold mb-2">
-                          {flow.name}
-                        </h3>
-                        <p className="text-gray-600">
-                          {flow.screen_count} screen
-                          {flow.screen_count !== 1 ? 's' : ''}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </>
+            {/* Empty States */}
+            {!loadingContent &&
+              contentType === 'screens' &&
+              screens.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                  No screens found
+                </div>
+              )}
+            {!loadingContent &&
+              contentType === 'ui-elements' &&
+              uiElements.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                  No UI elements found
+                </div>
+              )}
+            {!loadingContent &&
+              contentType === 'flows' &&
+              flows.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                  No flows found
+                </div>
+              )}
+          </div>
         )}
-      </main>
+      </div>
     </div>
   )
 }

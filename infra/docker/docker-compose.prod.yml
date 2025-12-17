@@ -9,6 +9,7 @@ services:
       - "8000:8000"
     env_file:
       - ../../services/backend/.env
+    shm_size: "2gb" # Required for Chromium
 
   frontend:
     build:
