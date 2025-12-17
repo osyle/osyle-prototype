@@ -85,7 +85,7 @@ export default function Home() {
   // Accordion state
   const [expandedStage, setExpandedStage] = useState<number | null>(1)
   const [selectedTasteId, setSelectedTasteId] = useState<string | null>(null)
-  const [selectedResourceIds, setSelectedResourceIds] = useState<string[]>([]) // ✅ CHANGED: Now array
+  const [selectedResourceIds, setSelectedResourceIds] = useState<string[]>([])
 
   // Modal state
   const [isCreateTasteModalOpen, setIsCreateTasteModalOpen] = useState(false)
@@ -119,6 +119,7 @@ export default function Home() {
   const [pendingResourceData, setPendingResourceData] = useState<{
     tasteId: string
     resourceId: string
+    resourceCount: number
   } | null>(null)
 
   // DTM Training state
@@ -405,9 +406,9 @@ export default function Home() {
 
       // Select the new taste
       setSelectedTasteId(newTaste.taste_id)
-      setSelectedResourceIds([]) // ✅ CHANGED: Reset to empty array
+      setSelectedResourceIds([]) // Reset to empty array
 
-      // ✅ CHANGED: Go to Stage 2 (resources), not Stage 3
+      // Go to Stage 2 (resources), not Stage 3
       setExpandedStage(2)
 
       // Close modal
@@ -430,7 +431,7 @@ export default function Home() {
     }
   }
 
-  // ✅ NEW: Handler for creating resource from Stage 2 modal
+  // Handler for creating resource from Stage 2 modal
   const handleCreateResource = async (
     resourceName: string,
     figmaFile: File | null,
@@ -522,34 +523,56 @@ export default function Home() {
       }
 
       // Update local state
-      setTastes(
-        tastes.map(t =>
-          t.taste_id === selectedTasteId
-            ? { ...t, resources: [...t.resources, displayResource] }
-            : t,
-        ),
+
+      const updatedTastes = tastes.map(t =>
+        t.taste_id === selectedTasteId
+          ? {
+              ...t,
+              resources: [...t.resources, displayResource],
+            }
+          : t,
       )
 
-      // ✅ CHANGED: Auto-select the new resource
+      setTastes(updatedTastes)
+
+      // Auto-select the new resource
+
       setSelectedResourceIds(prev => [...prev, resource.resource_id])
 
       // Close modal
+
       setIsCreateResourceModalOpen(false)
 
-      // ✅ NEW: Start DTR learning process
+      // Calculate resource count from updated tastes, not state
+
+      const currentTaste = updatedTastes.find(
+        t => t.taste_id === selectedTasteId,
+      )
+
+      const resourceCount = currentTaste?.resources.length || 1
+
+      // Start DTR learning process
+
       setDtrLearningResourceName(resourceName)
+
       setPendingResourceData({
         tasteId: selectedTasteId,
         resourceId: resource.resource_id,
+        resourceCount,
       })
+
       setDtrLearningState('learning')
+
       setDtrLearningError(null)
+
       setIsDtrLearningModalOpen(true)
 
-      // Trigger DTR learning
-      buildDtrForResource(selectedTasteId, resource.resource_id)
+      // Trigger DTR learning with resource count
+
+      buildDtrForResource(selectedTasteId, resource.resource_id, resourceCount)
     } catch (err) {
       console.error('Failed to create resource:', err)
+
       alert('Failed to create resource. Please try again.')
     } finally {
       setIsCreatingResource(false)
@@ -560,7 +583,11 @@ export default function Home() {
   // DTR LEARNING HANDLERS
   // ============================================================================
 
-  const buildDtrForResource = async (tasteId: string, resourceId: string) => {
+  const buildDtrForResource = async (
+    tasteId: string,
+    resourceId: string,
+    resourceCount: number,
+  ) => {
     try {
       // Check if DTR already exists
       const dtrCheck = await api.llm.checkDtrExists(resourceId, tasteId)
@@ -582,7 +609,7 @@ export default function Home() {
       await new Promise(resolve => setTimeout(resolve, 1500))
 
       // Phase 2: Start DTM training
-      await trainDtmAfterDtr(tasteId, resourceId)
+      await trainDtmAfterDtr(tasteId, resourceId, resourceCount)
     } catch (err) {
       console.error('Failed to build DTR:', err)
       setDtrLearningState('error')
@@ -592,14 +619,17 @@ export default function Home() {
     }
   }
 
-  const trainDtmAfterDtr = async (tasteId: string, resourceId: string) => {
+  const trainDtmAfterDtr = async (
+    tasteId: string,
+    resourceId: string,
+    resourceCount: number,
+  ) => {
     try {
       // Close DTR modal
       setIsDtrLearningModalOpen(false)
 
-      // Get resource count for display
-      const taste = tastes.find(t => t.taste_id === tasteId)
-      const resourceCount = taste?.resources.length || 1
+      // Use the passed resourceCount instead of looking it up
+      console.log(`Training DTM with ${resourceCount} resources`)
 
       // Call update-dtm endpoint
       console.log('Calling DTM update endpoint...')
@@ -645,6 +675,7 @@ export default function Home() {
     await buildDtrForResource(
       pendingResourceData.tasteId,
       pendingResourceData.resourceId,
+      pendingResourceData.resourceCount,
     )
   }
 
@@ -663,6 +694,7 @@ export default function Home() {
     await trainDtmAfterDtr(
       pendingResourceData.tasteId,
       pendingResourceData.resourceId,
+      pendingResourceData.resourceCount,
     )
   }
 
@@ -678,13 +710,13 @@ export default function Home() {
     try {
       setIsCreatingProject(true)
 
-      // ✅ CHANGED: Create project with array of resource IDs
+      // Create project with array of resource IDs
       const project = await api.projects.create({
         name: projectName,
         task_description: ideaText,
         selected_taste_id: selectedTasteId,
-        selected_resource_ids: selectedResourceIds, // ✅ Now array
-        inspiration_images: inspirationImages, // ✅ NEW: Add inspiration images
+        selected_resource_ids: selectedResourceIds,
+        inspiration_images: inspirationImages,
         metadata: {},
       })
 
@@ -696,7 +728,7 @@ export default function Home() {
           project_name: project.name,
           task_description: project.task_description,
           selected_taste_id: project.selected_taste_id,
-          selected_resource_ids: project.selected_resource_ids, // ✅ Array
+          selected_resource_ids: project.selected_resource_ids,
         }),
       )
 
@@ -705,8 +737,8 @@ export default function Home() {
 
       // Reset form and clear active project flag
       setIdeaText('')
-      setSelectedResourceIds([]) // ✅ Reset array
-      setInspirationImages([]) // ✅ NEW: Clear inspiration images
+      setSelectedResourceIds([])
+      setInspirationImages([])
       setHasActiveProject(false)
       setActiveProjectName(null)
 
@@ -740,7 +772,7 @@ export default function Home() {
           project_name: projectDetails.name,
           task_description: projectDetails.task_description,
           selected_taste_id: projectDetails.selected_taste_id,
-          selected_resource_ids: projectDetails.selected_resource_ids, // ✅ Array
+          selected_resource_ids: projectDetails.selected_resource_ids,
         }),
       )
 
@@ -890,9 +922,9 @@ export default function Home() {
               <StyleCard
                 key={resource.resource_id}
                 resource={resource}
-                isSelected={selectedResourceIds.includes(resource.resource_id)} // ✅ CHANGED
+                isSelected={selectedResourceIds.includes(resource.resource_id)}
                 onClick={() => {
-                  // ✅ CHANGED: Toggle selection instead of single select
+                  // Toggle selection instead of single select
                   setSelectedResourceIds(prev =>
                     prev.includes(resource.resource_id)
                       ? prev.filter(id => id !== resource.resource_id)
@@ -904,7 +936,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ✅ NEW: Continue button when resources are selected */}
+        {/* Continue button when resources are selected */}
         {selectedResourceIds.length > 0 && (
           <div className="mt-6 flex justify-end">
             <button
@@ -922,7 +954,7 @@ export default function Home() {
         )}
       </div>
     )
-  }, [selectedTaste, selectedResourceIds]) // ✅ CHANGED: Depend on array
+  }, [selectedTaste, selectedResourceIds])
 
   // ============================================================================
   // STAGE LOGIC
@@ -948,7 +980,7 @@ export default function Home() {
       id: 2,
       title: 'Choose a style',
       icon: Palette,
-      hasNewButton: true, // ✅ CHANGED: Enable New button
+      hasNewButton: true,
       content: chooseStyleContent,
       canOpen: canOpenStage2,
     },
@@ -1226,7 +1258,7 @@ export default function Home() {
                       <button
                         onClick={e => {
                           e.stopPropagation()
-                          setIsCreateResourceModalOpen(true) // ✅ Open modal
+                          setIsCreateResourceModalOpen(true)
                         }}
                         className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all hover:scale-105"
                         style={{ backgroundColor: '#F5C563' }}

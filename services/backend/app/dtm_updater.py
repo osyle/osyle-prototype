@@ -6,6 +6,7 @@ Avoids O(n) full recomputation - much faster for large portfolios
 from typing import Dict, Any
 from datetime import datetime
 import statistics
+import copy
 
 
 class DTMIncrementalUpdater:
@@ -36,7 +37,7 @@ class DTMIncrementalUpdater:
             Updated DTM
         """
         
-        dtm = existing_dtm.copy()
+        dtm = copy.deepcopy(existing_dtm)
         
         # Update metadata
         dtm["meta"]["updated_at"] = datetime.utcnow().isoformat() + "Z"
@@ -99,7 +100,7 @@ class DTMIncrementalUpdater:
         O(1) time complexity
         """
         
-        patterns = existing_patterns.copy()
+        patterns = copy.deepcopy(existing_patterns)
         
         # Extract new data from DTR
         new_data = self._extract_dtr_statistics(new_dtr)
@@ -182,10 +183,10 @@ class DTMIncrementalUpdater:
         
         return stats
     
-    def _update_spacing_stats(self, existing: Dict, new_data: Dict, n: int) -> Dict:
+    def _update_spacing_stats(self, existing: Dict, new_data: Dict, total_count: int) -> Dict:
         """Update spacing statistics with weighted running average"""
         
-        updated = existing.copy()
+        updated = copy.deepcopy(existing)
         
         # Update quantum using weighted average
         if "quantum" in existing and new_data.get("quantum"):
@@ -195,7 +196,7 @@ class DTMIncrementalUpdater:
             # Weighted update: new_mean = (old_mean * (n-1) + new_value) / n
             if "mean" in old_quantum:
                 old_mean = old_quantum["mean"]
-                updated_mean = (old_mean * (n - 1) + new_quantum) / n
+                updated_mean = (old_mean * (total_count - 1) + new_quantum) / total_count
                 
                 updated["quantum"]["mean"] = updated_mean
                 updated["quantum"]["all_observed"] = sorted(set(
@@ -223,10 +224,10 @@ class DTMIncrementalUpdater:
         
         return updated
     
-    def _update_color_stats(self, existing: Dict, new_data: Dict, n: int) -> Dict:
+    def _update_color_stats(self, existing: Dict, new_data: Dict, total_count: int) -> Dict:
         """Update color statistics"""
         
-        updated = existing.copy()
+        updated = copy.deepcopy(existing)
         
         # Update common colors
         if "common_colors" in existing and new_data.get("colors"):
@@ -244,14 +245,14 @@ class DTMIncrementalUpdater:
             for key in ["warm", "cool", "neutral"]:
                 old_val = existing["temperature"].get(key, 0)
                 new_val = new_data["temperature"].get(key, 0)
-                updated["temperature"][key] = round((old_val * (n - 1) + new_val) / n, 3)
+                updated["temperature"][key] = round((old_val * (total_count - 1) + new_val) / total_count, 3)
         
         return updated
     
-    def _update_typography_stats(self, existing: Dict, new_data: Dict, n: int) -> Dict:
+    def _update_typography_stats(self, existing: Dict, new_data: Dict, total_count: int) -> Dict:
         """Update typography statistics"""
         
-        updated = existing.copy()
+        updated = copy.deepcopy(existing)
         
         # Update scale ratio
         if "scale_ratio" in existing and new_data.get("scale_ratio"):
@@ -259,7 +260,7 @@ class DTMIncrementalUpdater:
             new_ratio = new_data["scale_ratio"]
             
             if "mean" in old_ratio:
-                updated_mean = (old_ratio["mean"] * (n - 1) + new_ratio) / n
+                updated_mean = (old_ratio["mean"] * (total_count - 1) + new_ratio) / total_count
                 updated["scale_ratio"]["mean"] = round(updated_mean, 3)
                 
                 all_vals = old_ratio.get("all_observed", []) + [new_ratio]
@@ -272,10 +273,10 @@ class DTMIncrementalUpdater:
         
         return updated
     
-    def _update_form_stats(self, existing: Dict, new_data: Dict, n: int) -> Dict:
+    def _update_form_stats(self, existing: Dict, new_data: Dict, total_count: int) -> Dict:
         """Update form statistics"""
         
-        updated = existing.copy()
+        updated = copy.deepcopy(existing)
         
         # Update radii
         if "corner_radii" in existing and new_data.get("radii"):
