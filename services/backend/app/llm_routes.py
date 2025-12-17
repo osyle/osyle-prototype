@@ -29,6 +29,15 @@ router = APIRouter(prefix="/api/llm", tags=["llm"])
 
 
 # ============================================================================
+# CONSTANTS
+# ============================================================================
+
+# Maximum number of inspiration images to include in LLM generation call
+# If project has more images, we take the last N (most recent)
+MAX_INSPIRATION_IMAGES_FOR_LLM = 5
+
+
+# ============================================================================
 # REQUEST MODELS
 # ============================================================================
 
@@ -506,23 +515,31 @@ async def generate_ui(
         inspiration_images = []
         inspiration_keys = project.get("inspiration_image_keys", [])
         if inspiration_keys:
-            print(f"Loading {len(inspiration_keys)} inspiration image(s)...")
+            # Limit to last N images (most recent)
+            limited_keys = inspiration_keys[-MAX_INSPIRATION_IMAGES_FOR_LLM:]
+            
+            if len(inspiration_keys) > MAX_INSPIRATION_IMAGES_FOR_LLM:
+                print(f"Project has {len(inspiration_keys)} images, using last {MAX_INSPIRATION_IMAGES_FOR_LLM}")
+            else:
+                print(f"Loading {len(limited_keys)} inspiration image(s)...")
+            
             inspiration_images = storage.get_inspiration_images(
                 user_id,
                 request.project_id,
-                inspiration_keys
+                limited_keys
             )
             print(f"✓ Loaded {len(inspiration_images)} inspiration image(s)")
+
         
         # Build message content with images if present
         if inspiration_images:
             # If images exist, use content array format
             message_content = [{"type": "text", "text": user_message}]
             
-            # Add separator text
+            # Add separator text with clear instructions
             message_content.append({
                 "type": "text",
-                "text": "\n\nInspiration Images (for visual reference):"
+                "text": "\n\n=== INSPIRATION IMAGES (CONTENT REFERENCE ONLY) ===\n\nThe following images are provided by the user to help you understand what UI components, layout, and content structure they want. Use these images ONLY for:\n- Understanding what components to include (buttons, cards, charts, forms, etc.)\n- Layout structure and information hierarchy\n- Content organization and placement\n\nIMPORTANT: Do NOT copy visual style, colors, typography, spacing, or design aesthetic from these images. ALL design decisions must come from the DTM/DTR provided above.\n\nInspiration images:"
             })
             
             # Add each inspiration image

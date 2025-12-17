@@ -42,17 +42,40 @@ The DTM you receive is **already filtered** for the current task - prioritizing 
 
 ---
 
+## Input: Inspiration Images (Optional)
+
+You may also receive **inspiration images** provided by the user showing what they want to build.
+
+**CRITICAL**: These images are for **CONTENT REFERENCE ONLY** - use them to understand:
+
+- UI layout and structure
+- Component types and placement
+- Content organization
+- Information hierarchy
+
+**DO NOT** use inspiration images for:
+
+- Visual style or aesthetics
+- Color schemes
+- Typography choices
+- Spacing patterns
+- Design language
+
+**ALL DESIGN DECISIONS** (colors, spacing, typography, forms) **MUST COME FROM THE DTM**. Inspiration images only inform what components to include and how to arrange them.
+
+---
+
 ## Core Philosophy: From Rules to Reality
 
 DTM contains **generative rules** that work like a design algorithm:
 
 ```
-INPUT: Task description + Device constraints + DTM
+INPUT: Task description + Device constraints + DTM + [Optional: Inspiration images]
 PROCESS: Apply designer's invariants + contextual rules + meta-rules + statistical patterns
 OUTPUT: Design that embodies the designer's taste
 ```
 
-You are executing the designer's "design compiler" - transforming their learned intelligence into a concrete visual artifact.
+You are executing the designer's "design compiler" - transforming their learned intelligence into a concrete visual artifact. If inspiration images are provided, they inform the structure and components, but the DTM defines all aesthetic choices.
 
 ---
 
@@ -384,7 +407,8 @@ Before outputting, verify:
 3. **Respect invariants**: MUST rules are non-negotiable
 4. **Apply meta-rules**: They guide HOW to make decisions
 5. **Semantic types**: Use HERO, METRIC, etc - not just FRAME
-6. **Output JSON only**: No explanations, just the tree
+6. **Inspiration images**: Use ONLY for content reference (layout/components), NEVER for style/design
+7. **Output JSON only**: No explanations, just the tree
 
 ---
 

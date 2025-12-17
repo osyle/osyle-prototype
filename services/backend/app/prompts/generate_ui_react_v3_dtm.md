@@ -35,6 +35,7 @@ You receive:
 2. **Task Description** - What the UI should accomplish (e.g., "dashboard showing user metrics")
 
 3. **Device Context**:
+
    ```typescript
    {
      width: number,      // Screen width in pixels
@@ -42,6 +43,25 @@ You receive:
      platform: "web" | "phone"
    }
    ```
+
+4. **Inspiration Images** (Optional) - Reference images provided by the user showing what they want to build
+
+   **CRITICAL**: These images are for **CONTENT REFERENCE ONLY** - use them to understand:
+
+   - UI layout and structure
+   - Component types and placement
+   - Content organization
+   - Information hierarchy
+
+   **DO NOT** use inspiration images for:
+
+   - Visual style or aesthetics
+   - Color schemes
+   - Typography choices
+   - Spacing patterns
+   - Design language
+
+   **ALL DESIGN DECISIONS** (colors, spacing, typography, forms) **MUST COME FROM THE DTM**. Inspiration images only inform what components to include and how to arrange them.
 
 ---
 
@@ -495,7 +515,8 @@ Before outputting, verify:
 5. **Apply contextual rules**: SHOULD rules for this specific context
 6. **Follow meta-rules**: HOW designer thinks guides your decisions
 7. **Platform matters**: Phone needs different treatment than web
-8. **Output code only**: No explanations, just the React component string
+8. **Inspiration images**: Use ONLY for content reference (layout/components), NEVER for style/design
+9. **Output code only**: No explanations, just the React component string
 
 ---
 
