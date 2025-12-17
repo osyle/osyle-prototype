@@ -1,5 +1,5 @@
-import { History, RotateCcw, Eye } from 'lucide-react'
-import React, { useState } from 'react'
+import { History, RotateCcw, Eye, Check } from 'lucide-react'
+import { useState } from 'react'
 
 interface VersionHistoryProps {
   currentVersion: number
@@ -111,7 +111,7 @@ export default function VersionHistory({
               </div>
 
               <div className="flex items-center gap-1">
-                {/* View button */}
+                {/* View button - always show unless already viewing */}
                 {!isViewing && (
                   <button
                     onClick={() => onVersionSelect(version)}
@@ -120,22 +120,42 @@ export default function VersionHistory({
                       backgroundColor: '#E0F2FE',
                       color: '#0369A1',
                     }}
-                    title="Preview this version"
+                    title={
+                      isCurrent
+                        ? 'View current version'
+                        : 'Preview this version'
+                    }
                   >
                     <Eye size={14} />
                   </button>
                 )}
 
-                {/* Viewing indicator */}
-                {isViewing && !isCurrent && (
-                  <div
-                    className="px-2 py-1 rounded text-xs font-medium"
-                    style={{
-                      backgroundColor: '#FEF3C7',
-                      color: '#92400E',
-                    }}
-                  >
-                    Viewing
+                {/* Viewing indicator with close button */}
+                {isViewing && (
+                  <div className="flex items-center gap-1">
+                    <div
+                      className="px-2 py-1 rounded text-xs font-medium flex items-center gap-1"
+                      style={{
+                        backgroundColor: '#FEF3C7',
+                        color: '#92400E',
+                      }}
+                    >
+                      <Check size={12} />
+                      Viewing
+                    </div>
+                    {!isCurrent && (
+                      <button
+                        onClick={() => onVersionSelect(currentVersion)}
+                        className="p-1.5 rounded transition-all hover:scale-105"
+                        style={{
+                          backgroundColor: '#E0F2FE',
+                          color: '#0369A1',
+                        }}
+                        title="Back to current version"
+                      >
+                        <Eye size={14} />
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -162,7 +182,8 @@ export default function VersionHistory({
 
       {/* Info text */}
       <p className="text-xs mt-3" style={{ color: '#929397' }}>
-        Reverting creates a new version as a copy of the selected version
+        Click <Eye size={12} className="inline" /> to preview versions.
+        Reverting creates a new version as a copy.
       </p>
     </div>
   )

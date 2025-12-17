@@ -13,10 +13,10 @@ import {
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AddInspirationModal from '../components/AddInspirationModal'
+import VersionHistory from '../components/VersionHistory'
 import { type UINode } from '../components/DeviceRenderer'
 import DeviceRenderer from '../components/DeviceRenderer'
 import InfiniteCanvas from '../components/InfiniteCanvas'
-import VersionHistory from '../components/VersionHistory'
 import { useDeviceContext } from '../hooks/useDeviceContext'
 import api from '../services/api'
 
@@ -115,7 +115,6 @@ export default function Editor() {
   useEffect(() => {
     checkAndStartGeneration()
     loadInspirationImages()
-    loadVersionInfo()
   }, [])
 
   const checkAndStartGeneration = async () => {
@@ -142,6 +141,9 @@ export default function Editor() {
         console.log('Loaded existing UI:', existingUIData)
         setGeneratedUI(existingUIData.ui as UINode)
         setGenerationStage('complete')
+
+        // Load version info when loading existing UI
+        await loadVersionInfo()
         return
       } catch (err) {
         console.log('No existing UI found, will generate new one:', err)
@@ -240,6 +242,7 @@ export default function Editor() {
       )
 
       setGeneratedUI(uiData.ui as UINode)
+      setCurrentUIVersion(uiData.version)
       setGenerationStage('complete')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error occurred')
@@ -290,10 +293,8 @@ export default function Editor() {
       )
 
       setGeneratedUI(uiData.ui as UINode)
+      setCurrentUIVersion(uiData.version)
       setGenerationStage('complete')
-
-      // Update version info
-      await loadVersionInfo()
     } catch (err) {
       console.error('Failed to add inspiration images:', err)
       setError(
