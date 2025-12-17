@@ -921,12 +921,29 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Continue button when resources are selected */}
-        {selectedResourceIds.length > 0 && (
-          <div className="mt-6 flex justify-end">
+        {/* Action buttons */}
+        <div className="mt-6 flex justify-end gap-3">
+          {/* Use Entire Taste button - always visible when taste is selected */}
+          <button
+            onClick={() => {
+              setSelectedResourceIds([]) // Clear any selected resources
+              setExpandedStage(3)
+            }}
+            className="px-6 py-2.5 rounded-lg font-medium text-sm transition-all hover:scale-105"
+            style={{
+              backgroundColor: '#10B981',
+              color: '#FFFFFF',
+              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+            }}
+          >
+            Use Entire Taste Profile
+          </button>
+
+          {/* Continue button when resources are selected */}
+          {selectedResourceIds.length > 0 && (
             <button
               onClick={() => setExpandedStage(3)}
-              className="px-6 py-2.5 rounded-full font-medium text-sm transition-all hover:scale-105"
+              className="px-6 py-2.5 rounded-lg font-medium text-sm transition-all hover:scale-105"
               style={{
                 backgroundColor: '#4A90E2',
                 color: '#FFFFFF',
@@ -935,8 +952,8 @@ export default function Home() {
             >
               Continue ({selectedResourceIds.length} selected)
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     )
   }, [selectedTaste, selectedResourceIds])
@@ -948,9 +965,8 @@ export default function Home() {
   // Stage 2 unlocks as soon as a taste is selected (so user can create/select resources)
   const canOpenStage2 = selectedTasteId !== null
 
-  // Stage 3 opens when resources are selected
-  const canOpenStage3 =
-    selectedTasteId !== null && selectedResourceIds.length > 0
+  // Stage 3 opens when a taste is selected (resources are optional)
+  const canOpenStage3 = selectedTasteId !== null
 
   const stages = [
     {
