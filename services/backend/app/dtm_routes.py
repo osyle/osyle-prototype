@@ -49,9 +49,9 @@ async def build_dtm(
     llm: LLMService = Depends(get_llm_service)
 ):
     """
-    Build DTM from all DTRs in a taste
+    Manually build DTM from all DTRs in a taste (force rebuild)
     
-    Triggered when: User adds 2nd+ resource to taste
+    Use this to rebuild DTM from scratch (e.g., after deleting and re-adding resources)
     """
     user_id = user["user_id"]
     
@@ -106,6 +106,7 @@ async def build_dtm(
     summary = builder.get_dtm_summary(dtm)
     
     return {
+        "status": "built",
         "message": "DTM built successfully",
         "taste_id": request.taste_id,
         "total_resources": len(dtrs),
@@ -121,79 +122,14 @@ async def update_dtm(
     llm: LLMService = Depends(get_llm_service)
 ):
     """
-    Incrementally update DTM with new DTR
+    Smart DTM update after DTR is built
     
-    Triggered when: User adds 3rd+ resource to taste
-    """
-    user_id = user["user_id"]
-    
-    # Check taste ownership
-    taste = db.get_taste(request.taste_id)
-    if not taste or taste.get("owner_id") != user_id:
-        raise HTTPException(status_code=404, detail="Taste not found")
-    
-    # Get existing DTM
-    try:
-        dtm = storage.get_taste_dtm(user_id, request.taste_id)
-    except:
-        # DTM doesn't exist yet - build from scratch
-        return await build_dtm(
-            BuildDTMRequest(taste_id=request.taste_id),
-            user,
-            llm
-        )
-    
-    # Get new DTR
-    try:
-        new_dtr = storage.get_resource_dtr(
-            user_id,
-            request.taste_id,
-            request.resource_id
-        )
-        if not new_dtr:
-            raise HTTPException(
-                status_code=400,
-                detail="DTR not found for this resource. Build DTR first."
-            )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to load DTR: {str(e)}")
-    
-    print(f"Updating DTM with new resource {request.resource_id}...")
-    
-    # Incremental update
-    updater = DTMIncrementalUpdater(llm if request.resynthesize else None)
-    updated_dtm = await updater.update_dtm(
-        existing_dtm=dtm,
-        new_dtr=new_dtr,
-        resynthesize_semantic=request.resynthesize
-    )
-    
-    # Save updated DTM
-    storage.put_taste_dtm(user_id, request.taste_id, updated_dtm)
-    
-    return {
-        "message": "DTM updated successfully",
-        "taste_id": request.taste_id,
-        "total_resources": updated_dtm["meta"]["total_resources"],
-        "confidence": updated_dtm["meta"]["overall_confidence"],
-        "incremental": not request.resynthesize
-    }
-
-
-@router.post("/update-dtm")
-async def update_dtm(
-    request: UpdateDTMRequest,
-    user: dict = Depends(get_current_user),
-    llm: LLMService = Depends(get_llm_service)
-):
-    """
-    Build or update DTM after DTR is created
+    Automatically called by frontend after each DTR learning completes.
     
     Logic:
-    - If no DTM exists → Build new DTM
-    - If DTM exists → Incrementally update DTM
-    
-    Triggered by: Frontend after DTR learning completes
+    - 0-1 resources: Returns { status: "skipped" } → FE doesn't show DTM modal
+    - 2 resources: Builds initial DTM { status: "built" } → FE shows training modal
+    - 3+ resources: Updates DTM incrementally { status: "updated" } → FE shows training modal
     """
     user_id = user["user_id"]
     
@@ -202,44 +138,127 @@ async def update_dtm(
     if not taste or taste.get("owner_id") != user_id:
         raise HTTPException(status_code=404, detail="Taste not found")
     
-    # Check if DTM exists
-    try:
-        dtm = storage.get_taste_dtm(user_id, request.taste_id)
-        dtm_exists = True
-    except:
-        dtm_exists = False
-    
-    # Count total resources with DTRs
+    # Count resources with DTRs
     resources = db.list_resources_for_taste(request.taste_id)
-    resources_with_dtr = [
-        r for r in resources 
-        if storage.resource_dtr_exists(user_id, request.taste_id, r["resource_id"])
-    ]
+    resources_with_dtr = []
+    
+    for resource in resources:
+        if storage.resource_dtr_exists(user_id, request.taste_id, resource["resource_id"]):
+            resources_with_dtr.append(resource)
     
     total_dtrs = len(resources_with_dtr)
     
-    print(f"Update DTM: {total_dtrs} DTRs, DTM exists: {dtm_exists}")
+    print(f"DTM Update: {total_dtrs} DTRs in taste {request.taste_id}")
     
-    # Decision logic
-    if not dtm_exists and total_dtrs >= 1:
-        # Build new DTM (first time or after deletion)
-        print("Building new DTM...")
-        return await build_dtm(
-            BuildDTMRequest(taste_id=request.taste_id),
-            user,
-            llm
-        )
-    elif dtm_exists:
-        # Incrementally update existing DTM
-        print(f"Updating existing DTM with resource {request.resource_id}...")
-        return await update_dtm(request, user, llm)
-    else:
-        # Edge case: No DTRs yet
+    # CASE 1: 0-1 resources → Skip (not enough to build DTM)
+    if total_dtrs < 2:
+        print("→ Only 1 DTR, skipping DTM (need 2+ for pattern detection)")
         return {
             "status": "skipped",
-            "reason": "No DTRs available to build DTM",
-            "total_dtrs": total_dtrs
+            "reason": "Need at least 2 resources to build DTM",
+            "total_dtrs": total_dtrs,
+            "message": "DTM will be built when you add a second design resource"
         }
+    
+    # CASE 2: Check if DTM exists
+    dtm_exists = storage.taste_dtm_exists(user_id, request.taste_id)
+    
+    # CASE 3: 2+ resources, no DTM → Build initial DTM
+    if not dtm_exists:
+        print(f"→ Building initial DTM with {total_dtrs} resources...")
+        
+        try:
+            # Load all DTRs
+            dtrs = []
+            for resource in resources_with_dtr:
+                dtr = storage.get_resource_dtr(
+                    user_id,
+                    request.taste_id,
+                    resource["resource_id"]
+                )
+                if dtr:
+                    dtrs.append(dtr)
+            
+            if not dtrs:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No DTRs could be loaded"
+                )
+            
+            # Build DTM
+            builder = DTMBuilder(llm)
+            dtm = await builder.build_dtm(
+                dtrs=dtrs,
+                taste_id=request.taste_id,
+                owner_id=user_id,
+                use_llm=True
+            )
+            
+            # Save DTM
+            storage.put_taste_dtm(user_id, request.taste_id, dtm)
+            
+            print(f"✓ Initial DTM built (confidence: {dtm['meta']['overall_confidence']:.2f})")
+            
+            return {
+                "status": "built",
+                "message": "DTM built successfully",
+                "taste_id": request.taste_id,
+                "total_resources": total_dtrs,
+                "confidence": dtm["meta"]["overall_confidence"]
+            }
+        
+        except Exception as e:
+            print(f"✗ DTM build failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to build DTM: {str(e)}")
+    
+    # CASE 4: DTM exists → Incremental update
+    else:
+        print(f"→ Updating DTM incrementally with resource {request.resource_id}...")
+        
+        try:
+            # Get existing DTM
+            dtm = storage.get_taste_dtm(user_id, request.taste_id)
+            
+            # Get new DTR
+            new_dtr = storage.get_resource_dtr(
+                user_id,
+                request.taste_id,
+                request.resource_id
+            )
+            
+            if not new_dtr:
+                raise HTTPException(
+                    status_code=400,
+                    detail="DTR not found for this resource"
+                )
+            
+            # Incremental update (code-only by default, fast)
+            updater = DTMIncrementalUpdater(llm if request.resynthesize else None)
+            updated_dtm = await updater.update_dtm(
+                existing_dtm=dtm,
+                new_dtr=new_dtr,
+                resynthesize_semantic=request.resynthesize
+            )
+            
+            # Save updated DTM
+            storage.put_taste_dtm(user_id, request.taste_id, updated_dtm)
+            
+            print(f"✓ DTM updated (confidence: {updated_dtm['meta']['overall_confidence']:.2f})")
+            
+            return {
+                "status": "updated",
+                "message": "DTM updated successfully",
+                "taste_id": request.taste_id,
+                "total_resources": updated_dtm["meta"]["total_resources"],
+                "confidence": updated_dtm["meta"]["overall_confidence"],
+                "incremental": not request.resynthesize
+            }
+        
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"✗ DTM update failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to update DTM: {str(e)}")
 
 
 @router.get("/{taste_id}")
@@ -269,7 +288,7 @@ async def get_dtm(
     except Exception as e:
         raise HTTPException(
             status_code=404,
-            detail="DTM not found. Build DTM first."
+            detail="DTM not found. Build DTM first by adding 2+ resources."
         )
     
     # Apply filters if requested

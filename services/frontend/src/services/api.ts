@@ -96,12 +96,12 @@ export interface BuildDTRResponse {
 }
 
 export interface UpdateDTMResponse {
-  message: string
-  taste_id: string
-  total_resources: number
-  confidence: number
+  status: 'skipped' | 'built' | 'updated'
+  message?: string
+  taste_id?: string
+  total_resources?: number
+  confidence?: number
   incremental?: boolean
-  status?: string
   reason?: string
   total_dtrs?: number
 }
@@ -713,7 +713,7 @@ export const dtmAPI = {
     tasteId: string,
     resourceId: string,
   ): Promise<UpdateDTMResponse> => {
-    return apiRequest<UpdateDTMResponse>('/api/dtm/update-dtm', {
+    return apiRequest<UpdateDTMResponse>('/api/dtm/update', {
       method: 'POST',
       body: JSON.stringify({
         taste_id: tasteId,

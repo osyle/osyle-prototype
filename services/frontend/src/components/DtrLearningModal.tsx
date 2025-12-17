@@ -130,8 +130,10 @@ const DtrLearningModal: React.FC<DtrLearningModalProps> = ({
               style={{ color: '#929397' }}
             >
               Analyzing{' '}
-              <span style={{ color: '#3B3B3B' }}>`${resourceName}`</span> to
-              extract design patterns and styles
+              <span style={{ color: '#3B3B3B' }}>
+                &quot;{resourceName}&quot;
+              </span>{' '}
+              to extract design patterns and styles
             </p>
 
             {/* Progress Bar */}
@@ -186,7 +188,9 @@ const DtrLearningModal: React.FC<DtrLearningModalProps> = ({
               style={{ color: '#929397' }}
             >
               Successfully learned design taste from{' '}
-              <span style={{ color: '#3B3B3B' }}>`${resourceName}`</span>
+              <span style={{ color: '#3B3B3B' }}>
+                &quot;{resourceName}&quot;
+              </span>
             </p>
 
             {/* Success Progress Bar */}

@@ -601,15 +601,28 @@ export default function Home() {
       const taste = tastes.find(t => t.taste_id === tasteId)
       const resourceCount = taste?.resources.length || 1
 
+      // Call update-dtm endpoint
+      console.log('Calling DTM update endpoint...')
+      const response = await api.dtm.updateDtm(tasteId, resourceId)
+
+      // Check if DTM training was skipped (only 1 resource)
+      if (response.status === 'skipped') {
+        console.log('DTM training skipped:', response.reason)
+        // Don't show DTM modal for first resource
+        return
+      }
+
+      // For 2+ resources, show DTM training modal
+      console.log(`DTM ${response.status}:`, response.message)
+
       // Open DTM training modal
       setDtmResourceCount(resourceCount)
       setDtmTrainingState('training')
       setDtmTrainingError(null)
       setIsDtmTrainingModalOpen(true)
 
-      // Call update-dtm endpoint
-      console.log('Updating DTM...')
-      await api.dtm.updateDtm(tasteId, resourceId)
+      // Simulate training progress (backend is already done)
+      await new Promise(resolve => setTimeout(resolve, 1500))
 
       // Success!
       setDtmTrainingState('success')
