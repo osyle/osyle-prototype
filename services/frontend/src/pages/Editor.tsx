@@ -13,10 +13,10 @@ import {
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AddInspirationModal from '../components/AddInspirationModal'
-import VersionHistory from '../components/VersionHistory'
 import { type UINode } from '../components/DeviceRenderer'
 import DeviceRenderer from '../components/DeviceRenderer'
 import InfiniteCanvas from '../components/InfiniteCanvas'
+import VersionHistory from '../components/VersionHistory'
 import { useDeviceContext } from '../hooks/useDeviceContext'
 import api from '../services/api'
 
