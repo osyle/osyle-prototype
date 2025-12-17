@@ -156,7 +156,7 @@ async def update_dtm(
         return {
             "status": "skipped",
             "reason": "Need at least 2 resources to build DTM",
-            "total_dtrs": total_dtrs,
+            "total_resources": total_dtrs,  # Consistent with built/updated
             "message": "DTM will be built when you add a second design resource"
         }
     

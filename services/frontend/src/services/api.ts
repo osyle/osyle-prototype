@@ -372,54 +372,48 @@ export const projectsAPI = {
   }): Promise<Project> => {
     const token = await getAuthToken()
 
-    // If inspiration images exist, use FormData
+    // Always use FormData (backend expects FormData)
+    const formData = new FormData()
+    formData.append('name', data.name)
+
+    if (data.task_description) {
+      formData.append('task_description', data.task_description)
+    }
+    if (data.selected_taste_id) {
+      formData.append('selected_taste_id', data.selected_taste_id)
+    }
+    if (data.selected_resource_ids) {
+      data.selected_resource_ids.forEach(id => {
+        formData.append('selected_resource_ids', id)
+      })
+    }
+    if (data.metadata) {
+      formData.append('metadata', JSON.stringify(data.metadata))
+    }
+
+    // Append inspiration images if provided
     if (data.inspiration_images && data.inspiration_images.length > 0) {
-      const formData = new FormData()
-      formData.append('name', data.name)
-
-      if (data.task_description) {
-        formData.append('task_description', data.task_description)
-      }
-      if (data.selected_taste_id) {
-        formData.append('selected_taste_id', data.selected_taste_id)
-      }
-      if (data.selected_resource_ids) {
-        data.selected_resource_ids.forEach(id => {
-          formData.append('selected_resource_ids', id)
-        })
-      }
-      if (data.metadata) {
-        formData.append('metadata', JSON.stringify(data.metadata))
-      }
-
-      // Append inspiration images
       data.inspiration_images.forEach(file => {
         formData.append('inspiration_images', file, file.name)
       })
-
-      const response = await fetch(`${API_BASE_URL}/api/projects/`, {
-        method: 'POST',
-        headers: {
-          Authorization: token ? `Bearer ${token}` : '',
-        },
-        body: formData,
-      })
-
-      if (!response.ok) {
-        const error = (await response.json().catch(() => ({
-          detail: 'Request failed',
-        }))) as { detail: string }
-        throw new Error(error.detail || `HTTP ${response.status}`)
-      }
-
-      return response.json() as Promise<Project>
     }
 
-    // No inspiration images - use JSON
-    return apiRequest<Project>('/api/projects/', {
+    const response = await fetch(`${API_BASE_URL}/api/projects/`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      headers: {
+        Authorization: token ? `Bearer ${token}` : '',
+      },
+      body: formData,
     })
+
+    if (!response.ok) {
+      const error = (await response.json().catch(() => ({
+        detail: 'Request failed',
+      }))) as { detail: string }
+      throw new Error(error.detail || `HTTP ${response.status}`)
+    }
+
+    return response.json() as Promise<Project>
   },
 
   /**

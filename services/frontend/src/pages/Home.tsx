@@ -119,7 +119,6 @@ export default function Home() {
   const [pendingResourceData, setPendingResourceData] = useState<{
     tasteId: string
     resourceId: string
-    resourceCount: number
   } | null>(null)
 
   // DTM Training state
@@ -545,20 +544,12 @@ export default function Home() {
 
       // Calculate resource count from updated tastes, not state
 
-      const currentTaste = updatedTastes.find(
-        t => t.taste_id === selectedTasteId,
-      )
-
-      const resourceCount = currentTaste?.resources.length || 1
-
       // Start DTR learning process
-
       setDtrLearningResourceName(resourceName)
 
       setPendingResourceData({
         tasteId: selectedTasteId,
         resourceId: resource.resource_id,
-        resourceCount,
       })
 
       setDtrLearningState('learning')
@@ -567,9 +558,8 @@ export default function Home() {
 
       setIsDtrLearningModalOpen(true)
 
-      // Trigger DTR learning with resource count
-
-      buildDtrForResource(selectedTasteId, resource.resource_id, resourceCount)
+      // Trigger DTR learning (backend will decide if DTM is needed)
+      buildDtrForResource(selectedTasteId, resource.resource_id)
     } catch (err) {
       console.error('Failed to create resource:', err)
 
@@ -583,11 +573,7 @@ export default function Home() {
   // DTR LEARNING HANDLERS
   // ============================================================================
 
-  const buildDtrForResource = async (
-    tasteId: string,
-    resourceId: string,
-    resourceCount: number,
-  ) => {
+  const buildDtrForResource = async (tasteId: string, resourceId: string) => {
     try {
       // Check if DTR already exists
       const dtrCheck = await api.llm.checkDtrExists(resourceId, tasteId)
@@ -608,8 +594,8 @@ export default function Home() {
       // Wait a moment for user to see success
       await new Promise(resolve => setTimeout(resolve, 1500))
 
-      // Phase 2: Start DTM training
-      await trainDtmAfterDtr(tasteId, resourceId, resourceCount)
+      // Phase 2: Try DTM training (backend decides if needed)
+      await trainDtmAfterDtr(tasteId, resourceId)
     } catch (err) {
       console.error('Failed to build DTR:', err)
       setDtrLearningState('error')
@@ -619,21 +605,20 @@ export default function Home() {
     }
   }
 
-  const trainDtmAfterDtr = async (
-    tasteId: string,
-    resourceId: string,
-    resourceCount: number,
-  ) => {
+  const trainDtmAfterDtr = async (tasteId: string, resourceId: string) => {
     try {
       // Close DTR modal
       setIsDtrLearningModalOpen(false)
 
-      // Use the passed resourceCount instead of looking it up
-      console.log(`Training DTM with ${resourceCount} resources`)
-
       // Call update-dtm endpoint
       console.log('Calling DTM update endpoint...')
       const response = await api.dtm.updateDtm(tasteId, resourceId)
+
+      console.log('DTM update response:', {
+        status: response.status,
+        total_resources: response.total_resources,
+        message: response.message,
+      })
 
       // Check if DTM training was skipped (only 1 resource)
       if (response.status === 'skipped') {
@@ -643,10 +628,12 @@ export default function Home() {
       }
 
       // For 2+ resources, show DTM training modal
-      console.log(`DTM ${response.status}:`, response.message)
+      console.log(
+        `DTM ${response.status}: Showing training modal for ${response.total_resources} resources`,
+      )
 
-      // Open DTM training modal
-      setDtmResourceCount(resourceCount)
+      // Open DTM training modal - use backend's count
+      setDtmResourceCount(response.total_resources ?? 0)
       setDtmTrainingState('training')
       setDtmTrainingError(null)
       setIsDtmTrainingModalOpen(true)
@@ -675,7 +662,6 @@ export default function Home() {
     await buildDtrForResource(
       pendingResourceData.tasteId,
       pendingResourceData.resourceId,
-      pendingResourceData.resourceCount,
     )
   }
 
@@ -694,7 +680,6 @@ export default function Home() {
     await trainDtmAfterDtr(
       pendingResourceData.tasteId,
       pendingResourceData.resourceId,
-      pendingResourceData.resourceCount,
     )
   }
 
