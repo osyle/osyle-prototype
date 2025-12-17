@@ -656,6 +656,30 @@ export const llmAPI = {
   },
 
   /**
+   * Revert to a previous UI version
+   */
+  revertToVersion: async (
+    projectId: string,
+    version: number,
+  ): Promise<{
+    status: string
+    message: string
+    old_version: number
+    new_version: number
+    ui: unknown
+  }> => {
+    return apiRequest<{
+      status: string
+      message: string
+      old_version: number
+      new_version: number
+      ui: unknown
+    }>(`/api/llm/ui/revert?project_id=${projectId}&version=${version}`, {
+      method: 'POST',
+    })
+  },
+
+  /**
    * Get a random test UI (for testing)
    */
   getTestUI: async (): Promise<

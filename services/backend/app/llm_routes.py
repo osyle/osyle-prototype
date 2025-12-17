@@ -706,6 +706,78 @@ async def get_ui_versions(
 
 
 # ============================================================================
+# REVERT TO UI VERSION ENDPOINT
+# ============================================================================
+
+@router.post("/ui/revert")
+async def revert_to_version(
+    project_id: str,
+    version: int,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Revert to a previous UI version by making it the new current version
+    Creates a new version that is a copy of the specified old version
+    """
+    user_id = user.get("user_id")
+    
+    try:
+        project = db.get_project(project_id)
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        if project.get("owner_id") != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        current_version = project.get("metadata", {}).get("ui_version", 0)
+        
+        # Validate version exists
+        if version < 1 or version > current_version:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid version {version}. Valid range: 1-{current_version}"
+            )
+        
+        # Get the old version UI
+        old_ui = storage.get_project_ui(user_id, project_id, version=version)
+        
+        if not old_ui:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Version {version} not found"
+            )
+        
+        # Create new version as copy of old version
+        new_version = current_version + 1
+        storage.put_project_ui(user_id, project_id, old_ui, version=new_version)
+        
+        # Update project metadata
+        updated_metadata = project.get("metadata", {})
+        updated_metadata["ui_version"] = new_version
+        db.update_project(
+            project_id=project_id,
+            metadata=updated_metadata
+        )
+        
+        return {
+            "status": "success",
+            "message": f"Reverted to version {version}",
+            "old_version": version,
+            "new_version": new_version,
+            "ui": old_ui
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to revert version: {str(e)}"
+        )
+
+
+# ============================================================================
 # GET RANDOM UI ENDPOINT
 # ============================================================================
 

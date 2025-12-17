@@ -16,6 +16,7 @@ import AddInspirationModal from '../components/AddInspirationModal'
 import { type UINode } from '../components/DeviceRenderer'
 import DeviceRenderer from '../components/DeviceRenderer'
 import InfiniteCanvas from '../components/InfiniteCanvas'
+import VersionHistory from '../components/VersionHistory'
 import { useDeviceContext } from '../hooks/useDeviceContext'
 import api from '../services/api'
 
@@ -54,6 +55,11 @@ export default function Editor() {
   const [isAddInspirationModalOpen, setIsAddInspirationModalOpen] =
     useState(false)
   const [isAddingInspiration, setIsAddingInspiration] = useState(false)
+
+  // Version history state
+  const [currentUIVersion, setCurrentUIVersion] = useState<number>(1)
+  const [viewingVersion, setViewingVersion] = useState<number | null>(null)
+  const [isReverting, setIsReverting] = useState(false)
 
   const tabs = ['Concept', 'Prototype', 'Video pitch', 'Presentation']
 
@@ -109,6 +115,7 @@ export default function Editor() {
   useEffect(() => {
     checkAndStartGeneration()
     loadInspirationImages()
+    loadVersionInfo()
   }, [])
 
   const checkAndStartGeneration = async () => {
@@ -146,6 +153,67 @@ export default function Editor() {
       console.error('Error checking for existing UI:', err)
       setError(err instanceof Error ? err.message : 'Unknown error occurred')
       setGenerationStage('error')
+    }
+  }
+
+  const loadVersionInfo = async () => {
+    try {
+      const currentProject = localStorage.getItem('current_project')
+      if (!currentProject) return
+
+      const project = JSON.parse(currentProject)
+      const versionData = await api.llm.getUIVersions(project.project_id)
+      setCurrentUIVersion(versionData.current_version)
+    } catch (err) {
+      console.error('Failed to load version info:', err)
+    }
+  }
+
+  const handleVersionSelect = async (version: number) => {
+    try {
+      const currentProject = localStorage.getItem('current_project')
+      if (!currentProject) return
+
+      const project = JSON.parse(currentProject)
+      const versionData = await api.llm.getUI(project.project_id, version)
+
+      setGeneratedUI(versionData.ui as UINode)
+      setViewingVersion(version)
+    } catch (err) {
+      console.error('Failed to load version:', err)
+      alert(err instanceof Error ? err.message : 'Failed to load version')
+    }
+  }
+
+  const handleRevertVersion = async (version: number) => {
+    if (
+      !confirm(
+        `Revert to version ${version}? This will create a new version as a copy.`,
+      )
+    ) {
+      return
+    }
+
+    try {
+      setIsReverting(true)
+      const currentProject = localStorage.getItem('current_project')
+      if (!currentProject) return
+
+      const project = JSON.parse(currentProject)
+      const result = await api.llm.revertToVersion(project.project_id, version)
+
+      setGeneratedUI(result.ui as UINode)
+      setCurrentUIVersion(result.new_version)
+      setViewingVersion(null)
+
+      alert(
+        `Successfully reverted to version ${version}. Now viewing version ${result.new_version}.`,
+      )
+    } catch (err) {
+      console.error('Failed to revert version:', err)
+      alert(err instanceof Error ? err.message : 'Failed to revert version')
+    } finally {
+      setIsReverting(false)
     }
   }
 
@@ -199,15 +267,41 @@ export default function Editor() {
       if (!currentProject) return
 
       const project = JSON.parse(currentProject)
+
+      // Add new inspiration images to project
       await api.projects.addInspirationImages(project.project_id, files)
 
-      // Reload inspiration images
+      // Reload inspiration images to show in UI
       await loadInspirationImages()
 
+      // Close modal
       setIsAddInspirationModalOpen(false)
+
+      // Regenerate UI with updated inspiration images
+      setGenerationStage('generating')
+      setError(null)
+      setViewingVersion(null)
+
+      const uiData = await api.llm.generateUI(
+        project.project_id,
+        project.task_description,
+        device_info,
+        rendering_mode,
+      )
+
+      setGeneratedUI(uiData.ui as UINode)
+      setGenerationStage('complete')
+
+      // Update version info
+      await loadVersionInfo()
     } catch (err) {
       console.error('Failed to add inspiration images:', err)
-      alert(err instanceof Error ? err.message : 'Failed to add images')
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to add images and regenerate UI',
+      )
+      setGenerationStage('error')
     } finally {
       setIsAddingInspiration(false)
     }
@@ -373,6 +467,19 @@ export default function Editor() {
         >
           <Plus size={24} style={{ color: '#929397' }} />
         </button>
+
+        {/* Version History */}
+        {generationStage === 'complete' && currentUIVersion > 0 && (
+          <div className="mt-4">
+            <VersionHistory
+              currentVersion={currentUIVersion}
+              onVersionSelect={handleVersionSelect}
+              onRevert={handleRevertVersion}
+              isReverting={isReverting}
+              viewingVersion={viewingVersion}
+            />
+          </div>
+        )}
       </div>
 
       {/* Tab Navigation - Fixed top center (responsive to right panel) */}
