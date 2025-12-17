@@ -575,7 +575,7 @@ async def generate_ui(
         
         # Save UI to storage
         current_version = project.get("metadata", {}).get("ui_version", 0)
-        new_version = current_version + 1
+        new_version = int(current_version) + 1
         
         storage.put_project_ui(
             user_id,
@@ -688,12 +688,12 @@ async def get_ui_versions(
         if project.get("owner_id") != user_id:
             raise HTTPException(status_code=403, detail="Access denied")
         
-        current_version = project.get("metadata", {}).get("ui_version", 0)
+        current_version = int(project.get("metadata", {}).get("ui_version", 0))
         
         return {
             "status": "success",
             "current_version": current_version,
-            "versions": list(range(1, current_version + 1))
+            "versions": list(range(1, int(current_version) + 1))
         }
         
     except HTTPException:
@@ -730,7 +730,7 @@ async def revert_to_version(
         if project.get("owner_id") != user_id:
             raise HTTPException(status_code=403, detail="Access denied")
         
-        current_version = project.get("metadata", {}).get("ui_version", 0)
+        current_version = int(project.get("metadata", {}).get("ui_version", 0))
         
         # Validate version exists
         if version < 1 or version > current_version:
@@ -749,7 +749,10 @@ async def revert_to_version(
             )
         
         # Create new version as copy of old version
-        new_version = current_version + 1
+
+        # Convert Decimal to int (DynamoDB returns Decimal for numbers)
+        new_version = int(current_version) + 1
+
         storage.put_project_ui(user_id, project_id, old_ui, version=new_version)
         
         # Update project metadata

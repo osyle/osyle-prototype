@@ -5,10 +5,33 @@ Provides CRUD functions for Users, Tastes, Resources, and Projects
 import os
 import boto3
 import uuid
+from decimal import Decimal
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from boto3.dynamodb.conditions import Key, Attr
 from botocore.exceptions import ClientError
+
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def convert_decimals(obj):
+    """
+    Recursively convert DynamoDB Decimal objects to int/float for JSON serialization
+    """
+    if isinstance(obj, list):
+        return [convert_decimals(item) for item in obj]
+    elif isinstance(obj, dict):
+        return {key: convert_decimals(value) for key, value in obj.items()}
+    elif isinstance(obj, Decimal):
+        # Convert to int if it's a whole number, otherwise float
+        if obj % 1 == 0:
+            return int(obj)
+        else:
+            return float(obj)
+    else:
+        return obj
 
 
 # ============================================================================
@@ -326,7 +349,8 @@ def get_project(project_id: str) -> Optional[Dict[str, Any]]:
     """Get project by ID"""
     try:
         response = projects_table.get_item(Key={"project_id": project_id})
-        return response.get("Item")
+        item = response.get("Item")
+        return convert_decimals(item) if item else None
     except ClientError:
         return None
 
@@ -338,7 +362,8 @@ def list_projects_for_owner(owner_id: str) -> List[Dict[str, Any]]:
             IndexName="owner_id-index",
             KeyConditionExpression=Key('owner_id').eq(owner_id)
         )
-        return response.get("Items", [])
+        items = response.get("Items", [])
+        return [convert_decimals(item) for item in items]
     except ClientError as e:
         print(f"Error querying projects: {e}")
         return []
