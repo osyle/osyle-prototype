@@ -60,6 +60,8 @@ export interface Project {
   selected_resource_ids: string[]
   inspiration_image_keys?: string[] // S3 keys
   inspiration_image_urls?: string[] // Presigned URLs (when requested)
+  device_info?: DeviceInfo // Device settings when project was created
+  rendering_mode?: 'react' | 'design-ml' // Rendering mode when project was created
   outputs: string[]
   metadata: Record<string, unknown>
   created_at: string
@@ -368,6 +370,8 @@ export const projectsAPI = {
     selected_taste_id?: string
     selected_resource_ids?: string[]
     inspiration_images?: File[]
+    device_info?: DeviceInfo
+    rendering_mode?: 'react' | 'design-ml'
     metadata?: Record<string, unknown>
   }): Promise<Project> => {
     const token = await getAuthToken()
@@ -386,6 +390,12 @@ export const projectsAPI = {
       data.selected_resource_ids.forEach(id => {
         formData.append('selected_resource_ids', id)
       })
+    }
+    if (data.device_info) {
+      formData.append('device_info', JSON.stringify(data.device_info))
+    }
+    if (data.rendering_mode) {
+      formData.append('rendering_mode', data.rendering_mode)
     }
     if (data.metadata) {
       formData.append('metadata', JSON.stringify(data.metadata))

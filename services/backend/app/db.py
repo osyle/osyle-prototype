@@ -319,6 +319,8 @@ def create_project(
     selected_taste_id: str = None,
     selected_resource_ids: List[str] = None,
     inspiration_image_keys: List[str] = None,  # S3 keys for inspiration images
+    device_info: dict = None,  # Device settings when project was created
+    rendering_mode: str = None,  # 'react' or 'design-ml'
     metadata: dict = None,
     project_id: str = None  # Optional: pass explicit ID for S3 consistency
 ) -> Dict[str, Any]:
@@ -335,6 +337,8 @@ def create_project(
         "selected_taste_id": selected_taste_id or "",
         "selected_resource_ids": selected_resource_ids or [],
         "inspiration_image_keys": inspiration_image_keys or [],  # S3 keys
+        "device_info": device_info or {},  # Store device settings
+        "rendering_mode": rendering_mode or "react",  # Store rendering mode
         "outputs": [],
         "metadata": metadata or {},
         "created_at": now,

@@ -31,6 +31,7 @@ import ProjectCardPreview from '../components/ProjectCardPreview'
 import StyleCard from '../components/StyleCard'
 import TasteCard from '../components/TasteCard'
 
+import { useDeviceContext } from '../hooks/useDeviceContext'
 import api from '../services/api'
 
 // Type imports
@@ -51,6 +52,8 @@ export default function Home() {
   // ============================================================================
 
   const navigate = useNavigate()
+  const { device_info, rendering_mode, setDeviceInfo, setRenderingMode } =
+    useDeviceContext()
 
   // ============================================================================
   // STATE MANAGEMENT
@@ -367,11 +370,33 @@ export default function Home() {
       } catch (err) {
         console.error('Failed to load active project:', err)
       }
+
+      // Restore device settings when returning from Editor (BEFORE clearing flag)
+      const savedSettings = localStorage.getItem('home_device_settings')
+      if (savedSettings) {
+        try {
+          const {
+            device_info: savedDeviceInfo,
+            rendering_mode: savedRenderingMode,
+          } = JSON.parse(savedSettings)
+          // Restore the device settings
+          if (savedDeviceInfo) {
+            setDeviceInfo(savedDeviceInfo)
+          }
+          if (savedRenderingMode) {
+            setRenderingMode(savedRenderingMode)
+          }
+          // Clean up the saved settings
+          localStorage.removeItem('home_device_settings')
+        } catch (err) {
+          console.error('Failed to restore device settings:', err)
+        }
+      }
     }
 
     // Clear the came_from_editor flag after checking
     sessionStorage.removeItem('came_from_editor')
-  }, [])
+  }, [setDeviceInfo, setRenderingMode])
 
   // ============================================================================
   // EVENT HANDLERS
@@ -695,13 +720,15 @@ export default function Home() {
     try {
       setIsCreatingProject(true)
 
-      // Create project with array of resource IDs
+      // Create project with array of resource IDs and device settings
       const project = await api.projects.create({
         name: projectName,
         task_description: ideaText,
         selected_taste_id: selectedTasteId,
         selected_resource_ids: selectedResourceIds,
         inspiration_images: inspirationImages,
+        device_info: device_info, // Save current device settings
+        rendering_mode: rendering_mode, // Save current rendering mode
         metadata: {},
       })
 
@@ -714,6 +741,8 @@ export default function Home() {
           task_description: project.task_description,
           selected_taste_id: project.selected_taste_id,
           selected_resource_ids: project.selected_resource_ids,
+          device_info: project.device_info,
+          rendering_mode: project.rendering_mode,
         }),
       )
 
@@ -749,7 +778,16 @@ export default function Home() {
       // Fetch full project details from API to get taste and resource IDs
       const projectDetails = await api.projects.get(project.project_id)
 
-      // Save project info to localStorage for Editor
+      // Save current device settings so we can restore them when user returns to Home
+      localStorage.setItem(
+        'home_device_settings',
+        JSON.stringify({
+          device_info: device_info,
+          rendering_mode: rendering_mode,
+        }),
+      )
+
+      // Save project info to localStorage for Editor (including project's device settings)
       localStorage.setItem(
         'current_project',
         JSON.stringify({
@@ -758,6 +796,8 @@ export default function Home() {
           task_description: projectDetails.task_description,
           selected_taste_id: projectDetails.selected_taste_id,
           selected_resource_ids: projectDetails.selected_resource_ids,
+          device_info: projectDetails.device_info,
+          rendering_mode: projectDetails.rendering_mode,
         }),
       )
 

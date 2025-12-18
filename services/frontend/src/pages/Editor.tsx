@@ -25,7 +25,8 @@ type GenerationStage = 'idle' | 'generating' | 'complete' | 'error'
 export default function Editor() {
   const navigate = useNavigate()
 
-  const { device_info, rendering_mode } = useDeviceContext()
+  const { device_info, rendering_mode, setDeviceInfo, setRenderingMode } =
+    useDeviceContext()
 
   const [activeTab, setActiveTab] = useState('Concept')
   const [detailsValue, setDetailsValue] = useState(66)
@@ -127,6 +128,14 @@ export default function Editor() {
       }
 
       const project = JSON.parse(currentProject)
+
+      // Apply project's device settings if they exist
+      if (project.device_info) {
+        setDeviceInfo(project.device_info)
+      }
+      if (project.rendering_mode) {
+        setRenderingMode(project.rendering_mode)
+      }
 
       if (!project.selected_taste_id) {
         setError('Project missing taste selection')

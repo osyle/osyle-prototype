@@ -110,6 +110,18 @@ class ResourceUpdate(BaseModel):
 # PROJECT MODELS
 # ============================================================================
 
+class DeviceScreen(BaseModel):
+    """Device screen dimensions"""
+    width: int
+    height: int
+
+
+class DeviceInfo(BaseModel):
+    """Device information"""
+    platform: str  # 'web' or 'phone'
+    screen: DeviceScreen
+
+
 class ProjectCreate(BaseModel):
     """Request to create a new project"""
     name: str
@@ -117,6 +129,8 @@ class ProjectCreate(BaseModel):
     selected_taste_id: Optional[str] = None
     selected_resource_ids: Optional[List[str]] = []
     inspiration_image_keys: Optional[List[str]] = []  # S3 keys for inspiration images
+    device_info: Optional[DeviceInfo] = None  # Device settings when project was created
+    rendering_mode: Optional[str] = None  # 'react' or 'design-ml'
     metadata: Optional[dict] = {}
 
 
@@ -129,6 +143,8 @@ class ProjectOut(BaseModel):
     selected_taste_id: Optional[str] = None
     selected_resource_ids: List[str] = []
     inspiration_image_keys: List[str] = []  # S3 keys for inspiration images
+    device_info: Optional[dict] = None  # Device settings when project was created
+    rendering_mode: Optional[str] = None  # 'react' or 'design-ml'
     outputs: List[str] = []  # List of S3 keys
     metadata: dict
     created_at: str
@@ -140,7 +156,7 @@ class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     task_description: Optional[str] = None
     selected_taste_id: Optional[str] = None
-    selected_resource_ids: Optional[List[str]] = None  # ✅ CHANGED: Now a list
+    selected_resource_ids: Optional[List[str]] = None
     metadata: Optional[dict] = None
 
 

@@ -29,6 +29,8 @@ async def create_project(
     selected_taste_id: Optional[str] = Form(None),
     selected_resource_ids: Optional[List[str]] = Form(None),
     inspiration_images: List[UploadFile] = File(default=[]),
+    device_info: Optional[str] = Form(None),  # JSON string of device settings
+    rendering_mode: Optional[str] = Form(None),  # 'react' or 'design-ml'
     metadata: Optional[str] = Form(None),
     user: dict = Depends(get_current_user)
 ):
@@ -40,6 +42,8 @@ async def create_project(
     - **selected_taste_id**: Optional ID of selected taste
     - **selected_resource_ids**: Optional list of resource IDs (must all belong to selected_taste)
     - **inspiration_images**: Optional list of image files for visual inspiration (max 5)
+    - **device_info**: Optional JSON string of device settings (platform, screen dimensions)
+    - **rendering_mode**: Optional rendering mode ('react' or 'design-ml')
     - **metadata**: Optional JSON metadata
     """
     # Ensure user exists in database
@@ -52,6 +56,9 @@ async def create_project(
     
     # Parse metadata if provided
     metadata_dict = json.loads(metadata) if metadata else {}
+    
+    # Parse device_info if provided
+    device_info_dict = json.loads(device_info) if device_info else None
     
     # Parse selected_resource_ids if it's a string
     resource_ids = selected_resource_ids or []
@@ -146,6 +153,8 @@ async def create_project(
         selected_taste_id=selected_taste_id,
         selected_resource_ids=resource_ids,
         inspiration_image_keys=inspiration_keys,
+        device_info=device_info_dict,
+        rendering_mode=rendering_mode,
         metadata=metadata_dict,
         project_id=project_id
     )
