@@ -1,5 +1,9 @@
 import { Search, Loader2, Image, Layers, GitBranch } from 'lucide-react'
 import { useState } from 'react'
+import api, {
+  type MobbinFlowTreeHierarchy,
+  type MobbinNodeScreen,
+} from '../services/api'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -94,6 +98,11 @@ export default function MobbinExplorer() {
   const [uiElements, setUIElements] = useState<UIElement[]>([])
   const [flows, setFlows] = useState<Flow[]>([])
   const [selectedFlow, setSelectedFlow] = useState<FlowDetails | null>(null)
+
+  // Flow tree data
+  const [flowTree, setFlowTree] = useState<MobbinFlowTreeHierarchy | null>(null)
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [nodeScreens, setNodeScreens] = useState<MobbinNodeScreen[]>([])
 
   // Loading states
   const [loadingContent, setLoadingContent] = useState(false)
@@ -210,6 +219,7 @@ export default function MobbinExplorer() {
     setError('')
 
     try {
+      // Load both flow list and flow tree
       const url = new URL(`${API_BASE_URL}/api/mobbin/apps/${app.id}/flows`)
       if (app.version_id) {
         url.searchParams.append('version_id', app.version_id)
@@ -227,12 +237,59 @@ export default function MobbinExplorer() {
 
       const data = await response.json()
       setFlows(data.flows || [])
+
+      // Also load flow tree
+      if (app.version_id) {
+        loadFlowTree(app)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load flows')
       console.error('Load flows error:', err)
     } finally {
       setLoadingContent(false)
     }
+  }
+
+  const loadFlowTree = async (app: AppSearchResult) => {
+    if (!app.version_id) return
+
+    try {
+      const tree = await api.mobbin.getFlowTree(app.id, app.version_id)
+      setFlowTree(tree)
+
+      // Auto-select first node
+      if (tree.nodes.length > 0) {
+        const firstNode = tree.nodes[0]
+        setSelectedNodeId(firstNode.id)
+        loadNodeScreens(app, firstNode.id)
+      }
+    } catch (err) {
+      console.error('Load flow tree error:', err)
+    }
+  }
+
+  const loadNodeScreens = async (app: AppSearchResult, nodeId: string) => {
+    if (!app.version_id) return
+
+    setLoadingContent(true)
+    try {
+      const data = await api.mobbin.getFlowNodeScreens(
+        app.id,
+        nodeId,
+        app.version_id,
+      )
+      setNodeScreens(data.screens || [])
+    } catch (err) {
+      console.error('Load node screens error:', err)
+      setNodeScreens([])
+    } finally {
+      setLoadingContent(false)
+    }
+  }
+
+  const handleNodeSelect = (app: AppSearchResult, nodeId: string) => {
+    setSelectedNodeId(nodeId)
+    loadNodeScreens(app, nodeId)
   }
 
   const loadFlowDetails = async (app: AppSearchResult, flowId: string) => {
@@ -573,9 +630,115 @@ export default function MobbinExplorer() {
                 </div>
               )}
 
-            {/* Flows Grid */}
+            {/* Flows - Tree View */}
+            {!loadingContent && contentType === 'flows' && flowTree && (
+              <div className="flex h-[calc(100vh-300px)]">
+                {/* Left: Flow Tree */}
+                <div className="w-80 border-r border-gray-200 overflow-y-auto flex-shrink-0">
+                  <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 font-semibold text-gray-700">
+                    Flow Tree
+                  </div>
+                  <ul className="flex flex-col">
+                    {flowTree.nodes.map(node => (
+                      <li
+                        key={node.id}
+                        onClick={() => handleNodeSelect(selectedApp!, node.id)}
+                        className={`
+                          flex h-9 items-center gap-2 px-3 cursor-pointer transition-colors
+                          hover:bg-gray-100
+                          ${
+                            selectedNodeId === node.id
+                              ? 'bg-blue-50 text-blue-600 font-semibold'
+                              : 'text-gray-700'
+                          }
+                        `}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        {/* Branch lines for hierarchy */}
+                        <div className="flex items-stretch gap-0 self-stretch">
+                          {Array.from({ length: node.depth }, (_, i) => (
+                            <div
+                              key={i}
+                              className="flex h-full w-3 items-center border-l border-gray-300"
+                            >
+                              {i === node.depth - 1 && (
+                                <div className="w-full border-b border-gray-300"></div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Title */}
+                        <span className="flex-1 truncate text-sm">
+                          {node.title}
+                        </span>
+
+                        {/* Screen count */}
+                        <span
+                          className={`text-xs px-1.5 py-0.5 rounded ${
+                            selectedNodeId === node.id
+                              ? 'text-blue-600'
+                              : 'text-gray-500'
+                          }`}
+                        >
+                          {node.screen_count}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Right: Node Screens */}
+                <div className="flex-1 overflow-y-auto p-6">
+                  {nodeScreens.length > 0 ? (
+                    <>
+                      <div className="mb-4 text-sm text-gray-600">
+                        {nodeScreens.length}{' '}
+                        {nodeScreens.length === 1 ? 'screen' : 'screens'}
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        {nodeScreens.map(screen => (
+                          <div
+                            key={screen.id}
+                            className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
+                          >
+                            <img
+                              src={screen.thumbnail_url || screen.image_url}
+                              alt={
+                                screen.label || `Screen ${screen.screen_number}`
+                              }
+                              className="w-full h-auto object-cover"
+                            />
+                            {screen.label && (
+                              <div className="p-2">
+                                <p className="text-xs text-gray-600 truncate">
+                                  {screen.label}
+                                </p>
+                              </div>
+                            )}
+                            <div className="px-2 pb-2 text-xs text-gray-500">
+                              Screen {screen.screen_number}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-center h-96">
+                      <p className="text-gray-500">
+                        Select a flow to see screens
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Flows - Old Grid View (kept as fallback) */}
             {!loadingContent &&
               contentType === 'flows' &&
+              !flowTree &&
               flows.length > 0 &&
               !selectedFlow && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">

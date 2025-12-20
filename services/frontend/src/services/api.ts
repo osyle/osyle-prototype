@@ -861,6 +861,32 @@ export interface MobbinFlowDetails {
   metadata: Record<string, unknown>
 }
 
+export interface MobbinFlowTreeHierarchyNode {
+  id: string
+  title: string
+  screen_count: number
+  depth: number
+  has_children: boolean
+  is_selected: boolean
+  order: number
+}
+
+export interface MobbinFlowTreeHierarchy {
+  app_id: string
+  version_id: string
+  nodes: MobbinFlowTreeHierarchyNode[]
+  total: number
+}
+
+export interface MobbinNodeScreen {
+  id: string
+  screen_number: number
+  image_url: string
+  thumbnail_url: string
+  label: string | null
+  dimensions?: { width: number; height: number }
+}
+
 // ============================================================================
 // MOBBIN API
 // ============================================================================
@@ -974,6 +1000,50 @@ export const mobbinAPI = {
 
     return apiRequest<MobbinFlowDetails>(
       `/api/mobbin/apps/${appId}/flows/${flowId}?${params.toString()}`,
+    )
+  },
+
+  /**
+   * Get flow tree hierarchy for an app
+   */
+  getFlowTree: async (
+    appId: string,
+    versionId?: string,
+  ): Promise<MobbinFlowTreeHierarchy> => {
+    const params = new URLSearchParams()
+    if (versionId) params.append('version_id', versionId)
+
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return apiRequest<MobbinFlowTreeHierarchy>(
+      `/api/mobbin/apps/${appId}/flows/tree${query}`,
+    )
+  },
+
+  /**
+   * Get screens for a specific flow tree node
+   */
+  getFlowNodeScreens: async (
+    appId: string,
+    nodeId: string,
+    versionId: string,
+  ): Promise<{
+    app_id: string
+    version_id: string
+    node_id: string
+    screens: MobbinNodeScreen[]
+    total: number
+  }> => {
+    const params = new URLSearchParams()
+    params.append('version_id', versionId)
+
+    return apiRequest<{
+      app_id: string
+      version_id: string
+      node_id: string
+      screens: MobbinNodeScreen[]
+      total: number
+    }>(
+      `/api/mobbin/apps/${appId}/flows/tree/${nodeId}/screens?${params.toString()}`,
     )
   },
 

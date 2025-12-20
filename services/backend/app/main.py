@@ -21,6 +21,34 @@ from app.routers.mobbin import router as mobbin_router
 
 app = FastAPI(title="Osyle API", version="1.0.0")
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services at startup"""
+    print("="*70)
+    print("STARTUP: Initializing Mobbin scraper...")
+    print("="*70)
+    try:
+        from app.mobbin_scraper_service import mobbin_scraper_service
+        if mobbin_scraper_service.is_configured():
+            await mobbin_scraper_service.get_scraper()
+            print("✓ Mobbin scraper initialized successfully")
+        else:
+            print("⚠️ Mobbin credentials not configured - scraper will not be available")
+    except Exception as e:
+        print(f"⚠️ Failed to initialize Mobbin scraper: {e}")
+        print("Scraper will be initialized on first request instead")
+    print("="*70)
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    print("SHUTDOWN: Closing Mobbin scraper...")
+    try:
+        from app.mobbin_scraper_service import mobbin_scraper_service
+        await mobbin_scraper_service.close()
+    except Exception as e:
+        print(f"Error closing scraper: {e}")
+
 # Get ALLOWED_ORIGINS from environment
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*")
 if ALLOWED_ORIGINS != "*":

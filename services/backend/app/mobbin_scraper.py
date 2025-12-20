@@ -731,6 +731,219 @@ class MobbinScraper:
         
         return flow_data
     
+    async def get_flow_tree(
+        self,
+        app_id: str,
+        version_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get the complete flow tree structure for an app
+        
+        Args:
+            app_id: App identifier (full slug)
+            version_id: Specific version ID (optional)
+            
+        Returns:
+            Dictionary with flow tree nodes in hierarchical order
+        """
+        print(f"Fetching flow tree for app: {app_id}")
+        
+        # Construct URL for flows page
+        if version_id:
+            url = f"https://mobbin.com/apps/{app_id}/{version_id}/flows"
+        else:
+            url = f"https://mobbin.com/apps/{app_id}/flows"
+        
+        print(f"Navigating to: {url}")
+        await self.page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        await asyncio.sleep(3)
+        
+        # Extract tree structure
+        tree_data = await self.page.evaluate("""
+            () => {
+                const nodes = [];
+                
+                // Find all tree nodes
+                const treeNodes = document.querySelectorAll('li[data-tree-node-id]');
+                
+                console.log(`Found ${treeNodes.length} tree nodes`);
+                
+                treeNodes.forEach((node, index) => {
+                    try {
+                        const nodeId = node.getAttribute('data-tree-node-id');
+                        
+                        // Count depth by number of TreeNodeBranch divs
+                        const branches = node.querySelectorAll('[class*="TreeNodeBranch"]');
+                        const depth = branches.length;
+                        
+                        // Get title (usually in a text element)
+                        let title = 'Untitled';
+                        const textEl = node.querySelector('[class*="TreeNodeText"], [class*="text"]');
+                        if (textEl) {
+                            title = textEl.textContent.trim();
+                        }
+                        
+                        // Get screen count (usually in a badge)
+                        let screenCount = 0;
+                        const badgeEl = node.querySelector('[class*="Badge"], [class*="count"]');
+                        if (badgeEl) {
+                            const countText = badgeEl.textContent.trim();
+                            const match = countText.match(/\\d+/);
+                            if (match) {
+                                screenCount = parseInt(match[0]);
+                            }
+                        }
+                        
+                        // Check if has children
+                        const hasChildren = node.querySelector('[class*="expand"], [class*="collapse"]') !== null;
+                        
+                        // Check if selected
+                        const isSelected = node.classList.contains('selected') || 
+                                         node.hasAttribute('aria-selected') ||
+                                         node.querySelector('[class*="selected"]') !== null;
+                        
+                        nodes.push({
+                            id: nodeId,
+                            title: title,
+                            screen_count: screenCount,
+                            depth: depth,
+                            has_children: hasChildren,
+                            is_selected: isSelected,
+                            order: index
+                        });
+                    } catch (e) {
+                        console.error('Error parsing tree node:', e);
+                    }
+                });
+                
+                return nodes;
+            }
+        """)
+        
+        print(f"✓ Extracted {len(tree_data)} tree nodes")
+        
+        return {
+            "app_id": app_id,
+            "version_id": version_id,
+            "nodes": tree_data,
+            "total": len(tree_data)
+        }
+    
+    async def get_flow_node_screens(
+        self,
+        app_id: str,
+        version_id: str,
+        node_id: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Get screens for a specific flow tree node
+        
+        Args:
+            app_id: App identifier (full slug)
+            version_id: Version ID
+            node_id: Flow tree node ID
+            
+        Returns:
+            List of screen dictionaries with images and metadata
+        """
+        print(f"Fetching screens for flow node: {node_id}")
+        
+        # Navigate to flows page
+        url = f"https://mobbin.com/apps/{app_id}/{version_id}/flows"
+        print(f"Navigating to: {url}")
+        await self.page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        await asyncio.sleep(2)
+        
+        # Click the specific node
+        print(f"Clicking node: {node_id}")
+        await self.page.evaluate(f"""
+            () => {{
+                const node = document.querySelector('li[data-tree-node-id="{node_id}"]');
+                if (node) {{
+                    node.click();
+                }} else {{
+                    console.error('Node not found: {node_id}');
+                }}
+            }}
+        """)
+        
+        # Wait for screens to load
+        await asyncio.sleep(3)
+        
+        # Scroll to load lazy images
+        await self.page.evaluate("""
+            async () => {
+                const scrollHeight = document.body.scrollHeight;
+                const viewportHeight = window.innerHeight;
+                const scrollStep = viewportHeight / 3;
+                
+                for (let y = 0; y < scrollHeight; y += scrollStep) {
+                    window.scrollTo(0, y);
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+                
+                window.scrollTo(0, 0);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        """)
+        
+        # Extract screens
+        screens = await self.page.evaluate("""
+            () => {
+                const screens = [];
+                const seenIds = new Set();
+                
+                // Find all image elements
+                const imgs = document.querySelectorAll('img[src*="mobbin"]');
+                
+                imgs.forEach((img, idx) => {
+                    try {
+                        const width = img.naturalWidth || img.width;
+                        const height = img.naturalHeight || img.height;
+                        
+                        // Filter: minimum size and portrait aspect ratio
+                        if (width < 150 || height < 200) return;
+                        if (height / width < 1.3) return; // Must be portrait
+                        
+                        // Filter: skip logos/icons/avatars by URL
+                        const src = img.src.toLowerCase();
+                        if (src.includes('logo') || src.includes('icon') || src.includes('avatar')) return;
+                        
+                        // Avoid duplicates
+                        if (seenIds.has(img.src)) return;
+                        seenIds.add(img.src);
+                        
+                        // Get label from nearby text
+                        let label = null;
+                        const parent = img.closest('div, article, figure');
+                        if (parent) {
+                            const labelEl = parent.querySelector('[class*="label"], figcaption, [class*="title"]');
+                            if (labelEl) {
+                                label = labelEl.textContent.trim();
+                            }
+                        }
+                        
+                        screens.push({
+                            id: `screen-${idx}`,
+                            screen_number: screens.length + 1,
+                            image_url: img.src,
+                            thumbnail_url: img.src,
+                            label: label,
+                            dimensions: { width: width, height: height }
+                        });
+                    } catch (e) {
+                        console.error('Error processing image:', e);
+                    }
+                });
+                
+                return screens;
+            }
+        """)
+        
+        print(f"✓ Extracted {len(screens)} screens for node {node_id}")
+        
+        return screens
+    
     async def get_app_ui_elements(
         self,
         app_id: str,

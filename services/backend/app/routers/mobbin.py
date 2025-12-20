@@ -84,6 +84,32 @@ class FlowDetailResponse(BaseModel):
     metadata: Dict[str, Any]
 
 
+class FlowTreeNodeResponse(BaseModel):
+    id: str
+    title: str
+    screen_count: int
+    depth: int
+    has_children: bool
+    is_selected: bool
+    order: int
+
+
+class FlowTreeResponse(BaseModel):
+    app_id: str
+    version_id: str
+    nodes: List[FlowTreeNodeResponse]
+    total: int
+
+
+class NodeScreenResponse(BaseModel):
+    id: str
+    screen_number: int
+    image_url: str
+    thumbnail_url: str
+    label: Optional[str] = None
+    dimensions: Optional[Dict[str, int]] = None
+
+
 class SearchResponse(BaseModel):
     query: str
     platform: str
@@ -283,6 +309,99 @@ async def get_app_flows(
         print(f"ERROR in get_app_flows: {str(e)}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to fetch flows: {str(e)}")
+
+
+# IMPORTANT: Specific routes (/tree) MUST come BEFORE generic routes ({flow_id})
+# FastAPI matches routes in order, so /flows/tree would match /flows/{flow_id} if that came first
+
+@router.get("/apps/{app_id}/flows/tree/{node_id}/screens")
+async def get_flow_node_screens(
+    app_id: str,
+    node_id: str,
+    version_id: str = Query(..., description="Version ID (required)")
+):
+    """
+    Get screens for a specific flow tree node
+    
+    Args:
+        app_id: Full app ID/slug
+        node_id: Flow tree node ID
+        version_id: Version ID (required)
+        
+    Returns:
+        Screens for the specific flow node
+    """
+    try:
+        scraper = await mobbin_scraper_service.get_scraper()
+        
+        screens = await scraper.get_flow_node_screens(app_id, version_id, node_id)
+        
+        return {
+            "app_id": app_id,
+            "version_id": version_id,
+            "node_id": node_id,
+            "screens": [
+                NodeScreenResponse(
+                    id=screen["id"],
+                    screen_number=screen["screen_number"],
+                    image_url=screen["image_url"],
+                    thumbnail_url=screen["thumbnail_url"],
+                    label=screen.get("label"),
+                    dimensions=screen.get("dimensions")
+                )
+                for screen in screens
+            ],
+            "total": len(screens)
+        }
+    except Exception as e:
+        import traceback
+        print(f"ERROR in get_flow_node_screens: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to fetch flow node screens: {str(e)}")
+
+
+@router.get("/apps/{app_id}/flows/tree")
+async def get_flow_tree(
+    app_id: str,
+    version_id: Optional[str] = Query(None, description="Version ID (optional)")
+):
+    """
+    Get the complete flow tree structure for an app
+    
+    Args:
+        app_id: Full app ID/slug
+        version_id: Optional version ID
+        
+    Returns:
+        Flow tree with all nodes in hierarchical order
+    """
+    try:
+        scraper = await mobbin_scraper_service.get_scraper()
+        
+        tree_data = await scraper.get_flow_tree(app_id, version_id)
+        
+        return FlowTreeResponse(
+            app_id=tree_data.get("app_id", app_id),
+            version_id=tree_data.get("version_id", version_id or ""),
+            nodes=[
+                FlowTreeNodeResponse(
+                    id=node["id"],
+                    title=node["title"],
+                    screen_count=node["screen_count"],
+                    depth=node["depth"],
+                    has_children=node["has_children"],
+                    is_selected=node["is_selected"],
+                    order=node["order"]
+                )
+                for node in tree_data.get("nodes", [])
+            ],
+            total=len(tree_data.get("nodes", []))
+        )
+    except Exception as e:
+        import traceback
+        print(f"ERROR in get_flow_tree: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to fetch flow tree: {str(e)}")
 
 
 @router.get("/apps/{app_id}/flows/{flow_id}")
