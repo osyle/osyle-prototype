@@ -27,6 +27,9 @@ async def startup_event():
     print("="*70)
     print("STARTUP: Initializing Mobbin scraper...")
     print("="*70)
+
+    # Disable mobbin temporarily
+    """
     try:
         from app.mobbin_scraper_service import mobbin_scraper_service
         if mobbin_scraper_service.is_configured():
@@ -37,17 +40,21 @@ async def startup_event():
     except Exception as e:
         print(f"⚠️ Failed to initialize Mobbin scraper: {e}")
         print("Scraper will be initialized on first request instead")
+    """
     print("="*70)
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
     print("SHUTDOWN: Closing Mobbin scraper...")
+    # Disable mobbin temporarily
+    """
     try:
         from app.mobbin_scraper_service import mobbin_scraper_service
         await mobbin_scraper_service.close()
     except Exception as e:
         print(f"Error closing scraper: {e}")
+    """
 
 # Get ALLOWED_ORIGINS from environment
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*")
