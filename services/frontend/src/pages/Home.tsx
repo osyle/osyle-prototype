@@ -122,6 +122,7 @@ export default function Home() {
   const [pendingResourceData, setPendingResourceData] = useState<{
     tasteId: string
     resourceId: string
+    resourceCount: number
   } | null>(null)
 
   // DTM Training state
@@ -567,7 +568,11 @@ export default function Home() {
 
       setIsCreateResourceModalOpen(false)
 
-      // Calculate resource count from updated tastes, not state
+      // Calculate resource count from updated tastes for DTM training
+      const updatedTaste = updatedTastes.find(
+        t => t.taste_id === selectedTasteId,
+      )
+      const resourceCount = updatedTaste?.resources.length || 0
 
       // Start DTR learning process
       setDtrLearningResourceName(resourceName)
@@ -575,6 +580,7 @@ export default function Home() {
       setPendingResourceData({
         tasteId: selectedTasteId,
         resourceId: resource.resource_id,
+        resourceCount: resourceCount,
       })
 
       setDtrLearningState('learning')
@@ -584,7 +590,7 @@ export default function Home() {
       setIsDtrLearningModalOpen(true)
 
       // Trigger DTR learning (backend will decide if DTM is needed)
-      buildDtrForResource(selectedTasteId, resource.resource_id)
+      buildDtrForResource(selectedTasteId, resource.resource_id, resourceCount)
     } catch (err) {
       console.error('Failed to create resource:', err)
 
@@ -598,7 +604,11 @@ export default function Home() {
   // DTR LEARNING HANDLERS
   // ============================================================================
 
-  const buildDtrForResource = async (tasteId: string, resourceId: string) => {
+  const buildDtrForResource = async (
+    tasteId: string,
+    resourceId: string,
+    resourceCount: number,
+  ) => {
     try {
       // Check if DTR already exists
       const dtrCheck = await api.llm.checkDtrExists(resourceId, tasteId)
@@ -616,11 +626,11 @@ export default function Home() {
         console.log('DTR learning completed successfully')
       }
 
-      // Wait a moment for user to see success
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      // Wait 2 seconds for user to see success state
+      await new Promise(resolve => setTimeout(resolve, 2000))
 
       // Phase 2: Try DTM training (backend decides if needed)
-      await trainDtmAfterDtr(tasteId, resourceId)
+      await trainDtmAfterDtr(tasteId, resourceId, resourceCount)
     } catch (err) {
       console.error('Failed to build DTR:', err)
       setDtrLearningState('error')
@@ -630,12 +640,29 @@ export default function Home() {
     }
   }
 
-  const trainDtmAfterDtr = async (tasteId: string, resourceId: string) => {
+  const trainDtmAfterDtr = async (
+    tasteId: string,
+    resourceId: string,
+    resourceCount: number,
+  ) => {
     try {
       // Close DTR modal
       setIsDtrLearningModalOpen(false)
 
-      // Call update-dtm endpoint
+      // Check if DTM training is needed (requires 2+ resources)
+      if (resourceCount < 2) {
+        console.log(`Only ${resourceCount} resource(s), skipping DTM training`)
+        return
+      }
+
+      // Open DTM modal IMMEDIATELY with the correct resource count
+      console.log(`Opening DTM training modal for ${resourceCount} resources`)
+      setDtmResourceCount(resourceCount)
+      setDtmTrainingState('training')
+      setDtmTrainingError(null)
+      setIsDtmTrainingModalOpen(true)
+
+      // Make the API call (while modal is showing "training")
       console.log('Calling DTM update endpoint...')
       const response = await api.dtm.updateDtm(tasteId, resourceId)
 
@@ -645,30 +672,35 @@ export default function Home() {
         message: response.message,
       })
 
-      // Check if DTM training was skipped (only 1 resource)
+      // Verify backend agrees with our resource count
+      if (
+        response.total_resources &&
+        response.total_resources !== resourceCount
+      ) {
+        console.warn(
+          `Resource count mismatch: frontend=${resourceCount}, backend=${response.total_resources}`,
+        )
+        setDtmResourceCount(response.total_resources)
+      }
+
+      // Check if DTM training was skipped by backend
       if (response.status === 'skipped') {
-        console.log('DTM training skipped:', response.reason)
-        // Don't show DTM modal for first resource
+        console.log('DTM training skipped by backend - closing modal')
+        setIsDtmTrainingModalOpen(false)
         return
       }
 
-      // For 2+ resources, show DTM training modal
+      // Backend finished successfully!
       console.log(
-        `DTM ${response.status}: Showing training modal for ${response.total_resources} resources`,
+        `DTM ${response.status} completed successfully with ${response.total_resources || resourceCount} resources`,
       )
-
-      // Open DTM training modal - use backend's count
-      setDtmResourceCount(response.total_resources ?? 0)
-      setDtmTrainingState('training')
-      setDtmTrainingError(null)
-      setIsDtmTrainingModalOpen(true)
-
-      // Simulate training progress (backend is already done)
-      await new Promise(resolve => setTimeout(resolve, 1500))
-
-      // Success!
       setDtmTrainingState('success')
-      console.log('DTM training completed successfully')
+
+      // Wait 2 seconds for user to see success state
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      // Close modal
+      setIsDtmTrainingModalOpen(false)
     } catch (err) {
       console.error('Failed to train DTM:', err)
       setDtmTrainingState('error')
@@ -687,6 +719,7 @@ export default function Home() {
     await buildDtrForResource(
       pendingResourceData.tasteId,
       pendingResourceData.resourceId,
+      pendingResourceData.resourceCount,
     )
   }
 
@@ -705,6 +738,7 @@ export default function Home() {
     await trainDtmAfterDtr(
       pendingResourceData.tasteId,
       pendingResourceData.resourceId,
+      pendingResourceData.resourceCount,
     )
   }
 
