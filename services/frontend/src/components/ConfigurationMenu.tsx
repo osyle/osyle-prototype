@@ -2,10 +2,6 @@ import {
   Settings,
   Monitor,
   Smartphone,
-  Code,
-  Palette,
-  ChevronDown,
-  ChevronUp,
   XCircle,
   Grid3X3,
   Maximize2,
@@ -17,10 +13,8 @@ import { useDeviceContext } from '../hooks/useDeviceContext'
 
 export default function ConfigurationMenu() {
   const [isOpen, setIsOpen] = useState(false)
-  const [activeSection, setActiveSection] = useState<string | null>('device')
   const menuRef = useRef<HTMLDivElement>(null)
-  const { device_info, setDeviceInfo, rendering_mode, setRenderingMode } =
-    useDeviceContext()
+  const { device_info, setDeviceInfo } = useDeviceContext()
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -35,10 +29,6 @@ export default function ConfigurationMenu() {
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [])
-
-  const toggleSection = (section: string) => {
-    setActiveSection(activeSection === section ? null : section)
-  }
 
   const handlePlatformChange = (platform: 'web' | 'phone') => {
     const defaultScreen =

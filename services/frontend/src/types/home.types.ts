@@ -79,6 +79,7 @@ export interface ProjectDisplay {
   ui_loading?: boolean
   ui_error?: boolean
   rendering_mode?: 'design-ml' | 'react'
+  created_at?: string // Timestamp for sorting
 }
 
 // ============================================================================

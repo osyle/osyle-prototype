@@ -83,6 +83,7 @@ export default function Home() {
   const [tastes, setTastes] = useState<TasteDisplay[]>([])
   const [projects, setProjects] = useState<ProjectDisplay[]>([])
   const [loading, setLoading] = useState(true)
+  const [projectsLoading, setProjectsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   // Accordion state
@@ -267,21 +268,29 @@ export default function Home() {
   useEffect(() => {
     async function loadProjects() {
       try {
+        setProjectsLoading(true)
         const apiProjects = await api.projects.list()
 
-        // Transform to display format
+        // Transform to display format - only show flow-based projects
         const displayProjects: ProjectDisplay[] = apiProjects
-          .filter(p => p.metadata?.['has_ui']) // Only show projects with generated UIs
+          .filter(
+            p =>
+              p.flow_mode === true &&
+              p.flow_graph &&
+              p.flow_graph.screens &&
+              Array.isArray(p.flow_graph.screens) &&
+              p.flow_graph.screens.length > 0,
+          ) // Only show flow projects with generated flow graphs and screens
           .map(p => ({
             project_id: p.project_id,
             name: p.name,
             task_description: p.task_description,
-            rendering_mode:
-              (p.metadata?.['rendering_mode'] as 'design-ml' | 'react') ||
-              'design-ml',
+            flow_mode: p.flow_mode,
+            flow_graph: p.flow_graph,
+            rendering_mode: p.rendering_mode || 'react',
             created_at: p.created_at,
-            ui: undefined,
-            ui_loading: true,
+            ui: undefined, // Not used for flows
+            ui_loading: false,
             ui_error: false,
           }))
           // Sort by created_at descending (newest first)
@@ -292,36 +301,10 @@ export default function Home() {
           )
 
         setProjects(displayProjects)
-
-        // Fetch UI data for each project in parallel
-        const projectsWithUI: ProjectDisplay[] = await Promise.all(
-          displayProjects.map(async project => {
-            try {
-              const uiResponse = await api.llm.getUI(project.project_id)
-              return {
-                ...project,
-                ui: uiResponse.ui as Record<string, unknown> | string,
-                ui_loading: false,
-                ui_error: false,
-              }
-            } catch (err) {
-              console.error(
-                `Failed to load UI for project ${project.project_id}:`,
-                err,
-              )
-              return {
-                ...project,
-                ui: undefined,
-                ui_loading: false,
-                ui_error: true,
-              }
-            }
-          }),
-        )
-
-        setProjects(projectsWithUI)
       } catch (err) {
         console.error('Failed to load projects:', err)
+      } finally {
+        setProjectsLoading(false)
       }
     }
 
@@ -1567,7 +1550,22 @@ export default function Home() {
             </div>
 
             {/* Projects Grid */}
-            {projects.length === 0 ? (
+            {projectsLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="text-center">
+                  <div
+                    className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-solid border-current border-r-transparent mb-4"
+                    style={{ color: '#4A90E2' }}
+                  ></div>
+                  <div className="text-lg mb-2" style={{ color: '#3B3B3B' }}>
+                    Loading projects...
+                  </div>
+                  <div className="text-sm" style={{ color: '#929397' }}>
+                    Please wait
+                  </div>
+                </div>
+              </div>
+            ) : projects.length === 0 ? (
               <div className="flex items-center justify-center py-20">
                 <div className="text-center">
                   <Sparkles
