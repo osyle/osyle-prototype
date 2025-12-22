@@ -200,8 +200,19 @@ export default function Editor() {
   const calculateFlowLayout = (flow: FlowGraph) => {
     if (!flow || !flow.screens.length) return {}
 
-    const HORIZONTAL_GAP = 100
-    const VERTICAL_GAP = 80
+    // Calculate actual device dimensions (including bezel/chrome)
+    const deviceWidth =
+      device_info.platform === 'phone'
+        ? device_info.screen.width + 24
+        : device_info.screen.width
+    const deviceHeight =
+      device_info.platform === 'phone'
+        ? device_info.screen.height + 48
+        : device_info.screen.height + 40
+
+    // Generous proportional spacing based on device size
+    const HORIZONTAL_GAP = deviceWidth * 1.2 // 120% of device width for better spacing
+    const VERTICAL_GAP = deviceHeight * 0.8 // 80% of device height
 
     // Find entry screen
     const entryScreen = flow.screens.find(s => s.screen_type === 'entry')
@@ -251,20 +262,19 @@ export default function Editor() {
       levelGroups[level].push(id)
     })
 
-    // Calculate positions
+    // Calculate positions using device dimensions
     const positions: Record<string, { x: number; y: number }> = {}
 
     Object.entries(levelGroups).forEach(([levelStr, screenIds]) => {
       const level = parseInt(levelStr)
-      const x = level * (device_info.screen.width + HORIZONTAL_GAP)
+      const x = level * (deviceWidth + HORIZONTAL_GAP)
 
-      // Center vertically within this column
+      // Center vertically within this column with generous spacing
       screenIds.forEach((id, index) => {
         const totalHeight =
-          screenIds.length * (device_info.screen.height + VERTICAL_GAP) -
-          VERTICAL_GAP
+          screenIds.length * (deviceHeight + VERTICAL_GAP) - VERTICAL_GAP
         const startY = -totalHeight / 2
-        const y = startY + index * (device_info.screen.height + VERTICAL_GAP)
+        const y = startY + index * (deviceHeight + VERTICAL_GAP)
 
         positions[id] = { x, y }
       })
@@ -309,7 +319,7 @@ export default function Editor() {
 
     const viewport = getAvailableViewport()
 
-    // Calculate device dimensions (including bezel for phone)
+    // Calculate device dimensions (including bezel for phone, chrome for web)
     const deviceWidth =
       device_info.platform === 'phone'
         ? device_info.screen.width + 24
@@ -317,7 +327,7 @@ export default function Editor() {
     const deviceHeight =
       device_info.platform === 'phone'
         ? device_info.screen.height + 48
-        : device_info.screen.height
+        : device_info.screen.height + 40 // Add browser chrome
 
     // Calculate zoom to fit with margins (15% on each side = 70% of viewport)
     const targetWidth = viewport.width * 0.7
@@ -566,8 +576,14 @@ export default function Editor() {
               transitions={flowGraph.transitions}
               screenPositions={positions}
               screenDimensions={{
-                width: device_info.screen.width,
-                height: device_info.screen.height,
+                width:
+                  device_info.platform === 'phone'
+                    ? device_info.screen.width + 24 // Include phone bezel
+                    : device_info.screen.width,
+                height:
+                  device_info.platform === 'phone'
+                    ? device_info.screen.height + 48 // Include phone bezel
+                    : device_info.screen.height + 40, // Include web browser chrome
               }}
             />
             {flowGraph.screens.map(screen => {
@@ -953,11 +969,15 @@ export default function Editor() {
             flowGraph && generationStage === 'complete'
               ? (() => {
                   const positions = calculateFlowLayout(flowGraph)
+                  const deviceWidth =
+                    device_info.platform === 'phone'
+                      ? device_info.screen.width + 24
+                      : device_info.screen.width
                   return (
                     Math.max(...Object.values(positions).map(p => p.x), 0) +
-                    device_info.screen.width +
-                    (device_info.platform === 'phone' ? 300 : 200)
-                  )
+                    deviceWidth +
+                    deviceWidth * 0.6
+                  ) // Match HORIZONTAL_GAP
                 })()
               : device_info.screen.width
           }
@@ -968,12 +988,11 @@ export default function Editor() {
                   const yValues = Object.values(positions).map(p => p.y)
                   const minY = Math.min(...yValues, 0)
                   const maxY = Math.max(...yValues, 0)
-                  return (
-                    maxY -
-                    minY +
-                    device_info.screen.height +
-                    (device_info.platform === 'phone' ? 200 : 150)
-                  )
+                  const deviceHeight =
+                    device_info.platform === 'phone'
+                      ? device_info.screen.height + 48
+                      : device_info.screen.height + 40
+                  return maxY - minY + deviceHeight + deviceHeight * 0.5 // Match VERTICAL_GAP
                 })()
               : device_info.screen.height
           }
