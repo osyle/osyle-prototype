@@ -145,7 +145,8 @@ deploy-frontend: ## Deploy frontend to AWS Amplify
 	git add . && git commit -m "Deploy" && git push origin main
 	aws amplify start-job --app-id $(APP_ID) --branch-name main --job-type RELEASE
 
-deploy-all: deploy-backend deploy-frontend ## Deploy both backend and frontend
+deploy-all: ## Deploy both backend and frontend
+	./infra/scripts/deploy-all.sh
 
 aws-logs: ## Tail Lambda logs
 	aws logs tail /aws/lambda/osyle-api --follow
