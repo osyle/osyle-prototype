@@ -6,13 +6,16 @@ interface DynamicReactRendererProps {
   propsToInject?: Record<string, unknown>
 }
 
+// Stable empty object to avoid recreating on every render
+const EMPTY_PROPS = {}
+
 /**
  * DynamicReactRenderer
  * Evaluates JSX code strings returned from the backend and renders them
  */
 export default function DynamicReactRenderer({
   jsxCode,
-  propsToInject = {},
+  propsToInject = EMPTY_PROPS,
 }: DynamicReactRendererProps) {
   const [Component, setComponent] = useState<React.ComponentType | null>(null)
   const [error, setError] = useState<string | null>(null)
