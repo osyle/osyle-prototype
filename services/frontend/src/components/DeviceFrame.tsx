@@ -21,86 +21,129 @@ export default function DeviceFrame({
   const getFrameStyles = () => {
     if (platform === 'web') {
       return {
-        frameClass:
-          'rounded-lg overflow-hidden bg-white shadow-2xl border border-gray-300',
+        frameClass: 'rounded-xl overflow-hidden bg-white relative',
         topBarClass:
-          'h-8 bg-gray-200 flex items-center px-3 border-b border-gray-300',
+          'h-10 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center px-4 border-b border-gray-200',
         contentClass: 'overflow-auto',
+        outerShadow:
+          '0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(255, 255, 255, 0.1)',
       }
     } else {
       // Phone frame
       return {
-        frameClass:
-          'rounded-[32px] overflow-hidden bg-black shadow-2xl border-8 border-black relative',
-        topBarClass: 'h-6 bg-black relative',
+        frameClass: 'rounded-[42px] overflow-hidden relative',
+        topBarClass: 'h-0',
         contentClass: 'overflow-auto',
+        outerShadow:
+          '0 25px 70px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)',
       }
     }
   }
 
-  const { frameClass, topBarClass, contentClass } = getFrameStyles()
+  const { frameClass, topBarClass, contentClass, outerShadow } =
+    getFrameStyles()
 
   return (
     <div
       className="flex items-center justify-center w-full h-full"
-      style={{ backgroundColor: '#EDEBE9' }}
+      style={{ backgroundColor: 'transparent' }}
     >
-      <div
-        className={frameClass}
-        style={{
-          width: `${displayWidth}px`,
-          height:
-            platform === 'web'
-              ? `${displayHeight}px`
-              : `${displayHeight + 32}px`, // Add space for top bar
-        }}
-      >
-        {/* Browser/Phone Top Bar */}
-        <div className={topBarClass}>
-          {platform === 'web' ? (
-            // Browser controls
-            <div className="flex items-center gap-1.5 w-full">
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+      {/* Outer device shell for phone */}
+      {platform === 'phone' ? (
+        <div
+          className="rounded-[48px] p-3 relative"
+          style={{
+            background: 'linear-gradient(145deg, #2a2a2a 0%, #1a1a1a 100%)',
+            boxShadow: outerShadow,
+            width: `${displayWidth + 24}px`,
+            height: `${displayHeight + 48}px`,
+          }}
+        >
+          {/* Power button */}
+          <div
+            className="absolute right-0 top-24 w-1 h-16 rounded-l-sm"
+            style={{ backgroundColor: '#0a0a0a' }}
+          />
+
+          {/* Volume buttons */}
+          <div
+            className="absolute left-0 top-20 w-1 h-8 rounded-r-sm"
+            style={{ backgroundColor: '#0a0a0a' }}
+          />
+          <div
+            className="absolute left-0 top-32 w-1 h-12 rounded-r-sm"
+            style={{ backgroundColor: '#0a0a0a' }}
+          />
+
+          {/* Screen */}
+          <div
+            className={frameClass}
+            style={{
+              width: `${displayWidth}px`,
+              height: `${displayHeight}px`,
+              background: '#000',
+            }}
+          >
+            {/* Notch */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-36 h-7 bg-black rounded-b-3xl z-50 flex items-center justify-center gap-3">
+              <div className="w-14 h-1 bg-gray-900 rounded-full" />
+            </div>
+
+            {/* Content Area */}
+            <div
+              className={contentClass}
+              style={{
+                height: `${displayHeight}px`,
+                width: '100%',
+                backgroundColor: 'white',
+              }}
+            >
+              {children}
+            </div>
+
+            {/* Home Indicator */}
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-1 bg-white/30 rounded-full z-50" />
+          </div>
+        </div>
+      ) : (
+        /* Web device frame */
+        <div
+          className={frameClass}
+          style={{
+            width: `${displayWidth}px`,
+            height: `${displayHeight}px`,
+            boxShadow: outerShadow,
+          }}
+        >
+          {/* Browser Top Bar */}
+          <div className={topBarClass}>
+            <div className="flex items-center gap-2 w-full">
+              <div className="w-3 h-3 rounded-full bg-red-500" />
+              <div className="w-3 h-3 rounded-full bg-yellow-500" />
+              <div className="w-3 h-3 rounded-full bg-green-500" />
 
               {/* URL bar */}
-              <div className="ml-4 flex-1 max-w-lg">
-                <div className="bg-gray-100 rounded-md h-5 px-3 text-xs flex items-center text-gray-600 truncate">
+              <div className="ml-6 flex-1 max-w-xl">
+                <div className="bg-white rounded-md h-6 px-4 text-xs flex items-center text-gray-500 border border-gray-200">
                   osyle.generative.design
                 </div>
               </div>
             </div>
-          ) : (
-            // Phone notch
-            <>
-              <div className="absolute left-1/2 top-0 -translate-x-1/2 w-1/4 h-6 bg-black rounded-b-xl"></div>
-              <div className="absolute left-[25%] top-1 w-2 h-2 rounded-full bg-gray-700"></div>
-              <div className="absolute right-[25%] top-1 w-2 h-2 rounded-full bg-gray-700"></div>
-            </>
-          )}
-        </div>
+          </div>
 
-        {/* Content Area */}
-        <div
-          className={contentClass}
-          style={{
-            height:
-              platform === 'web'
-                ? `${displayHeight - 32}px`
-                : `${displayHeight}px`,
-            width: '100%',
-            backgroundColor: 'white',
-          }}
-        >
-          {children}
+          {/* Content Area */}
+          <div
+            className={contentClass}
+            style={{
+              height: `${displayHeight - 40}px`,
+              width: '100%',
+              backgroundColor: 'white',
+            }}
+          >
+            {children}
+          </div>
         </div>
-
-        {/* Phone Home Indicator (only for phone) */}
-        {platform === 'phone' && (
-          <div className="h-1 absolute bottom-3 left-1/2 -translate-x-1/2 w-1/3 bg-gray-500 rounded-full"></div>
-        )}
-      </div>
+      )}
     </div>
   )
 }

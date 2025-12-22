@@ -27,17 +27,17 @@ export default function FlowConnections({
   const getColor = (flowType: string) => {
     switch (flowType) {
       case 'forward':
-        return '#3B82F6' // Blue
+        return '#60A5FA' // Brighter Blue
       case 'back':
         return '#9CA3AF' // Gray
       case 'error':
-        return '#EF4444' // Red
+        return '#F87171' // Brighter Red
       case 'branch':
-        return '#8B5CF6' // Purple
+        return '#A78BFA' // Brighter Purple
       case 'success':
-        return '#10B981' // Green
+        return '#34D399' // Brighter Green
       default:
-        return '#6B7280'
+        return '#9CA3AF'
     }
   }
 
@@ -88,9 +88,10 @@ export default function FlowConnections({
               d={path}
               fill="none"
               stroke={color}
-              strokeWidth="2"
+              strokeWidth="2.5"
               strokeDasharray={transition.flow_type === 'back' ? '5,5' : 'none'}
               markerEnd={`url(#arrowhead-${transition.flow_type})`}
+              opacity="0.9"
             />
 
             {/* Label */}
@@ -103,7 +104,7 @@ export default function FlowConnections({
                   width="80"
                   height="24"
                   rx="4"
-                  fill="white"
+                  fill="rgba(0, 0, 0, 0.8)"
                   stroke={color}
                   strokeWidth="1.5"
                 />
@@ -114,7 +115,7 @@ export default function FlowConnections({
                   y={midY + 4}
                   textAnchor="middle"
                   fontSize="11"
-                  fontWeight="500"
+                  fontWeight="600"
                   fill={color}
                 >
                   {transition.label}

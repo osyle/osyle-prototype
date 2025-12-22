@@ -18,6 +18,7 @@ import DeviceFrame from '../components/DeviceFrame'
 import DynamicReactRenderer from '../components/DynamicReactRenderer'
 import FlowConnections from '../components/FlowConnections'
 import InfiniteCanvas from '../components/InfiniteCanvas'
+import PrototypeCanvas from '../components/PrototypeCanvas'
 import PrototypeRunner from '../components/PrototypeRunner'
 import VersionHistory from '../components/VersionHistory'
 import { useDeviceContext } from '../hooks/useDeviceContext'
@@ -66,8 +67,13 @@ export default function Editor() {
   const [viewingVersion, setViewingVersion] = useState<number | null>(null)
   const [isReverting, setIsReverting] = useState(false)
 
-  // ONLY 2 tabs - flow mode only
-  const tabs = ['Concept', 'Prototype']
+  // 4 tabs - Video pitch and Presentation disabled for now
+  const tabs = [
+    { name: 'Concept', enabled: true },
+    { name: 'Prototype', enabled: true },
+    { name: 'Video pitch', enabled: false },
+    { name: 'Presentation', enabled: false },
+  ]
 
   const styleOptions = [
     {
@@ -183,6 +189,83 @@ export default function Editor() {
     } finally {
       setIsReverting(false)
     }
+  }
+
+  // Calculate optimized layout positions for flow screens
+  const calculateFlowLayout = (flow: FlowGraph) => {
+    if (!flow || !flow.screens.length) return {}
+
+    const HORIZONTAL_GAP = 100
+    const VERTICAL_GAP = 80
+
+    // Find entry screen
+    const entryScreen = flow.screens.find(s => s.screen_type === 'entry')
+    if (!entryScreen) return flow.layout_positions || {}
+
+    // Build adjacency map from transitions
+    const adjacency: Record<string, string[]> = {}
+    flow.screens.forEach(s => (adjacency[s.screen_id] = []))
+
+    flow.transitions.forEach(t => {
+      if (!adjacency[t.from_screen_id]) adjacency[t.from_screen_id] = []
+      adjacency[t.from_screen_id].push(t.to_screen_id)
+    })
+
+    // BFS to assign levels (columns)
+    const levels: Record<string, number> = {}
+    const queue: Array<{ id: string; level: number }> = [
+      { id: entryScreen.screen_id, level: 0 },
+    ]
+    const visited = new Set<string>()
+
+    while (queue.length > 0) {
+      const { id, level } = queue.shift()!
+      if (visited.has(id)) continue
+      visited.add(id)
+      levels[id] = level
+
+      const children = adjacency[id] || []
+      children.forEach(childId => {
+        if (!visited.has(childId)) {
+          queue.push({ id: childId, level: level + 1 })
+        }
+      })
+    }
+
+    // Assign any unvisited screens to the end
+    flow.screens.forEach(s => {
+      if (!(s.screen_id in levels)) {
+        levels[s.screen_id] = Math.max(...Object.values(levels), 0) + 1
+      }
+    })
+
+    // Group screens by level
+    const levelGroups: Record<number, string[]> = {}
+    Object.entries(levels).forEach(([id, level]) => {
+      if (!levelGroups[level]) levelGroups[level] = []
+      levelGroups[level].push(id)
+    })
+
+    // Calculate positions
+    const positions: Record<string, { x: number; y: number }> = {}
+
+    Object.entries(levelGroups).forEach(([levelStr, screenIds]) => {
+      const level = parseInt(levelStr)
+      const x = level * (device_info.screen.width + HORIZONTAL_GAP)
+
+      // Center vertically within this column
+      screenIds.forEach((id, index) => {
+        const totalHeight =
+          screenIds.length * (device_info.screen.height + VERTICAL_GAP) -
+          VERTICAL_GAP
+        const startY = -totalHeight / 2
+        const y = startY + index * (device_info.screen.height + VERTICAL_GAP)
+
+        positions[id] = { x, y }
+      })
+    })
+
+    return positions
   }
 
   const checkAndStartGeneration = async () => {
@@ -345,7 +428,7 @@ export default function Editor() {
             >
               Generation Failed
             </h3>
-            <p className="text-sm mb-4" style={{ color: '#929397' }}>
+            <p className="text-sm mb-4" style={{ color: '#6B7280' }}>
               {error || 'An unexpected error occurred'}
             </p>
             <button
@@ -372,20 +455,23 @@ export default function Editor() {
       if (activeTab === 'Prototype') {
         return <PrototypeRunner flow={flowGraph} deviceInfo={device_info} />
       } else {
+        // Use calculated positions instead of backend positions
+        const calculatedPositions = calculateFlowLayout(flowGraph)
+        const positions = calculatedPositions
+
         return (
           <>
             <FlowConnections
               transitions={flowGraph.transitions}
-              screenPositions={flowGraph.layout_positions || {}}
+              screenPositions={positions}
               screenDimensions={{
                 width: device_info.screen.width,
                 height: device_info.screen.height,
               }}
             />
             {flowGraph.screens.map(screen => {
-              const position = flowGraph.layout_positions?.[
-                screen.screen_id
-              ] || { x: 0, y: 0 }
+              const position = positions[screen.screen_id] || { x: 0, y: 0 }
+              const isEntry = screen.screen_type === 'entry'
 
               return (
                 <div
@@ -397,6 +483,29 @@ export default function Editor() {
                     pointerEvents: 'none',
                   }}
                 >
+                  {/* START badge for entry screen */}
+                  {isEntry && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '-32px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        backgroundColor: '#10B981',
+                        color: '#FFFFFF',
+                        padding: '4px 12px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        letterSpacing: '0.5px',
+                        boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                        zIndex: 10,
+                      }}
+                    >
+                      START
+                    </div>
+                  )}
+
                   <DeviceFrame>
                     {screen.ui_code ? (
                       <DynamicReactRenderer
@@ -414,10 +523,13 @@ export default function Editor() {
                   <div
                     style={{
                       position: 'absolute',
-                      top: device_info.screen.height + 12,
+                      top:
+                        device_info.platform === 'phone'
+                          ? device_info.screen.height + 60
+                          : device_info.screen.height + 12,
                       left: 0,
                       fontSize: '13px',
-                      color: '#6B7280',
+                      color: 'rgba(255, 255, 255, 0.7)',
                       fontWeight: 500,
                       fontFamily: 'system-ui, sans-serif',
                     }}
@@ -631,7 +743,7 @@ export default function Editor() {
         className="fixed top-6 transition-all duration-300 z-40"
         style={{
           left: '80px',
-          right: isRightPanelCollapsed ? '0' : '20%',
+          right: isRightPanelCollapsed ? '80px' : 'calc(20% + 40px)',
           display: 'flex',
           justifyContent: 'center',
         }}
@@ -640,61 +752,139 @@ export default function Editor() {
           className="flex items-center gap-1 rounded-full px-2 py-1.5"
           style={{
             backgroundColor: '#FFFFFF',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+            border: '1px solid rgba(0, 0, 0, 0.05)',
           }}
         >
           {tabs.map(tab => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className="px-6 py-2 rounded-full transition-all duration-300 text-sm font-medium"
+              key={tab.name}
+              onClick={() => tab.enabled && setActiveTab(tab.name)}
+              disabled={!tab.enabled}
+              className="px-6 py-2 rounded-full transition-all duration-300 text-sm font-medium relative group"
               style={{
-                backgroundColor: activeTab === tab ? '#F4F4F4' : 'transparent',
-                color: activeTab === tab ? '#3B3B3B' : '#929397',
+                backgroundColor:
+                  activeTab === tab.name ? '#F4F4F4' : 'transparent',
+                color:
+                  activeTab === tab.name
+                    ? '#1F1F20'
+                    : tab.enabled
+                      ? '#6B7280'
+                      : '#D1D5DB',
+                cursor: tab.enabled ? 'pointer' : 'not-allowed',
+                opacity: tab.enabled ? 1 : 0.6,
               }}
             >
-              {tab}
+              {tab.name}
+              {!tab.enabled && (
+                <span className="ml-2 text-xs opacity-50">🔒</span>
+              )}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Infinite Canvas */}
-      <InfiniteCanvas
-        width={
-          flowGraph && flowGraph.layout_positions
-            ? Math.max(
-                ...Object.values(flowGraph.layout_positions).map(p => p.x),
-                0,
-              ) +
-              device_info.screen.width +
-              200
-            : device_info.screen.width
-        }
-        height={
-          flowGraph && flowGraph.layout_positions
-            ? Math.max(
-                ...Object.values(flowGraph.layout_positions).map(p => p.y),
-                0,
-              ) +
-              device_info.screen.height +
-              200
-            : device_info.screen.height
-        }
-        isLoading={generationStage === 'generating'}
-        loadingStage={
-          generationStage === 'generating' ? 'Generating flow...' : undefined
-        }
-      >
-        {renderDeviceContent()}
-      </InfiniteCanvas>
+      {/* Canvas Container - Different for Concept vs Prototype */}
+      {activeTab === 'Prototype' &&
+      generationStage === 'complete' &&
+      flowGraph ? (
+        // Prototype mode - dark box container with light background
+        <div
+          className="fixed"
+          style={{
+            top: '80px',
+            bottom: '100px',
+            left: '80px',
+            right: isRightPanelCollapsed ? '80px' : 'calc(20% + 40px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {/* Wrapper to make box 20% narrower */}
+          <div
+            style={{
+              width: '80%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                backgroundColor: '#1F1F20',
+                borderRadius: '24px',
+                overflow: 'hidden',
+                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+                border: '1px solid rgba(255, 255, 255, 0.05)',
+              }}
+            >
+              <PrototypeCanvas
+                deviceWidth={
+                  device_info.platform === 'phone'
+                    ? device_info.screen.width + 24 // Phone bezel padding
+                    : device_info.screen.width
+                }
+                deviceHeight={
+                  device_info.platform === 'phone'
+                    ? device_info.screen.height + 48 // Phone bezel padding
+                    : device_info.screen.height + 40 // Web browser chrome
+                }
+              >
+                {renderDeviceContent()}
+              </PrototypeCanvas>
+            </div>
+          </div>
+        </div>
+      ) : (
+        // Concept mode - infinite canvas with dark background
+        <InfiniteCanvas
+          width={
+            flowGraph && generationStage === 'complete'
+              ? (() => {
+                  const positions = calculateFlowLayout(flowGraph)
+                  return (
+                    Math.max(...Object.values(positions).map(p => p.x), 0) +
+                    device_info.screen.width +
+                    (device_info.platform === 'phone' ? 300 : 200)
+                  )
+                })()
+              : device_info.screen.width
+          }
+          height={
+            flowGraph && generationStage === 'complete'
+              ? (() => {
+                  const positions = calculateFlowLayout(flowGraph)
+                  const yValues = Object.values(positions).map(p => p.y)
+                  const minY = Math.min(...yValues, 0)
+                  const maxY = Math.max(...yValues, 0)
+                  return (
+                    maxY -
+                    minY +
+                    device_info.screen.height +
+                    (device_info.platform === 'phone' ? 200 : 150)
+                  )
+                })()
+              : device_info.screen.height
+          }
+          isLoading={generationStage === 'generating'}
+          loadingStage={
+            generationStage === 'generating' ? 'Generating flow...' : undefined
+          }
+        >
+          {renderDeviceContent()}
+        </InfiniteCanvas>
+      )}
 
       {/* Bottom Control Bar */}
       <div
         className="fixed bottom-6 transition-all duration-300 z-40"
         style={{
           left: '80px',
-          right: isRightPanelCollapsed ? '0' : '20%',
+          right: isRightPanelCollapsed ? '80px' : 'calc(20% + 40px)',
           display: 'flex',
           justifyContent: 'center',
         }}

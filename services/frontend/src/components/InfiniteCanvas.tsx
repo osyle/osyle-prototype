@@ -167,15 +167,15 @@ export default function InfiniteCanvas({
 
   return (
     <div className="fixed inset-0 overflow-hidden" style={{ zIndex: 0 }}>
-      {/* Canvas with subtle dot grid background */}
+      {/* Canvas with subtle dot grid background - DARK THEME */}
       <div
         ref={canvasRef}
         className="w-full h-full overflow-hidden"
         style={{
-          backgroundColor: '#F8F9FA',
-          backgroundImage: `radial-gradient(circle, rgba(0, 0, 0, 0.08) 0.5px, transparent 0.5px)`,
-          backgroundSize: '16px 16px',
-          backgroundPosition: `${pan.x % 16}px ${pan.y % 16}px`,
+          backgroundColor: '#0F0F0F',
+          backgroundImage: `radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 1px)`,
+          backgroundSize: '24px 24px',
+          backgroundPosition: `${pan.x % 24}px ${pan.y % 24}px`,
           cursor: isPanning ? 'grabbing' : 'grab',
         }}
         onMouseDown={handleMouseDown}
@@ -200,11 +200,9 @@ export default function InfiniteCanvas({
             style={{
               width: `${width}px`,
               height: `${height}px`,
-              backgroundColor: 'white',
-              boxShadow:
-                '0 4px 12px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.06)',
-              borderRadius: '12px',
-              overflow: 'hidden',
+              backgroundColor: 'transparent',
+              borderRadius: '0px',
+              overflow: 'visible',
               position: 'relative',
             }}
           >
@@ -219,7 +217,7 @@ export default function InfiniteCanvas({
                   alignItems: 'center',
                   justifyContent: 'center',
                   background:
-                    'linear-gradient(135deg, #FAFAFA 0%, #F5F5F5 100%)',
+                    'linear-gradient(135deg, #1A1A1A 0%, #252525 100%)',
                 }}
               >
                 {/* Animated dashed border */}
@@ -227,7 +225,7 @@ export default function InfiniteCanvas({
                   style={{
                     position: 'absolute',
                     inset: '16px',
-                    border: '2px dashed #D1D5DB',
+                    border: '2px dashed rgba(255, 255, 255, 0.2)',
                     borderRadius: '8px',
                     animation: 'dashOffset 20s linear infinite',
                   }}
@@ -239,7 +237,7 @@ export default function InfiniteCanvas({
                     position: 'absolute',
                     inset: '16px',
                     borderRadius: '8px',
-                    background: 'white',
+                    background: 'rgba(255, 255, 255, 0.02)',
                     animation: 'pulse 2s ease-in-out infinite',
                   }}
                 />
@@ -259,7 +257,7 @@ export default function InfiniteCanvas({
                       width: '48px',
                       height: '48px',
                       margin: '0 auto 20px',
-                      border: '3px solid #E5E7EB',
+                      border: '3px solid rgba(255, 255, 255, 0.1)',
                       borderTop: '3px solid #6366F1',
                       borderRadius: '50%',
                       animation: 'spin 1s linear infinite',
@@ -271,7 +269,7 @@ export default function InfiniteCanvas({
                       style={{
                         fontSize: '16px',
                         fontWeight: 500,
-                        color: '#1F2937',
+                        color: '#FFFFFF',
                         marginBottom: '8px',
                       }}
                     >
@@ -282,7 +280,7 @@ export default function InfiniteCanvas({
                   <div
                     style={{
                       fontSize: '13px',
-                      color: '#6B7280',
+                      color: 'rgba(255, 255, 255, 0.5)',
                     }}
                   >
                     Preparing your design...
@@ -316,7 +314,7 @@ export default function InfiniteCanvas({
                 top: `${height + 12}px`,
                 left: 0,
                 fontSize: '11px',
-                color: '#6B7280',
+                color: 'rgba(255, 255, 255, 0.3)',
                 fontFamily: 'system-ui, sans-serif',
                 userSelect: 'none',
                 pointerEvents: 'none',
@@ -337,9 +335,11 @@ export default function InfiniteCanvas({
         <div
           className="px-3 py-2 rounded-lg text-xs font-medium text-center"
           style={{
-            backgroundColor: 'white',
-            color: '#3B3B3B',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            color: '#FFFFFF',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
             minWidth: '64px',
           }}
         >
@@ -350,15 +350,17 @@ export default function InfiniteCanvas({
         <div
           className="flex flex-col gap-1 rounded-lg p-1"
           style={{
-            backgroundColor: 'white',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
           }}
         >
           <button
             onClick={zoomIn}
-            className="p-2 rounded hover:bg-gray-100 transition-colors"
+            className="p-2 rounded hover:bg-white/10 transition-colors"
             title="Zoom in"
-            style={{ color: '#3B3B3B' }}
+            style={{ color: '#FFFFFF' }}
           >
             <ZoomIn size={18} />
           </button>
@@ -366,16 +368,16 @@ export default function InfiniteCanvas({
           <div
             style={{
               height: '1px',
-              backgroundColor: '#E5E7EB',
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
               margin: '0 4px',
             }}
           />
 
           <button
             onClick={zoomOut}
-            className="p-2 rounded hover:bg-gray-100 transition-colors"
+            className="p-2 rounded hover:bg-white/10 transition-colors"
             title="Zoom out"
-            style={{ color: '#3B3B3B' }}
+            style={{ color: '#FFFFFF' }}
           >
             <ZoomOut size={18} />
           </button>
@@ -383,16 +385,16 @@ export default function InfiniteCanvas({
           <div
             style={{
               height: '1px',
-              backgroundColor: '#E5E7EB',
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
               margin: '0 4px',
             }}
           />
 
           <button
             onClick={zoomToFit}
-            className="p-2 rounded hover:bg-gray-100 transition-colors"
+            className="p-2 rounded hover:bg-white/10 transition-colors"
             title="Zoom to fit"
-            style={{ color: '#3B3B3B' }}
+            style={{ color: '#FFFFFF' }}
           >
             <Maximize2 size={18} />
           </button>
@@ -400,16 +402,16 @@ export default function InfiniteCanvas({
           <div
             style={{
               height: '1px',
-              backgroundColor: '#E5E7EB',
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
               margin: '0 4px',
             }}
           />
 
           <button
             onClick={resetView}
-            className="p-2 rounded hover:bg-gray-100 transition-colors"
+            className="p-2 rounded hover:bg-white/10 transition-colors"
             title="Reset view (100%)"
-            style={{ color: '#3B3B3B' }}
+            style={{ color: '#FFFFFF' }}
           >
             <Move size={18} />
           </button>
@@ -421,10 +423,12 @@ export default function InfiniteCanvas({
         <div
           className="absolute top-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-sm font-medium"
           style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
             color: 'white',
             zIndex: 1000,
             pointerEvents: 'none',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(10px)',
           }}
         >
           <Move size={16} className="inline mr-2" />
@@ -436,9 +440,11 @@ export default function InfiniteCanvas({
       <div
         className="absolute bottom-6 left-6 px-3 py-2 rounded-lg text-xs"
         style={{
-          backgroundColor: 'white',
-          color: '#6B7280',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          color: 'rgba(255, 255, 255, 0.6)',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
           userSelect: 'none',
           zIndex: 1000,
         }}
@@ -447,7 +453,10 @@ export default function InfiniteCanvas({
           <div className="flex items-center gap-2">
             <kbd
               className="px-2 py-0.5 rounded text-xs font-mono"
-              style={{ backgroundColor: '#F3F4F6', color: '#4B5563' }}
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                color: 'rgba(255, 255, 255, 0.8)',
+              }}
             >
               Drag
             </kbd>
@@ -456,7 +465,10 @@ export default function InfiniteCanvas({
           <div className="flex items-center gap-2">
             <kbd
               className="px-2 py-0.5 rounded text-xs font-mono"
-              style={{ backgroundColor: '#F3F4F6', color: '#4B5563' }}
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                color: 'rgba(255, 255, 255, 0.8)',
+              }}
             >
               Scroll
             </kbd>
