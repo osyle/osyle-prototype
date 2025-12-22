@@ -3,6 +3,8 @@
  * Automatically attaches Cognito JWT tokens to requests
  */
 import { fetchAuthSession } from 'aws-amplify/auth'
+import type { FlowGraph } from '../types/home.types'
+
 import {
   buildDTRWebSocket,
   generateUIWebSocket,
@@ -62,6 +64,9 @@ export interface Project {
   inspiration_image_urls?: string[] // Presigned URLs (when requested)
   device_info?: DeviceInfo // Device settings when project was created
   rendering_mode?: 'react' | 'design-ml' // Rendering mode when project was created
+  flow_mode?: boolean // Enable flow mode
+  max_screens?: number // Max screens in flow
+  flow_graph?: FlowGraph // Flow graph structure
   outputs: string[]
   metadata: Record<string, unknown>
   created_at: string
@@ -372,6 +377,8 @@ export const projectsAPI = {
     inspiration_images?: File[]
     device_info?: DeviceInfo
     rendering_mode?: 'react' | 'design-ml'
+    flow_mode?: boolean
+    max_screens?: number
     metadata?: Record<string, unknown>
   }): Promise<Project> => {
     const token = await getAuthToken()
@@ -396,6 +403,12 @@ export const projectsAPI = {
     }
     if (data.rendering_mode) {
       formData.append('rendering_mode', data.rendering_mode)
+    }
+    if (data.flow_mode !== undefined) {
+      formData.append('flow_mode', data.flow_mode.toString())
+    }
+    if (data.max_screens !== undefined) {
+      formData.append('max_screens', data.max_screens.toString())
     }
     if (data.metadata) {
       formData.append('metadata', JSON.stringify(data.metadata))
@@ -685,6 +698,87 @@ export const llmAPI = {
       new_version: number
       ui: unknown
     }>(`/api/llm/ui/revert?project_id=${projectId}&version=${version}`, {
+      method: 'POST',
+    })
+  },
+
+  /**
+   * Generate flow for a project (multi-screen UI flow)
+   */
+  generateFlow: async (
+    projectId: string,
+  ): Promise<{
+    status: string
+    flow_graph: FlowGraph
+    version: number
+  }> => {
+    return apiRequest<{
+      status: string
+      flow_graph: FlowGraph
+      version: number
+    }>(`/api/llm/generate-flow?project_id=${projectId}`, {
+      method: 'POST',
+    })
+  },
+
+  /**
+   * Get existing flow for a project
+   */
+  getFlow: async (
+    projectId: string,
+    version?: number,
+  ): Promise<{
+    status: string
+    flow_graph: FlowGraph
+    version: number
+  }> => {
+    const query = version
+      ? `?project_id=${projectId}&version=${version}`
+      : `?project_id=${projectId}`
+    return apiRequest<{
+      status: string
+      flow_graph: FlowGraph
+      version: number
+    }>(`/api/llm/flow/get${query}`)
+  },
+
+  /**
+   * Get all flow versions for a project
+   */
+  getFlowVersions: async (
+    projectId: string,
+  ): Promise<{
+    status: string
+    current_version: number
+    versions: number[]
+  }> => {
+    return apiRequest<{
+      status: string
+      current_version: number
+      versions: number[]
+    }>(`/api/llm/flow/versions?project_id=${projectId}`)
+  },
+
+  /**
+   * Revert to a previous flow version
+   */
+  revertFlowVersion: async (
+    projectId: string,
+    version: number,
+  ): Promise<{
+    status: string
+    message: string
+    old_version: number
+    new_version: number
+    flow_graph: FlowGraph
+  }> => {
+    return apiRequest<{
+      status: string
+      message: string
+      old_version: number
+      new_version: number
+      flow_graph: FlowGraph
+    }>(`/api/llm/flow/revert?project_id=${projectId}&version=${version}`, {
       method: 'POST',
     })
   },

@@ -122,6 +122,56 @@ class DeviceInfo(BaseModel):
     screen: DeviceScreen
 
 
+# ============================================================================
+# FLOW MODELS (NEW)
+# ============================================================================
+
+class Position(BaseModel):
+    """Canvas position for a screen"""
+    x: float
+    y: float
+
+
+class FlowTransition(BaseModel):
+    """Transition between screens in a flow"""
+    transition_id: str
+    from_screen_id: str
+    to_screen_id: str
+    trigger: str  # "Tap 'Sign Up' button"
+    trigger_type: str  # "tap" | "submit" | "auto" | "link"
+    flow_type: str  # "forward" | "back" | "error" | "branch" | "success"
+    label: Optional[str] = None  # Display text on arrow
+    condition: Optional[str] = None  # "if form valid"
+    color: Optional[str] = None  # For visual coding
+
+
+class FlowScreen(BaseModel):
+    """Screen in a flow"""
+    screen_id: str
+    name: str
+    description: str
+    task_description: str  # Specific UI generation task
+    platform: str  # 'web' | 'phone'
+    dimensions: dict  # {width: int, height: int}
+    screen_type: Optional[str] = "intermediate"  # "entry" | "intermediate" | "success" | "error" | "exit"
+    semantic_role: Optional[str] = None  # "form" | "confirmation" | "decision" | "content"
+    ui_code: Optional[str] = None  # Generated React code
+    ui_loading: Optional[bool] = False
+    ui_error: Optional[bool] = False
+
+
+class FlowGraph(BaseModel):
+    """Complete flow graph structure"""
+    flow_id: str
+    flow_name: str
+    description: Optional[str] = ""
+    entry_screen_id: str
+    screens: List[FlowScreen]
+    transitions: List[FlowTransition]
+    layout_positions: Optional[dict] = {}  # screen_id -> {x, y}
+    layout_algorithm: Optional[str] = "hierarchical"  # "hierarchical" | "force-directed" | "manual"
+
+
 class ProjectCreate(BaseModel):
     """Request to create a new project"""
     name: str
@@ -131,6 +181,8 @@ class ProjectCreate(BaseModel):
     inspiration_image_keys: Optional[List[str]] = []  # S3 keys for inspiration images
     device_info: Optional[DeviceInfo] = None  # Device settings when project was created
     rendering_mode: Optional[str] = None  # 'react' or 'design-ml'
+    flow_mode: Optional[bool] = True  # NEW: Generate flow vs single screen
+    max_screens: Optional[int] = 5  # NEW: Max screens in flow
     metadata: Optional[dict] = {}
 
 
@@ -145,6 +197,8 @@ class ProjectOut(BaseModel):
     inspiration_image_keys: List[str] = []  # S3 keys for inspiration images
     device_info: Optional[dict] = None  # Device settings when project was created
     rendering_mode: Optional[str] = None  # 'react' or 'design-ml'
+    flow_mode: Optional[bool] = True  # NEW: Flow mode flag
+    flow_graph: Optional[dict] = None  # NEW: Flow graph structure
     outputs: List[str] = []  # List of S3 keys
     metadata: dict
     created_at: str

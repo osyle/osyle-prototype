@@ -321,6 +321,8 @@ def create_project(
     inspiration_image_keys: List[str] = None,  # S3 keys for inspiration images
     device_info: dict = None,  # Device settings when project was created
     rendering_mode: str = None,  # 'react' or 'design-ml'
+    flow_mode: bool = True,  # NEW: Flow mode flag
+    max_screens: int = 5,  # NEW: Max screens in flow
     metadata: dict = None,
     project_id: str = None  # Optional: pass explicit ID for S3 consistency
 ) -> Dict[str, Any]:
@@ -339,6 +341,9 @@ def create_project(
         "inspiration_image_keys": inspiration_image_keys or [],  # S3 keys
         "device_info": device_info or {},  # Store device settings
         "rendering_mode": rendering_mode or "react",  # Store rendering mode
+        "flow_mode": flow_mode,  # NEW: Store flow mode
+        "max_screens": max_screens,  # NEW: Store max screens
+        "flow_graph": {},  # NEW: Initialize empty flow graph
         "outputs": [],
         "metadata": metadata or {},
         "created_at": now,
@@ -443,3 +448,20 @@ def delete_project(project_id: str) -> bool:
         return True
     except ClientError:
         return False
+
+
+def update_project_flow_graph(project_id: str, flow_graph: dict) -> Dict[str, Any]:
+    """Update project's flow_graph"""
+    now = get_timestamp()
+    
+    response = projects_table.update_item(
+        Key={"project_id": project_id},
+        UpdateExpression="SET flow_graph = :flow_graph, updated_at = :updated",
+        ExpressionAttributeValues={
+            ":flow_graph": flow_graph,
+            ":updated": now
+        },
+        ReturnValues="ALL_NEW"
+    )
+    
+    return response.get("Attributes", {})

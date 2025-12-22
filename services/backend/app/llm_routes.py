@@ -839,3 +839,392 @@ async def get_random_ui(
             status_code=500,
             detail=f"Failed to get random UI: {str(e)}"
         )
+
+# ============================================================================
+# FLOW GENERATION
+# ============================================================================
+
+@router.post("/generate-flow")
+async def generate_flow(
+    project_id: str,
+    user: dict = Depends(get_current_user),
+    llm: LLMService = Depends(get_llm_service),
+):
+    """Generate a multi-screen flow for a project with versioning"""
+    import os
+    import asyncio
+    user_id = user.get("user_id")
+    
+    try:
+        project = db.get_project(project_id)
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        if project.get("owner_id") != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        task_description = project.get("task_description", "")
+        device_info = project.get("device_info", {})
+        max_screens = project.get("max_screens", 5)
+        
+        if not device_info:
+            raise HTTPException(status_code=400, detail="Device info required")
+        
+        # Load DTM if available
+        dtm_guidance = None
+        selected_taste_id = project.get("selected_taste_id")
+        
+        if selected_taste_id:
+            try:
+                dtm_data = storage.get_taste_dtm(user_id, selected_taste_id)
+                if dtm_data:
+                    dtm_guidance = f"DTM (Designer Taste Model):\n{json.dumps(dtm_data, indent=2)}"
+            except:
+                pass
+        
+        # Load inspiration images
+        inspiration_images = []
+        image_keys = project.get("inspiration_image_keys", [])
+        
+        if image_keys:
+            limited_keys = image_keys[-MAX_INSPIRATION_IMAGES_FOR_LLM:]
+            inspiration_images = storage.get_inspiration_images(user_id, project_id, limited_keys)
+        
+        # Generate flow architecture
+        flow_arch_content = [
+            {"type": "text", "text": f"TASK: {task_description}\n\nDEVICE CONTEXT:\n{json.dumps(device_info, indent=2)}\n\nMAX SCREENS: {max_screens}"}
+        ]
+        
+        if dtm_guidance:
+            flow_arch_content.append({"type": "text", "text": f"\n\n{dtm_guidance}"})
+        
+        for img in inspiration_images:
+            flow_arch_content.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": img.get('media_type', 'image/png'),
+                    "data": img['data']
+                }
+            })
+        
+        flow_arch_response = await llm.call_claude(
+            prompt_name="generate_flow_architecture",
+            user_message=flow_arch_content,
+            parse_json=True
+        )
+        
+        flow_architecture = flow_arch_response["json"]
+        
+        # Generate UI for each screen
+        async def generate_screen_ui(screen, screen_index):
+            outgoing_transitions = [
+                t for t in flow_architecture.get('transitions', [])
+                if t['from_screen_id'] == screen['screen_id']
+            ]
+            
+            flow_context = {
+                "flow_name": flow_architecture.get('flow_name'),
+                "screen_id": screen['screen_id'],
+                "screen_name": screen['name'],
+                "position_in_flow": screen_index + 1,
+                "total_screens": len(flow_architecture['screens']),
+                "outgoing_transitions": outgoing_transitions
+            }
+            
+            screen_content = [
+                {"type": "text", "text": f"TASK: {screen['task_description']}\n\nDEVICE CONTEXT:\n{json.dumps(device_info, indent=2)}\n\nFLOW CONTEXT:\n{json.dumps(flow_context, indent=2)}"}
+            ]
+            
+            if dtm_guidance:
+                screen_content.append({"type": "text", "text": f"\n\n{dtm_guidance}"})
+            
+            for img in inspiration_images:
+                screen_content.append({
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": img.get('media_type', 'image/png'),
+                        "data": img['data']
+                    }
+                })
+            
+            screen_response = await llm.call_claude(
+                prompt_name="generate_ui_react_v3_dtm_flow",
+                user_message=screen_content
+            )
+            
+            ui_code = screen_response["text"].strip()
+            # Strip markdown code fences
+            if ui_code.startswith("```jsx") or ui_code.startswith("```javascript") or ui_code.startswith("```tsx"):
+                first_newline = ui_code.find('\n')
+                if first_newline != -1:
+                    ui_code = ui_code[first_newline + 1:]
+            elif ui_code.startswith("```"):
+                ui_code = ui_code[3:]
+            if ui_code.endswith("```"):
+                ui_code = ui_code[:-3]
+            ui_code = ui_code.strip()
+            
+            return {"screen_id": screen['screen_id'], "ui_code": ui_code}
+        
+        screen_tasks = [
+            generate_screen_ui(screen, i)
+            for i, screen in enumerate(flow_architecture['screens'])
+        ]
+        screen_results = await asyncio.gather(*screen_tasks)
+        
+        for result in screen_results:
+            for screen in flow_architecture['screens']:
+                if screen['screen_id'] == result['screen_id']:
+                    screen['ui_code'] = result['ui_code']
+                    break
+        
+        # Calculate layout
+        def calculate_layout(flow_arch):
+            screens = flow_arch['screens']
+            transitions = flow_arch.get('transitions', [])
+            
+            graph = {screen['screen_id']: [] for screen in screens}
+            for trans in transitions:
+                if trans['from_screen_id'] in graph:
+                    graph[trans['from_screen_id']].append(trans['to_screen_id'])
+            
+            entry_id = flow_arch['entry_screen_id']
+            depths = {entry_id: 0}
+            visited = set()
+            
+            def assign_depth(screen_id, depth):
+                if screen_id in visited:
+                    return
+                visited.add(screen_id)
+                depths[screen_id] = depth
+                for next_id in graph.get(screen_id, []):
+                    if next_id not in depths or depths[next_id] > depth + 1:
+                        assign_depth(next_id, depth + 1)
+            
+            assign_depth(entry_id, 0)
+            
+            for screen in screens:
+                if screen['screen_id'] not in depths:
+                    depths[screen['screen_id']] = 0
+            
+            depth_groups = {}
+            for screen_id, depth in depths.items():
+                if depth not in depth_groups:
+                    depth_groups[depth] = []
+                depth_groups[depth].append(screen_id)
+            
+            positions = {}
+            for depth, screen_ids in sorted(depth_groups.items()):
+                x = depth * 600
+                for i, screen_id in enumerate(screen_ids):
+                    y = i * (int(device_info.get('screen', {}).get('height', 812)) + 400)
+                    positions[screen_id] = {"x": x, "y": y}
+            
+            return positions
+        
+        layout_positions = calculate_layout(flow_architecture)
+        
+        # Build flow graph
+        flow_graph = {
+            "flow_id": f"flow_{project_id}",
+            "flow_name": flow_architecture.get('flow_name'),
+            "description": task_description,
+            "entry_screen_id": flow_architecture.get('entry_screen_id'),
+            "screens": flow_architecture.get('screens', []),
+            "transitions": flow_architecture.get('transitions', []),
+            "layout_positions": layout_positions,
+            "layout_algorithm": "hierarchical"
+        }
+        
+        # === VERSIONING LOGIC ===
+        # Get existing versions
+        existing_versions = storage.list_project_flow_versions(user_id, project_id)
+        new_version = max(existing_versions) + 1 if existing_versions else 1
+        
+        print(f"💾 Saving flow as version {new_version}")
+        
+        # Save versioned flow to S3
+        storage.put_project_flow(user_id, project_id, flow_graph, new_version)
+        
+        # Update project's flow_graph in database
+        db.update_project_flow_graph(project_id, flow_graph)
+        
+        return {
+            "status": "success",
+            "flow_graph": flow_graph,
+            "version": new_version
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to generate flow: {str(e)}")
+
+
+# ============================================================================
+# FLOW VERSIONING ENDPOINTS
+# ============================================================================
+
+@router.get("/flow/get")
+async def get_flow(
+    project_id: str,
+    version: Optional[int] = None,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Get a specific version of a flow for a project
+    If version is not specified, returns the latest version
+    """
+    user_id = user.get("user_id")
+    
+    try:
+        project = db.get_project(project_id)
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        if project.get("owner_id") != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        # Get list of versions
+        versions = storage.list_project_flow_versions(user_id, project_id)
+        
+        if not versions:
+            raise HTTPException(status_code=404, detail="No flow versions found")
+        
+        # Use specified version or latest
+        target_version = version if version is not None else max(versions)
+        
+        if target_version not in versions:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Version {target_version} not found"
+            )
+        
+        # Load flow from S3
+        flow_graph = storage.get_project_flow(user_id, project_id, target_version)
+        
+        if not flow_graph:
+            raise HTTPException(status_code=404, detail="Flow data not found")
+        
+        return {
+            "status": "success",
+            "flow_graph": flow_graph,
+            "version": target_version
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to get flow: {str(e)}")
+
+
+@router.get("/flow/versions")
+async def get_flow_versions(
+    project_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Get all flow versions for a project"""
+    user_id = user.get("user_id")
+    
+    try:
+        project = db.get_project(project_id)
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        if project.get("owner_id") != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        # Get list of versions
+        versions = storage.list_project_flow_versions(user_id, project_id)
+        
+        current_version = max(versions) if versions else 0
+        
+        return {
+            "status": "success",
+            "current_version": current_version,
+            "versions": versions
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get flow versions: {str(e)}"
+        )
+
+
+@router.post("/flow/revert")
+async def revert_flow_version(
+    project_id: str,
+    version: int,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Revert to a previous flow version by creating a new version as a copy
+    This preserves history - the old version becomes the newest version
+    """
+    user_id = user.get("user_id")
+    
+    try:
+        project = db.get_project(project_id)
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        if project.get("owner_id") != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        # Get list of versions
+        versions = storage.list_project_flow_versions(user_id, project_id)
+        
+        if not versions:
+            raise HTTPException(status_code=404, detail="No flow versions found")
+        
+        if version not in versions:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Version {version} not found"
+            )
+        
+        # Load the old version
+        old_flow_graph = storage.get_project_flow(user_id, project_id, version)
+        
+        if not old_flow_graph:
+            raise HTTPException(status_code=404, detail="Flow data not found")
+        
+        # Create new version number (max + 1)
+        new_version = max(versions) + 1
+        
+        # Save as new version
+        storage.put_project_flow(user_id, project_id, old_flow_graph, new_version)
+        
+        # Update project's flow_graph in database
+        db.update_project_flow_graph(project_id, old_flow_graph)
+        
+        return {
+            "status": "success",
+            "message": f"Reverted to version {version} as new version {new_version}",
+            "old_version": version,
+            "new_version": new_version,
+            "flow_graph": old_flow_graph
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to revert flow version: {str(e)}"
+        )

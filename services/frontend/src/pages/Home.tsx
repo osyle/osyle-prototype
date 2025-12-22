@@ -763,6 +763,8 @@ export default function Home() {
         inspiration_images: inspirationImages,
         device_info: device_info, // Save current device settings
         rendering_mode: rendering_mode, // Save current rendering mode
+        flow_mode: true, // NEW: Enable flow mode by default
+        max_screens: 5, // NEW: Default max screens
         metadata: {},
       })
 
@@ -777,6 +779,8 @@ export default function Home() {
           selected_resource_ids: project.selected_resource_ids,
           device_info: project.device_info,
           rendering_mode: project.rendering_mode,
+          flow_mode: project.flow_mode, // NEW: Store flow_mode
+          max_screens: project.max_screens, // NEW: Store max_screens
         }),
       )
 
@@ -832,6 +836,9 @@ export default function Home() {
           selected_resource_ids: projectDetails.selected_resource_ids,
           device_info: projectDetails.device_info,
           rendering_mode: projectDetails.rendering_mode,
+          flow_mode: projectDetails.flow_mode ?? true, // NEW: Default to true if not set
+          max_screens: projectDetails.max_screens ?? 5, // NEW: Default to 5 if not set
+          flow_graph: projectDetails.flow_graph, // NEW: Include flow_graph if exists
         }),
       )
 
@@ -1330,12 +1337,12 @@ export default function Home() {
                   </div>
                   <div className="flex items-center gap-3">
                     {stage.hasNewButton && expandedStage === stage.id && (
-                      <button
+                      <div
                         onClick={e => {
                           e.stopPropagation()
                           setIsCreateResourceModalOpen(true)
                         }}
-                        className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all hover:scale-105"
+                        className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all hover:scale-105 cursor-pointer"
                         style={{ backgroundColor: '#F5C563' }}
                       >
                         <span
@@ -1345,7 +1352,7 @@ export default function Home() {
                           New
                         </span>
                         <Plus size={16} style={{ color: '#1F1F20' }} />
-                      </button>
+                      </div>
                     )}
                     <div
                       className="transition-transform duration-300"

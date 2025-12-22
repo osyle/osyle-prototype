@@ -9,24 +9,27 @@ import {
   Palette,
   Sparkles,
   Plus,
+  List,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AddInspirationModal from '../components/AddInspirationModal'
-import { type UINode } from '../components/DeviceRenderer'
-import DeviceRenderer from '../components/DeviceRenderer'
+import DeviceFrame from '../components/DeviceFrame'
+import DynamicReactRenderer from '../components/DynamicReactRenderer'
+import FlowConnections from '../components/FlowConnections'
 import InfiniteCanvas from '../components/InfiniteCanvas'
+import PrototypeRunner from '../components/PrototypeRunner'
 import VersionHistory from '../components/VersionHistory'
 import { useDeviceContext } from '../hooks/useDeviceContext'
 import api from '../services/api'
+import { type FlowGraph } from '../types/home.types'
 
 type GenerationStage = 'idle' | 'generating' | 'complete' | 'error'
 
 export default function Editor() {
   const navigate = useNavigate()
 
-  const { device_info, rendering_mode, setDeviceInfo, setRenderingMode } =
-    useDeviceContext()
+  const { device_info, setDeviceInfo, setRenderingMode } = useDeviceContext()
 
   const [activeTab, setActiveTab] = useState('Concept')
   const [detailsValue, setDetailsValue] = useState(66)
@@ -42,8 +45,9 @@ export default function Editor() {
   // Generation state
   const [generationStage, setGenerationStage] =
     useState<GenerationStage>('idle')
-  const [generatedUI, setGeneratedUI] = useState<UINode | null>(null)
-
+  const [flowGraph, setFlowGraph] = useState<FlowGraph | null>(null)
+  const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null)
+  const [isFlowNavigatorOpen, setIsFlowNavigatorOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Right panel collapsed state
@@ -57,12 +61,13 @@ export default function Editor() {
     useState(false)
   const [isAddingInspiration, setIsAddingInspiration] = useState(false)
 
-  // Version history state
-  const [currentUIVersion, setCurrentUIVersion] = useState<number>(1)
+  // Version history state - RESTORED!
+  const [currentFlowVersion, setCurrentFlowVersion] = useState<number>(1)
   const [viewingVersion, setViewingVersion] = useState<number | null>(null)
   const [isReverting, setIsReverting] = useState(false)
 
-  const tabs = ['Concept', 'Prototype', 'Video pitch', 'Presentation']
+  // ONLY 2 tabs - flow mode only
+  const tabs = ['Concept', 'Prototype']
 
   const styleOptions = [
     {
@@ -88,20 +93,16 @@ export default function Editor() {
   const getEnergyValue = () => Math.max(1, Math.round((energyValue / 100) * 10))
   const getCraftValue = () => Math.max(1, Math.round((craftValue / 100) * 10))
 
-  // Note: getScaledDimensions removed - InfiniteCanvas handles all sizing at true dimensions
-
   const handleBackToHome = () => {
-    // Only allow navigation back if generation is complete or in error state
     if (generationStage !== 'complete' && generationStage !== 'error') {
       return
     }
 
-    // Mark project as completed so "Continue" button appears
     const currentProject = localStorage.getItem('current_project')
     if (currentProject) {
       try {
         const project = JSON.parse(currentProject)
-        project.ui_data = generatedUI
+        project.flow_graph = flowGraph
         localStorage.setItem('current_project', JSON.stringify(project))
       } catch (err) {
         console.error('Failed to update project:', err)
@@ -112,11 +113,77 @@ export default function Editor() {
     navigate('/')
   }
 
-  // Start generation process on mount (only if not already generated)
   useEffect(() => {
     checkAndStartGeneration()
     loadInspirationImages()
   }, [])
+
+  // Load version info when flow is loaded
+  const loadVersionInfo = async () => {
+    try {
+      const currentProject = localStorage.getItem('current_project')
+      if (!currentProject) return
+
+      const project = JSON.parse(currentProject)
+      const versionData = await api.llm.getFlowVersions(project.project_id)
+      setCurrentFlowVersion(versionData.current_version)
+    } catch (err) {
+      console.error('Failed to load version info:', err)
+    }
+  }
+
+  // Handle version selection
+  const handleVersionSelect = async (version: number) => {
+    try {
+      const currentProject = localStorage.getItem('current_project')
+      if (!currentProject) return
+
+      const project = JSON.parse(currentProject)
+      const versionData = await api.llm.getFlow(project.project_id, version)
+
+      setFlowGraph(versionData.flow_graph)
+      setViewingVersion(version)
+    } catch (err) {
+      console.error('Failed to load version:', err)
+      alert(err instanceof Error ? err.message : 'Failed to load version')
+    }
+  }
+
+  // Handle version revert
+  const handleRevertVersion = async (version: number) => {
+    if (
+      !confirm(
+        `Revert to version ${version}? This will create a new version as a copy.`,
+      )
+    ) {
+      return
+    }
+
+    try {
+      setIsReverting(true)
+      const currentProject = localStorage.getItem('current_project')
+      if (!currentProject) return
+
+      const project = JSON.parse(currentProject)
+      const result = await api.llm.revertFlowVersion(
+        project.project_id,
+        version,
+      )
+
+      setFlowGraph(result.flow_graph)
+      setCurrentFlowVersion(result.new_version)
+      setViewingVersion(null)
+
+      alert(
+        `Successfully reverted to version ${version}. Now viewing version ${result.new_version}.`,
+      )
+    } catch (err) {
+      console.error('Failed to revert version:', err)
+      alert(err instanceof Error ? err.message : 'Failed to revert version')
+    } finally {
+      setIsReverting(false)
+    }
+  }
 
   const checkAndStartGeneration = async () => {
     try {
@@ -144,87 +211,37 @@ export default function Editor() {
         return
       }
 
-      // Check if UI already exists for this project
-      try {
-        const existingUIData = await api.llm.getUI(project.project_id)
-        console.log('Loaded existing UI:', existingUIData)
-        setGeneratedUI(existingUIData.ui as UINode)
+      // Check if flow_graph already exists
+      if (project.flow_graph && project.flow_graph.screens?.length > 0) {
+        console.log('✅ Loaded existing flow graph from project')
+        setFlowGraph(project.flow_graph)
         setGenerationStage('complete')
 
-        // Load version info when loading existing UI
+        // Load version info
+        await loadVersionInfo()
+        return
+      }
+
+      // Try to load from S3
+      try {
+        const flowData = await api.llm.getFlow(project.project_id)
+        console.log('✅ Loaded existing flow from S3')
+        setFlowGraph(flowData.flow_graph)
+        setGenerationStage('complete')
+
+        // Load version info
         await loadVersionInfo()
         return
       } catch (err) {
-        console.log('No existing UI found, will generate new one:', err)
+        console.log('No existing flow found, will generate new one:', err)
       }
 
-      // DTR learning is now done on Home screen, so we skip directly to UI generation
+      // No existing flow - generate new one
       startGeneration()
     } catch (err) {
-      console.error('Error checking for existing UI:', err)
+      console.error('Error in checkAndStartGeneration:', err)
       setError(err instanceof Error ? err.message : 'Unknown error occurred')
       setGenerationStage('error')
-    }
-  }
-
-  const loadVersionInfo = async () => {
-    try {
-      const currentProject = localStorage.getItem('current_project')
-      if (!currentProject) return
-
-      const project = JSON.parse(currentProject)
-      const versionData = await api.llm.getUIVersions(project.project_id)
-      setCurrentUIVersion(versionData.current_version)
-    } catch (err) {
-      console.error('Failed to load version info:', err)
-    }
-  }
-
-  const handleVersionSelect = async (version: number) => {
-    try {
-      const currentProject = localStorage.getItem('current_project')
-      if (!currentProject) return
-
-      const project = JSON.parse(currentProject)
-      const versionData = await api.llm.getUI(project.project_id, version)
-
-      setGeneratedUI(versionData.ui as UINode)
-      setViewingVersion(version)
-    } catch (err) {
-      console.error('Failed to load version:', err)
-      alert(err instanceof Error ? err.message : 'Failed to load version')
-    }
-  }
-
-  const handleRevertVersion = async (version: number) => {
-    if (
-      !confirm(
-        `Revert to version ${version}? This will create a new version as a copy.`,
-      )
-    ) {
-      return
-    }
-
-    try {
-      setIsReverting(true)
-      const currentProject = localStorage.getItem('current_project')
-      if (!currentProject) return
-
-      const project = JSON.parse(currentProject)
-      const result = await api.llm.revertToVersion(project.project_id, version)
-
-      setGeneratedUI(result.ui as UINode)
-      setCurrentUIVersion(result.new_version)
-      setViewingVersion(null)
-
-      alert(
-        `Successfully reverted to version ${version}. Now viewing version ${result.new_version}.`,
-      )
-    } catch (err) {
-      console.error('Failed to revert version:', err)
-      alert(err instanceof Error ? err.message : 'Failed to revert version')
-    } finally {
-      setIsReverting(false)
     }
   }
 
@@ -238,22 +255,25 @@ export default function Editor() {
       }
 
       const project = JSON.parse(currentProject)
-
-      // DTR learning already happened on Home screen
-      // Jump straight to UI generation
       setGenerationStage('generating')
 
-      const uiData = await api.llm.generateUI(
-        project.project_id,
-        project.task_description,
-        device_info,
-        rendering_mode,
-      )
+      console.log('🚀 Starting flow generation...')
 
-      setGeneratedUI(uiData.ui as UINode)
-      setCurrentUIVersion(uiData.version)
+      const flowResult = await api.llm.generateFlow(project.project_id)
+
+      console.log('✅ Flow generation complete!')
+      console.log('  Version:', flowResult.version)
+
+      setFlowGraph(flowResult.flow_graph)
+      setCurrentFlowVersion(flowResult.version)
       setGenerationStage('complete')
+      setViewingVersion(null) // Reset viewing version
+
+      // Update project in localStorage
+      project.flow_graph = flowResult.flow_graph
+      localStorage.setItem('current_project', JSON.stringify(project))
     } catch (err) {
+      console.error('❌ Generation error:', err)
       setError(err instanceof Error ? err.message : 'Unknown error occurred')
       setGenerationStage('error')
     }
@@ -280,36 +300,19 @@ export default function Editor() {
 
       const project = JSON.parse(currentProject)
 
-      // Add new inspiration images to project
       await api.projects.addInspirationImages(project.project_id, files)
-
-      // Reload inspiration images to show in UI
       await loadInspirationImages()
-
-      // Close modal
       setIsAddInspirationModalOpen(false)
 
-      // Regenerate UI with updated inspiration images
-      setGenerationStage('generating')
-      setError(null)
-      setViewingVersion(null)
-
-      const uiData = await api.llm.generateUI(
-        project.project_id,
-        project.task_description,
-        device_info,
-        rendering_mode,
-      )
-
-      setGeneratedUI(uiData.ui as UINode)
-      setCurrentUIVersion(uiData.version)
-      setGenerationStage('complete')
+      // Regenerate flow with new inspiration - this will create a new version
+      console.log('🔄 Regenerating flow with new inspiration images...')
+      await startGeneration()
     } catch (err) {
       console.error('Failed to add inspiration images:', err)
       setError(
         err instanceof Error
           ? err.message
-          : 'Failed to add images and regenerate UI',
+          : 'Failed to add images and regenerate',
       )
       setGenerationStage('error')
     } finally {
@@ -317,9 +320,8 @@ export default function Editor() {
     }
   }
 
-  // Render device content based on generation stage
+  // Render device content - FLOW MODE ONLY
   const renderDeviceContent = () => {
-    // Loading states are now handled by InfiniteCanvas
     if (generationStage === 'generating') {
       return null
     }
@@ -366,8 +368,68 @@ export default function Editor() {
       )
     }
 
-    if (generationStage === 'complete' && generatedUI) {
-      return <DeviceRenderer uiTree={generatedUI} />
+    if (generationStage === 'complete' && flowGraph) {
+      if (activeTab === 'Prototype') {
+        return <PrototypeRunner flow={flowGraph} deviceInfo={device_info} />
+      } else {
+        return (
+          <>
+            <FlowConnections
+              transitions={flowGraph.transitions}
+              screenPositions={flowGraph.layout_positions || {}}
+              screenDimensions={{
+                width: device_info.screen.width,
+                height: device_info.screen.height,
+              }}
+            />
+            {flowGraph.screens.map(screen => {
+              const position = flowGraph.layout_positions?.[
+                screen.screen_id
+              ] || { x: 0, y: 0 }
+
+              return (
+                <div
+                  key={screen.screen_id}
+                  style={{
+                    position: 'absolute',
+                    left: position.x,
+                    top: position.y,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <DeviceFrame>
+                    {screen.ui_code ? (
+                      <DynamicReactRenderer
+                        jsxCode={screen.ui_code}
+                        propsToInject={{
+                          onTransition: () => {},
+                        }}
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-gray-400">Loading...</div>
+                      </div>
+                    )}
+                  </DeviceFrame>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: device_info.screen.height + 12,
+                      left: 0,
+                      fontSize: '13px',
+                      color: '#6B7280',
+                      fontWeight: 500,
+                      fontFamily: 'system-ui, sans-serif',
+                    }}
+                  >
+                    {screen.name}
+                  </div>
+                </div>
+              )
+            })}
+          </>
+        )
+      }
     }
 
     return (
@@ -397,7 +459,7 @@ export default function Editor() {
         fontFamily: "'Inter', -apple-system, sans-serif",
       }}
     >
-      {/* Back Button - Fixed top-left */}
+      {/* Back Button */}
       {(generationStage === 'complete' || generationStage === 'error') && (
         <button
           onClick={handleBackToHome}
@@ -411,9 +473,83 @@ export default function Editor() {
         </button>
       )}
 
-      {/* Left Side Menu - Fixed left center */}
+      {/* Flow Navigator */}
+      {flowGraph && generationStage === 'complete' && (
+        <div className="fixed top-24 left-6 z-50">
+          <button
+            onClick={() => setIsFlowNavigatorOpen(!isFlowNavigatorOpen)}
+            className="w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 mb-2"
+            style={{
+              backgroundColor: '#FFFFFF',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            }}
+          >
+            <List size={20} style={{ color: '#3B3B3B' }} />
+          </button>
+
+          {isFlowNavigatorOpen && (
+            <div
+              className="rounded-2xl p-4 max-h-96 overflow-y-auto"
+              style={{
+                backgroundColor: '#FFFFFF',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                width: '240px',
+              }}
+            >
+              <div
+                className="text-xs font-semibold mb-3"
+                style={{ color: '#929397' }}
+              >
+                FLOW SCREENS ({flowGraph.screens.length})
+              </div>
+              {flowGraph.screens.map((screen, index) => (
+                <button
+                  key={screen.screen_id}
+                  onClick={() => {
+                    setSelectedScreenId(screen.screen_id)
+                    setIsFlowNavigatorOpen(false)
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg mb-1 transition-all hover:scale-[1.02]"
+                  style={{
+                    backgroundColor:
+                      selectedScreenId === screen.screen_id
+                        ? '#F4F4F4'
+                        : 'transparent',
+                    color: '#3B3B3B',
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-6 h-6 rounded flex items-center justify-center text-xs font-semibold"
+                      style={{
+                        backgroundColor:
+                          screen.screen_type === 'entry'
+                            ? '#4A90E2'
+                            : screen.screen_type === 'success'
+                              ? '#10B981'
+                              : '#E5E7EB',
+                        color:
+                          screen.screen_type === 'entry' ||
+                          screen.screen_type === 'success'
+                            ? '#FFFFFF'
+                            : '#6B7280',
+                      }}
+                    >
+                      {index + 1}
+                    </div>
+                    <div className="flex-1 text-sm font-medium">
+                      {screen.name}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Left Side Menu */}
       <div className="fixed left-6 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-40">
-        {/* Menu button */}
         <button
           className="rounded-lg flex items-center justify-center transition-all hover:scale-105"
           style={{
@@ -441,7 +577,6 @@ export default function Editor() {
           </div>
         </button>
 
-        {/* Inspiration Images (max 3 most recent) */}
         {inspirationImages.slice(-3).map(image => (
           <button
             key={image.key}
@@ -463,7 +598,6 @@ export default function Editor() {
           </button>
         ))}
 
-        {/* Add button */}
         <button
           onClick={() => setIsAddInspirationModalOpen(true)}
           className="rounded-xl flex items-center justify-center transition-all hover:scale-105"
@@ -478,11 +612,11 @@ export default function Editor() {
           <Plus size={24} style={{ color: '#929397' }} />
         </button>
 
-        {/* Version History */}
-        {generationStage === 'complete' && currentUIVersion > 0 && (
+        {/* Version History - RESTORED! */}
+        {generationStage === 'complete' && currentFlowVersion > 0 && (
           <div className="mt-4">
             <VersionHistory
-              currentVersion={currentUIVersion}
+              currentVersion={currentFlowVersion}
               onVersionSelect={handleVersionSelect}
               onRevert={handleRevertVersion}
               isReverting={isReverting}
@@ -492,7 +626,7 @@ export default function Editor() {
         )}
       </div>
 
-      {/* Tab Navigation - Fixed top center (responsive to right panel) */}
+      {/* Tab Navigation */}
       <div
         className="fixed top-6 transition-all duration-300 z-40"
         style={{
@@ -525,19 +659,37 @@ export default function Editor() {
         </div>
       </div>
 
-      {/* Infinite Canvas - Fullscreen background layer */}
+      {/* Infinite Canvas */}
       <InfiniteCanvas
-        width={device_info.screen.width}
-        height={device_info.screen.height}
+        width={
+          flowGraph && flowGraph.layout_positions
+            ? Math.max(
+                ...Object.values(flowGraph.layout_positions).map(p => p.x),
+                0,
+              ) +
+              device_info.screen.width +
+              200
+            : device_info.screen.width
+        }
+        height={
+          flowGraph && flowGraph.layout_positions
+            ? Math.max(
+                ...Object.values(flowGraph.layout_positions).map(p => p.y),
+                0,
+              ) +
+              device_info.screen.height +
+              200
+            : device_info.screen.height
+        }
         isLoading={generationStage === 'generating'}
         loadingStage={
-          generationStage === 'generating' ? 'Generating design...' : undefined
+          generationStage === 'generating' ? 'Generating flow...' : undefined
         }
       >
         {renderDeviceContent()}
       </InfiniteCanvas>
 
-      {/* Bottom Control Bar - Fixed bottom center (responsive to right panel) */}
+      {/* Bottom Control Bar */}
       <div
         className="fixed bottom-6 transition-all duration-300 z-40"
         style={{
@@ -559,20 +711,11 @@ export default function Editor() {
           <div className="flex items-center justify-between">
             <input
               type="text"
-              placeholder="Describe your edits"
-              className="flex-1 px-4 py-2 rounded-lg focus:outline-none text-sm"
-              style={{ backgroundColor: 'transparent', color: '#3B3B3B' }}
+              placeholder="Give feedback or direction..."
+              className="flex-1 bg-transparent border-none outline-none text-sm"
+              style={{ color: '#3B3B3B' }}
             />
-            <div className="flex items-center gap-3">
-              <button
-                className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-105"
-                style={{ backgroundColor: '#1F1F20' }}
-              >
-                <div
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: '#FFFFFF' }}
-                />
-              </button>
+            <div className="flex items-center gap-2">
               <button
                 className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
                 style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
@@ -604,7 +747,7 @@ export default function Editor() {
         </div>
       </div>
 
-      {/* Right Sidebar - Fixed right side, collapsible */}
+      {/* Right Sidebar */}
       <div
         className="fixed right-0 top-0 h-screen transition-all duration-300 z-30"
         style={{
@@ -622,7 +765,6 @@ export default function Editor() {
         >
           {!isRightPanelCollapsed && (
             <>
-              {/* Top row - L button, 25%, NI */}
               <div className="flex items-center justify-between">
                 <button
                   className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-semibold transition-all hover:scale-105"
@@ -646,7 +788,6 @@ export default function Editor() {
                 </div>
               </div>
 
-              {/* Title and subtitle */}
               <div>
                 <h2
                   className="text-2xl font-semibold mb-1"
@@ -659,7 +800,6 @@ export default function Editor() {
                 </p>
               </div>
 
-              {/* Style dropdown */}
               <div className="relative">
                 <button
                   onClick={() => setStyleDropdownOpen(!styleDropdownOpen)}
@@ -736,9 +876,7 @@ export default function Editor() {
                 )}
               </div>
 
-              {/* Sliders */}
               <div className="space-y-4">
-                {/* Details slider */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -781,7 +919,6 @@ export default function Editor() {
                   </div>
                 </div>
 
-                {/* Energy slider */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -824,7 +961,6 @@ export default function Editor() {
                   </div>
                 </div>
 
-                {/* Craft slider */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -868,7 +1004,6 @@ export default function Editor() {
                 </div>
               </div>
 
-              {/* 4 Control buttons */}
               <div className="grid grid-cols-4 gap-3">
                 <button
                   className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
@@ -908,7 +1043,6 @@ export default function Editor() {
                 </button>
               </div>
 
-              {/* Input area at bottom */}
               <div className="mt-auto">
                 <div className="relative">
                   <textarea
@@ -951,7 +1085,6 @@ export default function Editor() {
         </div>
       </div>
 
-      {/* Floating Collapse Button - Only visible when panel is open */}
       {!isRightPanelCollapsed && (
         <button
           onClick={() => setIsRightPanelCollapsed(true)}
@@ -972,7 +1105,6 @@ export default function Editor() {
         </button>
       )}
 
-      {/* Floating Expand Button - Only visible when panel is collapsed */}
       {isRightPanelCollapsed && (
         <button
           onClick={() => setIsRightPanelCollapsed(false)}
@@ -993,7 +1125,6 @@ export default function Editor() {
         </button>
       )}
 
-      {/* Add Inspiration Modal */}
       <AddInspirationModal
         isOpen={isAddInspirationModalOpen}
         onClose={() => setIsAddInspirationModalOpen(false)}

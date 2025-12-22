@@ -1,5 +1,11 @@
 import { ZoomIn, ZoomOut, Maximize2, Move } from 'lucide-react'
-import React, { type ReactNode, useRef, useState, useEffect } from 'react'
+import React, {
+  type ReactNode,
+  useRef,
+  useState,
+  useEffect,
+  useCallback,
+} from 'react'
 
 interface InfiniteCanvasProps {
   children: ReactNode
@@ -61,33 +67,48 @@ export default function InfiniteCanvas({
   }
 
   // Handle mouse wheel for zooming
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault()
+  const handleWheel = useCallback(
+    (e: WheelEvent) => {
+      e.preventDefault()
 
-    const delta = e.deltaY
-    const zoomFactor = 1.1
-    const newZoom = delta > 0 ? zoom / zoomFactor : zoom * zoomFactor
+      const delta = e.deltaY
+      const zoomFactor = 1.1
+      const newZoom = delta > 0 ? zoom / zoomFactor : zoom * zoomFactor
 
-    // Clamp zoom between 0.1x and 10x
-    const clampedZoom = Math.max(0.1, Math.min(10, newZoom))
+      // Clamp zoom between 0.1x and 10x
+      const clampedZoom = Math.max(0.1, Math.min(10, newZoom))
 
-    if (canvasRef.current) {
-      const rect = canvasRef.current.getBoundingClientRect()
-      const mouseX = e.clientX - rect.left
-      const mouseY = e.clientY - rect.top
+      if (canvasRef.current) {
+        const rect = canvasRef.current.getBoundingClientRect()
+        const mouseX = e.clientX - rect.left
+        const mouseY = e.clientY - rect.top
 
-      // Zoom towards mouse position
-      const dx = mouseX - pan.x
-      const dy = mouseY - pan.y
+        // Zoom towards mouse position
+        const dx = mouseX - pan.x
+        const dy = mouseY - pan.y
 
-      const newPanX = mouseX - dx * (clampedZoom / zoom)
-      const newPanY = mouseY - dy * (clampedZoom / zoom)
+        const newPanX = mouseX - dx * (clampedZoom / zoom)
+        const newPanY = mouseY - dy * (clampedZoom / zoom)
 
-      setPan({ x: newPanX, y: newPanY })
+        setPan({ x: newPanX, y: newPanY })
+      }
+
+      setZoom(clampedZoom)
+    },
+    [zoom, pan.x, pan.y],
+  )
+
+  useEffect(() => {
+    const element = canvasRef.current
+    if (!element) return
+
+    // Use native addEventListener with passive: false to allow preventDefault
+    element.addEventListener('wheel', handleWheel, { passive: false })
+
+    return () => {
+      element.removeEventListener('wheel', handleWheel)
     }
-
-    setZoom(clampedZoom)
-  }
+  }, [handleWheel])
 
   // Handle mouse down for panning
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -157,7 +178,6 @@ export default function InfiniteCanvas({
           backgroundPosition: `${pan.x % 16}px ${pan.y % 16}px`,
           cursor: isPanning ? 'grabbing' : 'grab',
         }}
-        onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

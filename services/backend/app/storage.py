@@ -452,6 +452,66 @@ def get_inspiration_images(user_id: str, project_id: str, image_keys: List[str])
 
 
 # ============================================================================
+# FLOW VERSIONING FUNCTIONS
+# ============================================================================
+
+def get_project_flow(user_id: str, project_id: str, version: int = 1) -> dict:
+    """Get flow graph from project (specific version)"""
+    key = f"projects/{user_id}/{project_id}/flow_v{version}.json"
+    
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        content = response['Body'].read().decode('utf-8')
+        return json.loads(content)
+    except s3_client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"Error getting flow: {e}")
+        raise
+
+
+def put_project_flow(user_id: str, project_id: str, flow_graph: dict, version: int = 1):
+    """Save flow graph to project (versioned)"""
+    key = f"projects/{user_id}/{project_id}/flow_v{version}.json"
+    
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=key,
+            Body=json.dumps(flow_graph, indent=2),
+            ContentType='application/json'
+        )
+    except Exception as e:
+        print(f"Error saving flow: {e}")
+        raise
+
+
+def list_project_flow_versions(user_id: str, project_id: str) -> list:
+    """List all flow versions for a project"""
+    prefix = f"projects/{user_id}/{project_id}/"
+    
+    try:
+        response = s3_client.list_objects_v2(
+            Bucket=S3_BUCKET,
+            Prefix=prefix
+        )
+        
+        versions = []
+        for obj in response.get('Contents', []):
+            key = obj['Key']
+            if key.endswith('.json') and 'flow_v' in key:
+                # Extract version number from flow_v1.json, flow_v2.json, etc.
+                match = re.search(r'flow_v(\d+)\.json', key)
+                if match:
+                    versions.append(int(match.group(1)))
+        
+        return sorted(versions)
+    except Exception as e:
+        print(f"Error listing flow versions: {e}")
+        return []
+
+
+# ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================
 

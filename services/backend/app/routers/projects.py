@@ -31,6 +31,7 @@ async def create_project(
     inspiration_images: List[UploadFile] = File(default=[]),
     device_info: Optional[str] = Form(None),  # JSON string of device settings
     rendering_mode: Optional[str] = Form(None),  # 'react' or 'design-ml'
+    max_screens: Optional[int] = Form(5),  # Max screens for flow generation
     metadata: Optional[str] = Form(None),
     user: dict = Depends(get_current_user)
 ):
@@ -155,6 +156,8 @@ async def create_project(
         inspiration_image_keys=inspiration_keys,
         device_info=device_info_dict,
         rendering_mode=rendering_mode,
+        flow_mode=True,  # Always use flow mode
+        max_screens=max_screens,
         metadata=metadata_dict,
         project_id=project_id
     )

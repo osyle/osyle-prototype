@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react'
 
 interface DynamicReactRendererProps {
   jsxCode: string
+  propsToInject?: Record<string, unknown>
 }
 
 /**
@@ -11,6 +12,7 @@ interface DynamicReactRendererProps {
  */
 export default function DynamicReactRenderer({
   jsxCode,
+  propsToInject = {},
 }: DynamicReactRendererProps) {
   const [Component, setComponent] = useState<React.ComponentType | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -31,17 +33,11 @@ export default function DynamicReactRenderer({
         filename: 'dynamic-component.jsx',
       }).code
 
-      // ✅ FIX: Remove "export default" and extract the function
-      // The transformed code looks like: "export default function App() {...}"
-      // We need to remove "export default" and just get the function
+      // Remove "export default" and extract the function
       let executableCode = transformedCode || ''
 
       // Remove export default and get just the function
       executableCode = executableCode.replace(/export\s+default\s+/, '')
-
-      // If it's a function declaration like "function App() {...}",
-      // we need to wrap it to return the function
-      // If it's already an expression like "() => {...}", it's fine
 
       // Check if it starts with "function" keyword
       if (executableCode.trim().startsWith('function')) {
@@ -51,18 +47,57 @@ export default function DynamicReactRenderer({
           return App;
         `
         // eslint-disable-next-line no-new-func
-        const ComponentFactory = new Function('React', functionBody)
-        const GeneratedComponent = ComponentFactory(React)
-        setComponent(() => GeneratedComponent)
+        const ComponentFactory = new Function(
+          'React',
+          'useState',
+          'useEffect',
+          'useCallback',
+          'useMemo',
+          'useRef',
+          functionBody,
+        )
+        const GeneratedComponent = ComponentFactory(
+          React,
+          React.useState,
+          React.useEffect,
+          React.useCallback,
+          React.useMemo,
+          React.useRef,
+        ) as React.ComponentType
+
+        // Wrap to inject props
+        const WrappedComponent = (props: Record<string, unknown>) => {
+          return <GeneratedComponent {...propsToInject} {...props} />
+        }
+
+        setComponent(() => WrappedComponent)
       } else {
         // It's already an expression, evaluate it directly
         // eslint-disable-next-line no-new-func
         const ComponentFactory = new Function(
           'React',
+          'useState',
+          'useEffect',
+          'useCallback',
+          'useMemo',
+          'useRef',
           `return ${executableCode}`,
         )
-        const GeneratedComponent = ComponentFactory(React)
-        setComponent(() => GeneratedComponent)
+        const GeneratedComponent = ComponentFactory(
+          React,
+          React.useState,
+          React.useEffect,
+          React.useCallback,
+          React.useMemo,
+          React.useRef,
+        ) as React.ComponentType
+
+        // Wrap to inject props
+        const WrappedComponent = (props: Record<string, unknown>) => {
+          return <GeneratedComponent {...propsToInject} {...props} />
+        }
+
+        setComponent(() => WrappedComponent)
       }
 
       setError(null)
@@ -73,7 +108,7 @@ export default function DynamicReactRenderer({
       )
       setComponent(null)
     }
-  }, [jsxCode])
+  }, [jsxCode, propsToInject])
 
   if (error) {
     return (
