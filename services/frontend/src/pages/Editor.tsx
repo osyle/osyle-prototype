@@ -11,13 +11,15 @@ import {
   Plus,
   List,
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AddInspirationModal from '../components/AddInspirationModal'
 import DeviceFrame from '../components/DeviceFrame'
 import DynamicReactRenderer from '../components/DynamicReactRenderer'
 import FlowConnections from '../components/FlowConnections'
-import InfiniteCanvas from '../components/InfiniteCanvas'
+import InfiniteCanvas, {
+  type InfiniteCanvasHandle,
+} from '../components/InfiniteCanvas'
 import PrototypeCanvas from '../components/PrototypeCanvas'
 import PrototypeRunner from '../components/PrototypeRunner'
 import VersionHistory from '../components/VersionHistory'
@@ -31,6 +33,9 @@ export default function Editor() {
   const navigate = useNavigate()
 
   const { device_info, setDeviceInfo, setRenderingMode } = useDeviceContext()
+
+  // Canvas ref for programmatic control
+  const canvasRef = useRef<InfiniteCanvasHandle>(null)
 
   const [activeTab, setActiveTab] = useState('Concept')
   const [detailsValue, setDetailsValue] = useState(66)
@@ -267,6 +272,102 @@ export default function Editor() {
 
     return positions
   }
+
+  // Calculate available viewport bounds (excluding UI elements)
+  const getAvailableViewport = () => {
+    const windowWidth = window.innerWidth
+    const windowHeight = window.innerHeight
+
+    // Left side: 80px for menus/buttons
+    const leftOffset = 80
+
+    // Right side: 20% when panel open + 40px padding, or 80px when closed
+    const rightOffset = isRightPanelCollapsed ? 80 : windowWidth * 0.2 + 40
+
+    // Top: ~80px for tabs
+    const topOffset = 80
+
+    // Bottom: ~100px for feedback bar
+    const bottomOffset = 100
+
+    return {
+      x: leftOffset,
+      y: topOffset,
+      width: windowWidth - leftOffset - rightOffset,
+      height: windowHeight - topOffset - bottomOffset,
+    }
+  }
+
+  // Center a specific screen in the available viewport
+  const centerScreen = (screenId: string, animated: boolean = true) => {
+    if (!flowGraph || !canvasRef.current) return
+
+    const positions = calculateFlowLayout(flowGraph)
+    const screenPosition = positions[screenId]
+
+    if (!screenPosition) return
+
+    const viewport = getAvailableViewport()
+
+    // Calculate device dimensions (including bezel for phone)
+    const deviceWidth =
+      device_info.platform === 'phone'
+        ? device_info.screen.width + 24
+        : device_info.screen.width
+    const deviceHeight =
+      device_info.platform === 'phone'
+        ? device_info.screen.height + 48
+        : device_info.screen.height
+
+    // Calculate zoom to fit with margins (15% on each side = 70% of viewport)
+    const targetWidth = viewport.width * 0.7
+    const targetHeight = viewport.height * 0.7
+    const zoomX = targetWidth / deviceWidth
+    const zoomY = targetHeight / deviceHeight
+    const fitZoom = Math.min(zoomX, zoomY, 1) // Don't zoom in beyond 100%
+
+    // Calculate scaled device dimensions
+    const scaledWidth = deviceWidth * fitZoom
+    const scaledHeight = deviceHeight * fitZoom
+
+    // Calculate pan to center the screen in viewport
+    // Screen is at (screenPosition.x, screenPosition.y) in world coordinates
+    // We want it centered in the viewport
+    const targetPanX =
+      viewport.x +
+      (viewport.width - scaledWidth) / 2 -
+      screenPosition.x * fitZoom
+    const targetPanY =
+      viewport.y +
+      (viewport.height - scaledHeight) / 2 -
+      screenPosition.y * fitZoom
+
+    canvasRef.current.panToPosition(targetPanX, targetPanY, fitZoom, animated)
+  }
+
+  // Center start screen on mount and when flow loads
+  useEffect(() => {
+    if (
+      generationStage === 'complete' &&
+      flowGraph &&
+      activeTab === 'Concept'
+    ) {
+      // Find entry screen
+      const entryScreen = flowGraph.screens.find(s => s.screen_type === 'entry')
+      if (entryScreen) {
+        setSelectedScreenId(entryScreen.screen_id)
+        // Delay to ensure canvas is rendered
+        setTimeout(() => centerScreen(entryScreen.screen_id, false), 200)
+      }
+    }
+  }, [generationStage, flowGraph, activeTab])
+
+  // Re-center when right panel toggles
+  useEffect(() => {
+    if (selectedScreenId && activeTab === 'Concept') {
+      setTimeout(() => centerScreen(selectedScreenId, true), 100)
+    }
+  }, [isRightPanelCollapsed])
 
   const checkAndStartGeneration = async () => {
     try {
@@ -619,15 +720,20 @@ export default function Editor() {
                   key={screen.screen_id}
                   onClick={() => {
                     setSelectedScreenId(screen.screen_id)
+                    centerScreen(screen.screen_id, true)
                     setIsFlowNavigatorOpen(false)
                   }}
                   className="w-full text-left px-3 py-2 rounded-lg mb-1 transition-all hover:scale-[1.02]"
                   style={{
                     backgroundColor:
                       selectedScreenId === screen.screen_id
-                        ? '#F4F4F4'
+                        ? '#F0F7FF'
                         : 'transparent',
                     color: '#3B3B3B',
+                    border:
+                      selectedScreenId === screen.screen_id
+                        ? '1px solid #3B82F6'
+                        : '1px solid transparent',
                   }}
                 >
                   <div className="flex items-center gap-2">
@@ -636,9 +742,9 @@ export default function Editor() {
                       style={{
                         backgroundColor:
                           screen.screen_type === 'entry'
-                            ? '#4A90E2'
+                            ? '#10B981'
                             : screen.screen_type === 'success'
-                              ? '#10B981'
+                              ? '#3B82F6'
                               : '#E5E7EB',
                         color:
                           screen.screen_type === 'entry' ||
@@ -647,7 +753,7 @@ export default function Editor() {
                             : '#6B7280',
                       }}
                     >
-                      {index + 1}
+                      {screen.screen_type === 'entry' ? '→' : index + 1}
                     </div>
                     <div className="flex-1 text-sm font-medium">
                       {screen.name}
@@ -842,6 +948,7 @@ export default function Editor() {
       ) : (
         // Concept mode - infinite canvas with dark background
         <InfiniteCanvas
+          ref={canvasRef}
           width={
             flowGraph && generationStage === 'complete'
               ? (() => {

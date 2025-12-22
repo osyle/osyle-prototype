@@ -5,6 +5,8 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useImperativeHandle,
+  forwardRef,
 } from 'react'
 
 interface InfiniteCanvasProps {
@@ -15,280 +17,324 @@ interface InfiniteCanvasProps {
   loadingStage?: string
 }
 
-export default function InfiniteCanvas({
-  children,
-  width,
-  height,
-  isLoading = false,
-  loadingStage,
-}: InfiniteCanvasProps) {
-  const canvasRef = useRef<HTMLDivElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
+export interface InfiniteCanvasHandle {
+  panToPosition: (
+    // eslint-disable-next-line no-unused-vars
+    x: number,
+    // eslint-disable-next-line no-unused-vars
+    y: number,
+    // eslint-disable-next-line no-unused-vars
+    zoom?: number,
+    // eslint-disable-next-line no-unused-vars
+    animated?: boolean,
+  ) => void
+  resetView: () => void
+}
 
-  // Pan and zoom state
-  const [pan, setPan] = useState({ x: 0, y: 0 })
-  const [zoom, setZoom] = useState(1)
-  const [isPanning, setIsPanning] = useState(false)
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 })
+const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(
+  ({ children, width, height, isLoading = false, loadingStage }, ref) => {
+    const canvasRef = useRef<HTMLDivElement>(null)
+    const contentRef = useRef<HTMLDivElement>(null)
 
-  // Center the canvas on mount and when dimensions change
-  useEffect(() => {
-    // Small delay to ensure canvas is properly sized
-    const timer = setTimeout(() => {
-      centerContent()
-    }, 100)
+    // Pan and zoom state
+    const [pan, setPan] = useState({ x: 0, y: 0 })
+    const [zoom, setZoom] = useState(1)
+    const [isPanning, setIsPanning] = useState(false)
+    const [panStart, setPanStart] = useState({ x: 0, y: 0 })
+    const [isAnimating, setIsAnimating] = useState(false)
 
-    return () => clearTimeout(timer)
-  }, [width, height])
+    // Expose methods to parent via ref
+    useImperativeHandle(
+      ref,
+      () => ({
+        panToPosition: (
+          targetX: number,
+          targetY: number,
+          targetZoom?: number,
+          animated: boolean = true,
+        ) => {
+          const newZoom = targetZoom ?? zoom
 
-  // Re-center when zoom changes significantly
-  useEffect(() => {
-    if (zoom === 1) {
-      // Only auto-center when zoom is reset to 1
-      const timer = setTimeout(centerContent, 50)
+          if (animated) {
+            setIsAnimating(true)
+            setTimeout(() => setIsAnimating(false), 500) // Match CSS transition duration
+          }
+
+          setPan({ x: targetX, y: targetY })
+          if (targetZoom !== undefined) {
+            setZoom(newZoom)
+          }
+        },
+        resetView: () => {
+          setZoom(1)
+          setTimeout(centerContent, 50)
+        },
+      }),
+      [zoom],
+    )
+
+    // Center the canvas on mount and when dimensions change
+    useEffect(() => {
+      // Small delay to ensure canvas is properly sized
+      const timer = setTimeout(() => {
+        centerContent()
+      }, 100)
+
       return () => clearTimeout(timer)
-    }
-  }, [zoom])
+    }, [width, height])
 
-  const centerContent = () => {
-    if (canvasRef.current) {
-      const canvasRect = canvasRef.current.getBoundingClientRect()
-
-      // Calculate the scaled dimensions
-      const scaledWidth = width * zoom
-      const scaledHeight = height * zoom
-
-      // Calculate pan to center the content
-      const initialX = (canvasRect.width - scaledWidth) / 2
-      const initialY = (canvasRect.height - scaledHeight) / 2
-
-      setPan({ x: initialX, y: initialY })
-    }
-  }
-
-  // Handle mouse wheel for zooming
-  const handleWheel = useCallback(
-    (e: WheelEvent) => {
-      e.preventDefault()
-
-      const delta = e.deltaY
-      const zoomFactor = 1.1
-      const newZoom = delta > 0 ? zoom / zoomFactor : zoom * zoomFactor
-
-      // Clamp zoom between 0.1x and 10x
-      const clampedZoom = Math.max(0.1, Math.min(10, newZoom))
-
-      if (canvasRef.current) {
-        const rect = canvasRef.current.getBoundingClientRect()
-        const mouseX = e.clientX - rect.left
-        const mouseY = e.clientY - rect.top
-
-        // Zoom towards mouse position
-        const dx = mouseX - pan.x
-        const dy = mouseY - pan.y
-
-        const newPanX = mouseX - dx * (clampedZoom / zoom)
-        const newPanY = mouseY - dy * (clampedZoom / zoom)
-
-        setPan({ x: newPanX, y: newPanY })
+    // Re-center when zoom changes significantly
+    useEffect(() => {
+      if (zoom === 1) {
+        // Only auto-center when zoom is reset to 1
+        const timer = setTimeout(centerContent, 50)
+        return () => clearTimeout(timer)
       }
+    }, [zoom])
 
-      setZoom(clampedZoom)
-    },
-    [zoom, pan.x, pan.y],
-  )
+    const centerContent = () => {
+      if (canvasRef.current) {
+        const canvasRect = canvasRef.current.getBoundingClientRect()
 
-  useEffect(() => {
-    const element = canvasRef.current
-    if (!element) return
+        // Calculate the scaled dimensions
+        const scaledWidth = width * zoom
+        const scaledHeight = height * zoom
 
-    // Use native addEventListener with passive: false to allow preventDefault
-    element.addEventListener('wheel', handleWheel, { passive: false })
+        // Calculate pan to center the content
+        const initialX = (canvasRect.width - scaledWidth) / 2
+        const initialY = (canvasRect.height - scaledHeight) / 2
 
-    return () => {
-      element.removeEventListener('wheel', handleWheel)
+        setPan({ x: initialX, y: initialY })
+      }
     }
-  }, [handleWheel])
 
-  // Handle mouse down for panning
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 0) {
-      setIsPanning(true)
-      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
+    // Handle mouse wheel for zooming
+    const handleWheel = useCallback(
+      (e: WheelEvent) => {
+        e.preventDefault()
+
+        const delta = e.deltaY
+        const zoomFactor = 1.1
+        const newZoom = delta > 0 ? zoom / zoomFactor : zoom * zoomFactor
+
+        // Clamp zoom between 0.1x and 10x
+        const clampedZoom = Math.max(0.1, Math.min(10, newZoom))
+
+        if (canvasRef.current) {
+          const rect = canvasRef.current.getBoundingClientRect()
+          const mouseX = e.clientX - rect.left
+          const mouseY = e.clientY - rect.top
+
+          // Zoom towards mouse position
+          const dx = mouseX - pan.x
+          const dy = mouseY - pan.y
+
+          const newPanX = mouseX - dx * (clampedZoom / zoom)
+          const newPanY = mouseY - dy * (clampedZoom / zoom)
+
+          setPan({ x: newPanX, y: newPanY })
+        }
+
+        setZoom(clampedZoom)
+      },
+      [zoom, pan.x, pan.y],
+    )
+
+    useEffect(() => {
+      const element = canvasRef.current
+      if (!element) return
+
+      // Use native addEventListener with passive: false to allow preventDefault
+      element.addEventListener('wheel', handleWheel, { passive: false })
+
+      return () => {
+        element.removeEventListener('wheel', handleWheel)
+      }
+    }, [handleWheel])
+
+    // Handle mouse down for panning
+    const handleMouseDown = (e: React.MouseEvent) => {
+      if (e.button === 0) {
+        setIsPanning(true)
+        setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
+      }
     }
-  }
 
-  // Handle mouse move for panning
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isPanning) {
-      setPan({
-        x: e.clientX - panStart.x,
-        y: e.clientY - panStart.y,
-      })
+    // Handle mouse move for panning
+    const handleMouseMove = (e: React.MouseEvent) => {
+      if (isPanning) {
+        setPan({
+          x: e.clientX - panStart.x,
+          y: e.clientY - panStart.y,
+        })
+      }
     }
-  }
 
-  // Handle mouse up
-  const handleMouseUp = () => {
-    setIsPanning(false)
-  }
-
-  // Zoom controls
-  const zoomIn = () => {
-    const newZoom = Math.min(10, zoom * 1.2)
-    setZoom(newZoom)
-  }
-
-  const zoomOut = () => {
-    const newZoom = Math.max(0.1, zoom / 1.2)
-    setZoom(newZoom)
-  }
-
-  const zoomToFit = () => {
-    if (canvasRef.current) {
-      const canvasRect = canvasRef.current.getBoundingClientRect()
-      const padding = 80 // Padding around the content
-
-      const scaleX = (canvasRect.width - padding * 2) / width
-      const scaleY = (canvasRect.height - padding * 2) / height
-      const fitZoom = Math.min(scaleX, scaleY, 1) // Don't zoom in beyond 100%
-
-      setZoom(fitZoom)
-
-      // Center the content after zoom
-      setTimeout(centerContent, 0)
+    // Handle mouse up
+    const handleMouseUp = () => {
+      setIsPanning(false)
     }
-  }
 
-  const resetView = () => {
-    setZoom(1)
-    // centerContent will be called by the useEffect when zoom becomes 1
-  }
+    // Zoom controls
+    const zoomIn = () => {
+      const newZoom = Math.min(10, zoom * 1.2)
+      setZoom(newZoom)
+    }
 
-  return (
-    <div className="fixed inset-0 overflow-hidden" style={{ zIndex: 0 }}>
-      {/* Canvas with subtle dot grid background - DARK THEME */}
-      <div
-        ref={canvasRef}
-        className="w-full h-full overflow-hidden"
-        style={{
-          backgroundColor: '#0F0F0F',
-          backgroundImage: `radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 1px)`,
-          backgroundSize: '24px 24px',
-          backgroundPosition: `${pan.x % 24}px ${pan.y % 24}px`,
-          cursor: isPanning ? 'grabbing' : 'grab',
-        }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-      >
-        {/* Content container with pan and zoom transforms */}
+    const zoomOut = () => {
+      const newZoom = Math.max(0.1, zoom / 1.2)
+      setZoom(newZoom)
+    }
+
+    const zoomToFit = () => {
+      if (canvasRef.current) {
+        const canvasRect = canvasRef.current.getBoundingClientRect()
+        const padding = 80 // Padding around the content
+
+        const scaleX = (canvasRect.width - padding * 2) / width
+        const scaleY = (canvasRect.height - padding * 2) / height
+        const fitZoom = Math.min(scaleX, scaleY, 1) // Don't zoom in beyond 100%
+
+        setZoom(fitZoom)
+
+        // Center the content after zoom
+        setTimeout(centerContent, 0)
+      }
+    }
+
+    const resetView = () => {
+      setZoom(1)
+      // centerContent will be called by the useEffect when zoom becomes 1
+    }
+
+    return (
+      <div className="fixed inset-0 overflow-hidden" style={{ zIndex: 0 }}>
+        {/* Canvas with subtle dot grid background - DARK THEME */}
         <div
-          ref={contentRef}
+          ref={canvasRef}
+          className="w-full h-full overflow-hidden"
           style={{
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-            transformOrigin: '0 0',
-            transition: isPanning ? 'none' : 'transform 0.1s ease-out',
-            position: 'absolute',
-            top: 0,
-            left: 0,
+            backgroundColor: '#0F0F0F',
+            backgroundImage: `radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 1px)`,
+            backgroundSize: '24px 24px',
+            backgroundPosition: `${pan.x % 24}px ${pan.y % 24}px`,
+            cursor: isPanning ? 'grabbing' : 'grab',
           }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
         >
-          {/* Card container - like Figma's frame */}
+          {/* Content container with pan and zoom transforms */}
           <div
+            ref={contentRef}
             style={{
-              width: `${width}px`,
-              height: `${height}px`,
-              backgroundColor: 'transparent',
-              borderRadius: '0px',
-              overflow: 'visible',
-              position: 'relative',
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: '0 0',
+              transition: isPanning
+                ? 'none'
+                : isAnimating
+                  ? 'transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
+                  : 'transform 0.1s ease-out',
+              position: 'absolute',
+              top: 0,
+              left: 0,
             }}
           >
-            {isLoading ? (
-              /* Loading placeholder with animated dashed border */
-              <div
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  position: 'relative',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background:
-                    'linear-gradient(135deg, #1A1A1A 0%, #252525 100%)',
-                }}
-              >
-                {/* Animated dashed border */}
+            {/* Card container - like Figma's frame */}
+            <div
+              style={{
+                width: `${width}px`,
+                height: `${height}px`,
+                backgroundColor: 'transparent',
+                borderRadius: '0px',
+                overflow: 'visible',
+                position: 'relative',
+              }}
+            >
+              {isLoading ? (
+                /* Loading placeholder with animated dashed border */
                 <div
                   style={{
-                    position: 'absolute',
-                    inset: '16px',
-                    border: '2px dashed rgba(255, 255, 255, 0.2)',
-                    borderRadius: '8px',
-                    animation: 'dashOffset 20s linear infinite',
-                  }}
-                />
-
-                {/* Pulsing background */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: '16px',
-                    borderRadius: '8px',
-                    background: 'rgba(255, 255, 255, 0.02)',
-                    animation: 'pulse 2s ease-in-out infinite',
-                  }}
-                />
-
-                {/* Loading content */}
-                <div
-                  style={{
+                    width: '100%',
+                    height: '100%',
                     position: 'relative',
-                    zIndex: 10,
-                    textAlign: 'center',
-                    padding: '32px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background:
+                      'linear-gradient(135deg, #1A1A1A 0%, #252525 100%)',
                   }}
                 >
-                  {/* Spinner */}
+                  {/* Animated dashed border */}
                   <div
                     style={{
-                      width: '48px',
-                      height: '48px',
-                      margin: '0 auto 20px',
-                      border: '3px solid rgba(255, 255, 255, 0.1)',
-                      borderTop: '3px solid #6366F1',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite',
+                      position: 'absolute',
+                      inset: '16px',
+                      border: '2px dashed rgba(255, 255, 255, 0.2)',
+                      borderRadius: '8px',
+                      animation: 'dashOffset 20s linear infinite',
                     }}
                   />
 
-                  {loadingStage && (
-                    <div
-                      style={{
-                        fontSize: '16px',
-                        fontWeight: 500,
-                        color: '#FFFFFF',
-                        marginBottom: '8px',
-                      }}
-                    >
-                      {loadingStage}
-                    </div>
-                  )}
-
+                  {/* Pulsing background */}
                   <div
                     style={{
-                      fontSize: '13px',
-                      color: 'rgba(255, 255, 255, 0.5)',
+                      position: 'absolute',
+                      inset: '16px',
+                      borderRadius: '8px',
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      animation: 'pulse 2s ease-in-out infinite',
+                    }}
+                  />
+
+                  {/* Loading content */}
+                  <div
+                    style={{
+                      position: 'relative',
+                      zIndex: 10,
+                      textAlign: 'center',
+                      padding: '32px',
                     }}
                   >
-                    Preparing your design...
-                  </div>
-                </div>
+                    {/* Spinner */}
+                    <div
+                      style={{
+                        width: '48px',
+                        height: '48px',
+                        margin: '0 auto 20px',
+                        border: '3px solid rgba(255, 255, 255, 0.1)',
+                        borderTop: '3px solid #6366F1',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite',
+                      }}
+                    />
 
-                {/* Add keyframe animations */}
-                <style>{`
+                    {loadingStage && (
+                      <div
+                        style={{
+                          fontSize: '16px',
+                          fontWeight: 500,
+                          color: '#FFFFFF',
+                          marginBottom: '8px',
+                        }}
+                      >
+                        {loadingStage}
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        fontSize: '13px',
+                        color: 'rgba(255, 255, 255, 0.5)',
+                      }}
+                    >
+                      Preparing your design...
+                    </div>
+                  </div>
+
+                  {/* Add keyframe animations */}
+                  <style>{`
                   @keyframes spin {
                     to { transform: rotate(360deg); }
                   }
@@ -300,182 +346,187 @@ export default function InfiniteCanvas({
                     to { stroke-dashoffset: -100; }
                   }
                 `}</style>
+                </div>
+              ) : (
+                children
+              )}
+            </div>
+
+            {/* Design dimensions label */}
+            {!isLoading && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: `${height + 12}px`,
+                  left: 0,
+                  fontSize: '11px',
+                  color: 'rgba(255, 255, 255, 0.3)',
+                  fontFamily: 'system-ui, sans-serif',
+                  userSelect: 'none',
+                  pointerEvents: 'none',
+                }}
+              >
+                {width} × {height}
               </div>
-            ) : (
-              children
             )}
           </div>
+        </div>
 
-          {/* Design dimensions label */}
-          {!isLoading && (
+        {/* Zoom Controls */}
+        <div
+          className="absolute bottom-6 right-6 flex flex-col gap-2"
+          style={{ zIndex: 1000 }}
+        >
+          {/* Zoom percentage display */}
+          <div
+            className="px-3 py-2 rounded-lg text-xs font-medium text-center"
+            style={{
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              color: '#FFFFFF',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              minWidth: '64px',
+            }}
+          >
+            {Math.round(zoom * 100)}%
+          </div>
+
+          {/* Zoom buttons */}
+          <div
+            className="flex flex-col gap-1 rounded-lg p-1"
+            style={{
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+            }}
+          >
+            <button
+              onClick={zoomIn}
+              className="p-2 rounded hover:bg-white/10 transition-colors"
+              title="Zoom in"
+              style={{ color: '#FFFFFF' }}
+            >
+              <ZoomIn size={18} />
+            </button>
+
             <div
               style={{
-                position: 'absolute',
-                top: `${height + 12}px`,
-                left: 0,
-                fontSize: '11px',
-                color: 'rgba(255, 255, 255, 0.3)',
-                fontFamily: 'system-ui, sans-serif',
-                userSelect: 'none',
-                pointerEvents: 'none',
+                height: '1px',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                margin: '0 4px',
               }}
+            />
+
+            <button
+              onClick={zoomOut}
+              className="p-2 rounded hover:bg-white/10 transition-colors"
+              title="Zoom out"
+              style={{ color: '#FFFFFF' }}
             >
-              {width} × {height}
-            </div>
-          )}
-        </div>
-      </div>
+              <ZoomOut size={18} />
+            </button>
 
-      {/* Zoom Controls */}
-      <div
-        className="absolute bottom-6 right-6 flex flex-col gap-2"
-        style={{ zIndex: 1000 }}
-      >
-        {/* Zoom percentage display */}
+            <div
+              style={{
+                height: '1px',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                margin: '0 4px',
+              }}
+            />
+
+            <button
+              onClick={zoomToFit}
+              className="p-2 rounded hover:bg-white/10 transition-colors"
+              title="Zoom to fit"
+              style={{ color: '#FFFFFF' }}
+            >
+              <Maximize2 size={18} />
+            </button>
+
+            <div
+              style={{
+                height: '1px',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                margin: '0 4px',
+              }}
+            />
+
+            <button
+              onClick={resetView}
+              className="p-2 rounded hover:bg-white/10 transition-colors"
+              title="Reset view (100%)"
+              style={{ color: '#FFFFFF' }}
+            >
+              <Move size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Pan indicator - shows when panning */}
+        {isPanning && (
+          <div
+            className="absolute top-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-sm font-medium"
+            style={{
+              backgroundColor: 'rgba(0, 0, 0, 0.85)',
+              color: 'white',
+              zIndex: 1000,
+              pointerEvents: 'none',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(10px)',
+            }}
+          >
+            <Move size={16} className="inline mr-2" />
+            Panning
+          </div>
+        )}
+
+        {/* Controls hint - bottom left */}
         <div
-          className="px-3 py-2 rounded-lg text-xs font-medium text-center"
+          className="absolute bottom-6 left-6 px-3 py-2 rounded-lg text-xs"
           style={{
             backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            color: '#FFFFFF',
+            color: 'rgba(255, 255, 255, 0.6)',
             boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
             backdropFilter: 'blur(10px)',
             border: '1px solid rgba(255, 255, 255, 0.1)',
-            minWidth: '64px',
-          }}
-        >
-          {Math.round(zoom * 100)}%
-        </div>
-
-        {/* Zoom buttons */}
-        <div
-          className="flex flex-col gap-1 rounded-lg p-1"
-          style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-          }}
-        >
-          <button
-            onClick={zoomIn}
-            className="p-2 rounded hover:bg-white/10 transition-colors"
-            title="Zoom in"
-            style={{ color: '#FFFFFF' }}
-          >
-            <ZoomIn size={18} />
-          </button>
-
-          <div
-            style={{
-              height: '1px',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              margin: '0 4px',
-            }}
-          />
-
-          <button
-            onClick={zoomOut}
-            className="p-2 rounded hover:bg-white/10 transition-colors"
-            title="Zoom out"
-            style={{ color: '#FFFFFF' }}
-          >
-            <ZoomOut size={18} />
-          </button>
-
-          <div
-            style={{
-              height: '1px',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              margin: '0 4px',
-            }}
-          />
-
-          <button
-            onClick={zoomToFit}
-            className="p-2 rounded hover:bg-white/10 transition-colors"
-            title="Zoom to fit"
-            style={{ color: '#FFFFFF' }}
-          >
-            <Maximize2 size={18} />
-          </button>
-
-          <div
-            style={{
-              height: '1px',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              margin: '0 4px',
-            }}
-          />
-
-          <button
-            onClick={resetView}
-            className="p-2 rounded hover:bg-white/10 transition-colors"
-            title="Reset view (100%)"
-            style={{ color: '#FFFFFF' }}
-          >
-            <Move size={18} />
-          </button>
-        </div>
-      </div>
-
-      {/* Pan indicator - shows when panning */}
-      {isPanning && (
-        <div
-          className="absolute top-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-sm font-medium"
-          style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.85)',
-            color: 'white',
+            userSelect: 'none',
             zIndex: 1000,
-            pointerEvents: 'none',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            backdropFilter: 'blur(10px)',
           }}
         >
-          <Move size={16} className="inline mr-2" />
-          Panning
-        </div>
-      )}
-
-      {/* Controls hint - bottom left */}
-      <div
-        className="absolute bottom-6 left-6 px-3 py-2 rounded-lg text-xs"
-        style={{
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          color: 'rgba(255, 255, 255, 0.6)',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          userSelect: 'none',
-          zIndex: 1000,
-        }}
-      >
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <kbd
-              className="px-2 py-0.5 rounded text-xs font-mono"
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                color: 'rgba(255, 255, 255, 0.8)',
-              }}
-            >
-              Drag
-            </kbd>
-            <span>Pan canvas</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <kbd
-              className="px-2 py-0.5 rounded text-xs font-mono"
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                color: 'rgba(255, 255, 255, 0.8)',
-              }}
-            >
-              Scroll
-            </kbd>
-            <span>Zoom in/out</span>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <kbd
+                className="px-2 py-0.5 rounded text-xs font-mono"
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  color: 'rgba(255, 255, 255, 0.8)',
+                }}
+              >
+                Drag
+              </kbd>
+              <span>Pan canvas</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <kbd
+                className="px-2 py-0.5 rounded text-xs font-mono"
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  color: 'rgba(255, 255, 255, 0.8)',
+                }}
+              >
+                Scroll
+              </kbd>
+              <span>Zoom in/out</span>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  )
-}
+    )
+  },
+)
+
+InfiniteCanvas.displayName = 'InfiniteCanvas'
+
+export default InfiniteCanvas
