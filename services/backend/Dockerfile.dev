@@ -35,7 +35,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # Install Playwright browsers (without --with-deps, we already have system deps)
-RUN playwright install chromium
+# RUN playwright install chromium
 
 COPY . .
 
