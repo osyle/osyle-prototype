@@ -516,7 +516,8 @@ export default function Editor() {
 
   // Render device content - FLOW MODE ONLY
   const renderDeviceContent = () => {
-    if (generationStage === 'generating') {
+    // Don't render anything during idle or generating states
+    if (generationStage === 'idle' || generationStage === 'generating') {
       return null
     }
 
@@ -673,23 +674,8 @@ export default function Editor() {
       }
     }
 
-    return (
-      <div
-        className="flex items-center justify-center h-full"
-        style={{ backgroundColor: '#EDEBE9' }}
-      >
-        <div className="text-center">
-          <Smile
-            size={48}
-            className="mx-auto mb-4"
-            style={{ color: '#929397' }}
-          />
-          <p className="text-sm" style={{ color: '#929397' }}>
-            Initializing...
-          </p>
-        </div>
-      </div>
-    )
+    // Fallback - should not be reached
+    return null
   }
 
   return (
@@ -1007,10 +993,6 @@ export default function Editor() {
                   return maxY - minY + deviceHeight + deviceHeight * 0.5 // Match VERTICAL_GAP
                 })()
               : device_info.screen.height
-          }
-          isLoading={generationStage === 'generating'}
-          loadingStage={
-            generationStage === 'generating' ? 'Generating flow...' : undefined
           }
         >
           {renderDeviceContent()}
@@ -1451,6 +1433,323 @@ export default function Editor() {
             className="group-hover:scale-110 transition-transform"
           />
         </button>
+      )}
+
+      {/* Initializing Overlay */}
+      {generationStage === 'idle' && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          style={{
+            backgroundColor: 'rgba(237, 235, 233, 0.8)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+        >
+          <div
+            className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-in fade-in duration-500"
+            style={{
+              backgroundColor: '#FFFFFF',
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+              maxWidth: '420px',
+              width: '90%',
+            }}
+          >
+            {/* Animated Loading Icon - Expanding Ripples */}
+            <div className="relative w-32 h-32 flex items-center justify-center">
+              {/* Center Icon */}
+              <div className="absolute inset-0 flex items-center justify-center z-10">
+                <div
+                  className="w-16 h-16 rounded-full flex items-center justify-center"
+                  style={{
+                    background:
+                      'linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)',
+                    boxShadow: '0 8px 32px rgba(245, 158, 11, 0.5)',
+                  }}
+                >
+                  <Sparkles size={28} style={{ color: '#FFFFFF' }} />
+                </div>
+              </div>
+
+              {/* Expanding Ripples */}
+              {[0, 1, 2, 3].map(i => (
+                <div
+                  key={i}
+                  className="absolute inset-0 rounded-full"
+                  style={{
+                    border: '3px solid',
+                    borderColor: i % 2 === 0 ? '#F59E0B' : '#EF4444',
+                    opacity: 0,
+                    animation: `ripple 3s ease-out infinite`,
+                    animationDelay: `${i * 0.75}s`,
+                  }}
+                />
+              ))}
+
+              {/* Rotating Particles */}
+              {[0, 1, 2, 3, 4, 5].map(i => (
+                <div
+                  key={`particle-${i}`}
+                  className="absolute"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    animation: `rotate-particles 4s linear infinite`,
+                    animationDelay: `${i * 0.2}s`,
+                  }}
+                >
+                  <div
+                    className="absolute w-2 h-2 rounded-full"
+                    style={{
+                      background:
+                        i % 3 === 0
+                          ? 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)'
+                          : i % 3 === 1
+                            ? 'linear-gradient(135deg, #FB923C 0%, #F97316 100%)'
+                            : 'linear-gradient(135deg, #FCA5A5 0%, #EF4444 100%)',
+                      boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)',
+                      top: '0',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Loading Text */}
+            <div className="text-center">
+              <h3
+                className="text-xl font-semibold mb-2"
+                style={{ color: '#1F1F20' }}
+              >
+                Initializing...
+              </h3>
+              <p
+                className="text-sm leading-relaxed"
+                style={{ color: '#929397' }}
+              >
+                Setting up your workspace
+              </p>
+            </div>
+
+            {/* Pulsing Bar Indicator */}
+            <div className="w-full flex items-center gap-1.5">
+              {[0, 1, 2, 3, 4].map(i => (
+                <div
+                  key={i}
+                  className="flex-1 h-1.5 rounded-full"
+                  style={{
+                    background:
+                      'linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)',
+                    animation: 'pulse-bar 1.5s ease-in-out infinite',
+                    animationDelay: `${i * 0.15}s`,
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Animation Styles */}
+            <style>{`
+              @keyframes ripple {
+                0% {
+                  transform: scale(0.5);
+                  opacity: 1;
+                }
+                50% {
+                  opacity: 0.4;
+                }
+                100% {
+                  transform: scale(1.8);
+                  opacity: 0;
+                }
+              }
+              @keyframes rotate-particles {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+              @keyframes pulse-bar {
+                0%, 100% { 
+                  opacity: 0.3;
+                  transform: scaleY(0.8);
+                }
+                50% { 
+                  opacity: 1;
+                  transform: scaleY(1.2);
+                }
+              }
+              @keyframes fade-in {
+                from { 
+                  opacity: 0;
+                  transform: scale(0.95);
+                }
+                to { 
+                  opacity: 1;
+                  transform: scale(1);
+                }
+              }
+              .animate-in {
+                animation: fade-in 0.5s ease-out;
+              }
+            `}</style>
+          </div>
+        </div>
+      )}
+
+      {/* Generating Flow Overlay */}
+      {generationStage === 'generating' && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          style={{
+            backgroundColor: 'rgba(237, 235, 233, 0.8)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+        >
+          <div
+            className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-in fade-in duration-500"
+            style={{
+              backgroundColor: '#FFFFFF',
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+              maxWidth: '420px',
+              width: '90%',
+            }}
+          >
+            {/* Animated Loading Icon - Orbiting Dots */}
+            <div className="relative w-32 h-32 flex items-center justify-center">
+              {/* Center Circle */}
+              <div
+                className="absolute inset-0 flex items-center justify-center"
+                style={{
+                  animation: 'pulse 2s ease-in-out infinite',
+                }}
+              >
+                <div
+                  className="w-16 h-16 rounded-full flex items-center justify-center"
+                  style={{
+                    background:
+                      'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+                    boxShadow: '0 8px 32px rgba(102, 126, 234, 0.4)',
+                  }}
+                >
+                  <Sparkles size={28} style={{ color: '#FFFFFF' }} />
+                </div>
+              </div>
+
+              {/* Orbiting Dots */}
+              {[0, 1, 2, 3].map(i => (
+                <div
+                  key={i}
+                  className="absolute inset-0"
+                  style={{
+                    animation: `orbit 3s linear infinite`,
+                    animationDelay: `${i * 0.75}s`,
+                  }}
+                >
+                  <div
+                    className="absolute w-4 h-4 rounded-full"
+                    style={{
+                      background:
+                        i % 2 === 0
+                          ? 'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)'
+                          : 'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
+                      boxShadow:
+                        i % 2 === 0
+                          ? '0 4px 12px rgba(245, 87, 108, 0.5)'
+                          : '0 4px 12px rgba(0, 242, 254, 0.5)',
+                      top: '0',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                    }}
+                  />
+                </div>
+              ))}
+
+              {/* Rotating Ring */}
+              <div
+                className="absolute inset-4"
+                style={{
+                  border: '2px solid transparent',
+                  borderTopColor: '#667EEA',
+                  borderRightColor: '#667EEA',
+                  borderRadius: '50%',
+                  animation: 'spin 4s linear infinite',
+                  opacity: 0.3,
+                }}
+              />
+            </div>
+
+            {/* Loading Text */}
+            <div className="text-center">
+              <h3
+                className="text-xl font-semibold mb-2"
+                style={{ color: '#1F1F20' }}
+              >
+                Generating your flow
+              </h3>
+              <p
+                className="text-sm leading-relaxed"
+                style={{ color: '#929397' }}
+              >
+                Creating screens and connecting interactions...
+              </p>
+            </div>
+
+            {/* Animated Progress Dots */}
+            <div className="flex items-center gap-2">
+              {[0, 1, 2].map(i => (
+                <div
+                  key={i}
+                  className="w-2 h-2 rounded-full"
+                  style={{
+                    background:
+                      'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+                    animation: 'bounce 1.4s ease-in-out infinite',
+                    animationDelay: `${i * 0.2}s`,
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Animation Styles */}
+            <style>{`
+              @keyframes orbit {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+              @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+              @keyframes pulse {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+              }
+              @keyframes bounce {
+                0%, 80%, 100% { 
+                  transform: scale(0.8);
+                  opacity: 0.5;
+                }
+                40% { 
+                  transform: scale(1.2);
+                  opacity: 1;
+                }
+              }
+              @keyframes fade-in {
+                from { 
+                  opacity: 0;
+                  transform: scale(0.95);
+                }
+                to { 
+                  opacity: 1;
+                  transform: scale(1);
+                }
+              }
+              .animate-in {
+                animation: fade-in 0.5s ease-out;
+              }
+            `}</style>
+          </div>
+        </div>
       )}
 
       <AddInspirationModal
