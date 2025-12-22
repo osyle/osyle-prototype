@@ -133,6 +133,10 @@ export default function Home() {
   const [dtmResourceCount, setDtmResourceCount] = useState(0)
   const [dtmTrainingError, setDtmTrainingError] = useState<string | null>(null)
 
+  // Project loading state
+  const [isLoadingProject, setIsLoadingProject] = useState(false)
+  const [loadingProjectName, setLoadingProjectName] = useState<string>('')
+
   // ============================================================================
   // COMPUTED VALUES
   // ============================================================================
@@ -796,6 +800,10 @@ export default function Home() {
 
   const handleOpenProject = async (project: ProjectDisplay) => {
     try {
+      // Show loading modal
+      setLoadingProjectName(project.name)
+      setIsLoadingProject(true)
+
       // Fetch full project details from API to get taste and resource IDs
       const projectDetails = await api.projects.get(project.project_id)
 
@@ -829,6 +837,7 @@ export default function Home() {
       navigate('/editor', { replace: true })
     } catch (err) {
       console.error('Failed to load project:', err)
+      setIsLoadingProject(false)
       alert('Failed to open project. Please try again.')
     }
   }
@@ -1693,6 +1702,45 @@ export default function Home() {
         onConfirm={handleCreateProject}
         isLoading={isCreatingProject}
       />
+
+      {/* Project Loading Modal */}
+      {isLoadingProject && (
+        <div
+          className="fixed inset-0 flex items-center justify-center"
+          style={{
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 9999,
+          }}
+        >
+          <div
+            className="rounded-2xl p-8 flex flex-col items-center gap-6"
+            style={{
+              backgroundColor: '#FFFFFF',
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+              minWidth: '400px',
+            }}
+          >
+            {/* Spinner */}
+            <div
+              className="w-12 h-12 border-4 rounded-full animate-spin"
+              style={{
+                borderColor: '#E5E7EB',
+                borderTopColor: '#4A90E2',
+              }}
+            />
+
+            {/* Loading text */}
+            <div className="flex flex-col items-center gap-2">
+              <div className="text-lg font-medium" style={{ color: '#3B3B3B' }}>
+                Loading Project
+              </div>
+              <div className="text-sm text-center" style={{ color: '#929397' }}>
+                {loadingProjectName}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Continue Project Button - Only shows when coming back from Editor */}
       {hasActiveProject && activeProjectName && (
