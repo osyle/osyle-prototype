@@ -564,7 +564,22 @@ export default function Editor() {
 
     if (generationStage === 'complete' && flowGraph) {
       if (activeTab === 'Prototype') {
-        return <PrototypeRunner flow={flowGraph} deviceInfo={device_info} />
+        return (
+          <DeviceFrame>
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                paddingTop: device_info.platform === 'phone' ? '28px' : '0', // Notch space
+                paddingBottom: device_info.platform === 'phone' ? '16px' : '0', // Home indicator space
+                boxSizing: 'border-box',
+                overflow: 'auto',
+              }}
+            >
+              <PrototypeRunner flow={flowGraph} deviceInfo={device_info} />
+            </div>
+          </DeviceFrame>
+        )
       } else {
         // Use calculated positions instead of backend positions
         const calculatedPositions = calculateFlowLayout(flowGraph)
@@ -640,10 +655,7 @@ export default function Editor() {
                   <div
                     style={{
                       position: 'absolute',
-                      top:
-                        device_info.platform === 'phone'
-                          ? device_info.screen.height + 60
-                          : device_info.screen.height + 12,
+                      top: '-28px',
                       left: 0,
                       fontSize: '13px',
                       color: 'rgba(255, 255, 255, 0.7)',
@@ -947,13 +959,13 @@ export default function Editor() {
               <PrototypeCanvas
                 deviceWidth={
                   device_info.platform === 'phone'
-                    ? device_info.screen.width + 24 // Phone bezel padding
+                    ? device_info.screen.width + 24 // Total width including DeviceFrame bezel
                     : device_info.screen.width
                 }
                 deviceHeight={
                   device_info.platform === 'phone'
-                    ? device_info.screen.height + 48 // Phone bezel padding
-                    : device_info.screen.height + 40 // Web browser chrome
+                    ? device_info.screen.height + 48 // Total height including DeviceFrame bezel
+                    : device_info.screen.height + 40 // Total height including browser chrome
                 }
               >
                 {renderDeviceContent()}
