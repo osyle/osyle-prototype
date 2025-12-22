@@ -231,30 +231,6 @@ export default function ConfigurationMenu() {
                   )}
                 </div>
               </div>
-
-              {/* Rendering Mode Card */}
-              <div
-                className="rounded-lg p-3"
-                style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
-              >
-                <div className="flex items-center gap-2">
-                  {rendering_mode === 'react' ? (
-                    <Code className="h-4 w-4 text-indigo-400" />
-                  ) : (
-                    <Palette className="h-4 w-4 text-purple-400" />
-                  )}
-                  <div className="text-xs">
-                    <div className="text-white font-medium">
-                      {rendering_mode === 'react' ? 'React Code' : 'Design ML'}
-                    </div>
-                    <div className="text-gray-400">
-                      {rendering_mode === 'react'
-                        ? 'Component generation'
-                        : 'Visual design'}
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
 
             {/* Right Column - Controls */}
@@ -266,297 +242,221 @@ export default function ConfigurationMenu() {
                   border: '1px solid rgba(255,255,255,0.1)',
                 }}
               >
-                <button
-                  onClick={() => toggleSection('device')}
-                  className="w-full flex justify-between items-center p-3 text-left hover:bg-white/5 transition-colors"
+                <div
+                  className="p-3 pt-0 space-y-4 border-t"
+                  style={{ borderColor: 'rgba(255,255,255,0.1)' }}
                 >
-                  <div className="flex items-center gap-2 text-white">
-                    <Smartphone size={16} />
-                    <span className="text-sm font-medium">Device Settings</span>
-                  </div>
-                  {activeSection === 'device' ? (
-                    <ChevronUp size={16} className="text-gray-400" />
-                  ) : (
-                    <ChevronDown size={16} className="text-gray-400" />
-                  )}
-                </button>
-
-                {activeSection === 'device' && (
-                  <div
-                    className="p-3 pt-0 space-y-4 border-t"
-                    style={{ borderColor: 'rgba(255,255,255,0.1)' }}
-                  >
-                    {/* Platform Toggle */}
-                    <div className="mt-3">
-                      <div className="text-xs text-gray-400 mb-2">Platform</div>
+                  {/* Platform Toggle */}
+                  <div className="mt-3">
+                    <div className="text-xs text-gray-400 mb-2">Platform</div>
+                    <div
+                      className="rounded-full p-1 flex gap-1"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+                    >
                       <div
-                        className="rounded-full p-1 flex gap-1"
-                        style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
-                      >
-                        <div
-                          className={getOptionStyle(
-                            device_info.platform === 'web',
-                          )}
-                          onClick={() => handlePlatformChange('web')}
-                        >
-                          <Monitor size={14} />
-                          <span className="text-sm">Web</span>
-                        </div>
-                        <div
-                          className={getOptionStyle(
-                            device_info.platform === 'phone',
-                          )}
-                          onClick={() => handlePlatformChange('phone')}
-                        >
-                          <Smartphone size={14} />
-                          <span className="text-sm">Phone</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Screen Size Presets */}
-                    <div>
-                      <div className="text-xs text-gray-400 mb-2">
-                        Screen Size
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {device_info.platform === 'web' ? (
-                          <>
-                            <button
-                              onClick={() =>
-                                handlePresetChange(SCREEN_PRESETS.web.desktop)
-                              }
-                              className="rounded p-2 text-xs flex flex-col items-center justify-center gap-1 hover:bg-white/10 transition-colors"
-                              style={{
-                                backgroundColor:
-                                  device_info.screen.width ===
-                                  SCREEN_PRESETS.web.desktop.width
-                                    ? 'rgba(59, 130, 246, 0.2)'
-                                    : 'rgba(255,255,255,0.05)',
-                                border:
-                                  device_info.screen.width ===
-                                  SCREEN_PRESETS.web.desktop.width
-                                    ? '1px solid rgba(59, 130, 246, 0.5)'
-                                    : '1px solid transparent',
-                                color: 'white',
-                              }}
-                            >
-                              <Monitor size={16} />
-                              <span className="font-medium">Desktop</span>
-                              <span className="text-gray-400">1440×900</span>
-                            </button>
-                            <button
-                              onClick={() =>
-                                handlePresetChange(SCREEN_PRESETS.web.laptop)
-                              }
-                              className="rounded p-2 text-xs flex flex-col items-center justify-center gap-1 hover:bg-white/10 transition-colors"
-                              style={{
-                                backgroundColor:
-                                  device_info.screen.width ===
-                                  SCREEN_PRESETS.web.laptop.width
-                                    ? 'rgba(59, 130, 246, 0.2)'
-                                    : 'rgba(255,255,255,0.05)',
-                                border:
-                                  device_info.screen.width ===
-                                  SCREEN_PRESETS.web.laptop.width
-                                    ? '1px solid rgba(59, 130, 246, 0.5)'
-                                    : '1px solid transparent',
-                                color: 'white',
-                              }}
-                            >
-                              <Monitor size={16} />
-                              <span className="font-medium">Laptop</span>
-                              <span className="text-gray-400">1280×800</span>
-                            </button>
-                            <button
-                              onClick={() =>
-                                handlePresetChange(SCREEN_PRESETS.web.tablet)
-                              }
-                              className="rounded p-2 text-xs flex flex-col items-center justify-center gap-1 hover:bg-white/10 transition-colors"
-                              style={{
-                                backgroundColor:
-                                  device_info.screen.width ===
-                                  SCREEN_PRESETS.web.tablet.width
-                                    ? 'rgba(59, 130, 246, 0.2)'
-                                    : 'rgba(255,255,255,0.05)',
-                                border:
-                                  device_info.screen.width ===
-                                  SCREEN_PRESETS.web.tablet.width
-                                    ? '1px solid rgba(59, 130, 246, 0.5)'
-                                    : '1px solid transparent',
-                                color: 'white',
-                              }}
-                            >
-                              <Maximize2 size={16} />
-                              <span className="font-medium">Tablet</span>
-                              <span className="text-gray-400">1024×768</span>
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() =>
-                                handlePresetChange(
-                                  SCREEN_PRESETS.phone.iphone14,
-                                )
-                              }
-                              className="rounded p-2 text-xs flex flex-col items-center justify-center gap-1 hover:bg-white/10 transition-colors"
-                              style={{
-                                backgroundColor:
-                                  device_info.screen.width ===
-                                  SCREEN_PRESETS.phone.iphone14.width
-                                    ? 'rgba(59, 130, 246, 0.2)'
-                                    : 'rgba(255,255,255,0.05)',
-                                border:
-                                  device_info.screen.width ===
-                                  SCREEN_PRESETS.phone.iphone14.width
-                                    ? '1px solid rgba(59, 130, 246, 0.5)'
-                                    : '1px solid transparent',
-                                color: 'white',
-                              }}
-                            >
-                              <Smartphone size={16} />
-                              <span className="font-medium">iPhone 14</span>
-                              <span className="text-gray-400">390×844</span>
-                            </button>
-                            <button
-                              onClick={() =>
-                                handlePresetChange(
-                                  SCREEN_PRESETS.phone.iphone14pro,
-                                )
-                              }
-                              className="rounded p-2 text-xs flex flex-col items-center justify-center gap-1 hover:bg-white/10 transition-colors"
-                              style={{
-                                backgroundColor:
-                                  device_info.screen.width ===
-                                  SCREEN_PRESETS.phone.iphone14pro.width
-                                    ? 'rgba(59, 130, 246, 0.2)'
-                                    : 'rgba(255,255,255,0.05)',
-                                border:
-                                  device_info.screen.width ===
-                                  SCREEN_PRESETS.phone.iphone14pro.width
-                                    ? '1px solid rgba(59, 130, 246, 0.5)'
-                                    : '1px solid transparent',
-                                color: 'white',
-                              }}
-                            >
-                              <Smartphone size={16} />
-                              <span className="font-medium">iPhone 14 Pro</span>
-                              <span className="text-gray-400">393×852</span>
-                            </button>
-                            <button
-                              onClick={() =>
-                                handlePresetChange(SCREEN_PRESETS.phone.pixel7)
-                              }
-                              className="rounded p-2 text-xs flex flex-col items-center justify-center gap-1 hover:bg-white/10 transition-colors"
-                              style={{
-                                backgroundColor:
-                                  device_info.screen.width ===
-                                  SCREEN_PRESETS.phone.pixel7.width
-                                    ? 'rgba(59, 130, 246, 0.2)'
-                                    : 'rgba(255,255,255,0.05)',
-                                border:
-                                  device_info.screen.width ===
-                                  SCREEN_PRESETS.phone.pixel7.width
-                                    ? '1px solid rgba(59, 130, 246, 0.5)'
-                                    : '1px solid transparent',
-                                color: 'white',
-                              }}
-                            >
-                              <Smartphone size={16} />
-                              <span className="font-medium">Pixel 7</span>
-                              <span className="text-gray-400">412×915</span>
-                            </button>
-                          </>
+                        className={getOptionStyle(
+                          device_info.platform === 'web',
                         )}
-                        <button
-                          className="rounded p-2 text-xs flex flex-col items-center justify-center gap-1 hover:bg-white/10 transition-colors col-span-2"
-                          style={{
-                            backgroundColor: 'rgba(255,255,255,0.05)',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            color: 'white',
-                          }}
-                          onClick={() => {
-                            const width = prompt(
-                              'Width (px):',
-                              device_info.screen.width.toString(),
-                            )
-                            const height = prompt(
-                              'Height (px):',
-                              device_info.screen.height.toString(),
-                            )
-                            if (width && height) {
-                              handlePresetChange({
-                                width: parseInt(width),
-                                height: parseInt(height),
-                              })
-                            }
-                          }}
-                        >
-                          <Grid3X3 size={16} />
-                          <span className="font-medium">Custom Size</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Rendering Mode Section */}
-              <div
-                className="rounded-lg overflow-hidden"
-                style={{
-                  border: '1px solid rgba(255,255,255,0.1)',
-                }}
-              >
-                <button
-                  onClick={() => toggleSection('rendering')}
-                  className="w-full flex justify-between items-center p-3 text-left hover:bg-white/5 transition-colors"
-                >
-                  <div className="flex items-center gap-2 text-white">
-                    <Code size={16} />
-                    <span className="text-sm font-medium">UI Rendering</span>
-                  </div>
-                  {activeSection === 'rendering' ? (
-                    <ChevronUp size={16} className="text-gray-400" />
-                  ) : (
-                    <ChevronDown size={16} className="text-gray-400" />
-                  )}
-                </button>
-
-                {activeSection === 'rendering' && (
-                  <div
-                    className="p-3 pt-0 space-y-4 border-t"
-                    style={{ borderColor: 'rgba(255,255,255,0.1)' }}
-                  >
-                    <div className="mt-3">
-                      <div className="text-xs text-gray-400 mb-2">
-                        Generation Mode
+                        onClick={() => handlePlatformChange('web')}
+                      >
+                        <Monitor size={14} />
+                        <span className="text-sm">Web</span>
                       </div>
                       <div
-                        className="rounded-full p-1 flex gap-1"
-                        style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+                        className={getOptionStyle(
+                          device_info.platform === 'phone',
+                        )}
+                        onClick={() => handlePlatformChange('phone')}
                       >
-                        <div
-                          className={getOptionStyle(rendering_mode === 'react')}
-                          onClick={() => setRenderingMode('react')}
-                        >
-                          <Code size={14} />
-                          <span className="text-sm">React</span>
-                        </div>
-                        <div
-                          className={getOptionStyle(
-                            rendering_mode === 'design-ml',
-                          )}
-                          onClick={() => setRenderingMode('design-ml')}
-                        >
-                          <Palette size={14} />
-                          <span className="text-sm">Design ML</span>
-                        </div>
+                        <Smartphone size={14} />
+                        <span className="text-sm">Phone</span>
                       </div>
                     </div>
                   </div>
-                )}
+
+                  {/* Screen Size Presets */}
+                  <div>
+                    <div className="text-xs text-gray-400 mb-2">
+                      Screen Size
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {device_info.platform === 'web' ? (
+                        <>
+                          <button
+                            onClick={() =>
+                              handlePresetChange(SCREEN_PRESETS.web.desktop)
+                            }
+                            className="rounded p-2 text-xs flex flex-col items-center justify-center gap-1 hover:bg-white/10 transition-colors"
+                            style={{
+                              backgroundColor:
+                                device_info.screen.width ===
+                                SCREEN_PRESETS.web.desktop.width
+                                  ? 'rgba(59, 130, 246, 0.2)'
+                                  : 'rgba(255,255,255,0.05)',
+                              border:
+                                device_info.screen.width ===
+                                SCREEN_PRESETS.web.desktop.width
+                                  ? '1px solid rgba(59, 130, 246, 0.5)'
+                                  : '1px solid transparent',
+                              color: 'white',
+                            }}
+                          >
+                            <Monitor size={16} />
+                            <span className="font-medium">Desktop</span>
+                            <span className="text-gray-400">1440×900</span>
+                          </button>
+                          <button
+                            onClick={() =>
+                              handlePresetChange(SCREEN_PRESETS.web.laptop)
+                            }
+                            className="rounded p-2 text-xs flex flex-col items-center justify-center gap-1 hover:bg-white/10 transition-colors"
+                            style={{
+                              backgroundColor:
+                                device_info.screen.width ===
+                                SCREEN_PRESETS.web.laptop.width
+                                  ? 'rgba(59, 130, 246, 0.2)'
+                                  : 'rgba(255,255,255,0.05)',
+                              border:
+                                device_info.screen.width ===
+                                SCREEN_PRESETS.web.laptop.width
+                                  ? '1px solid rgba(59, 130, 246, 0.5)'
+                                  : '1px solid transparent',
+                              color: 'white',
+                            }}
+                          >
+                            <Monitor size={16} />
+                            <span className="font-medium">Laptop</span>
+                            <span className="text-gray-400">1280×800</span>
+                          </button>
+                          <button
+                            onClick={() =>
+                              handlePresetChange(SCREEN_PRESETS.web.tablet)
+                            }
+                            className="rounded p-2 text-xs flex flex-col items-center justify-center gap-1 hover:bg-white/10 transition-colors"
+                            style={{
+                              backgroundColor:
+                                device_info.screen.width ===
+                                SCREEN_PRESETS.web.tablet.width
+                                  ? 'rgba(59, 130, 246, 0.2)'
+                                  : 'rgba(255,255,255,0.05)',
+                              border:
+                                device_info.screen.width ===
+                                SCREEN_PRESETS.web.tablet.width
+                                  ? '1px solid rgba(59, 130, 246, 0.5)'
+                                  : '1px solid transparent',
+                              color: 'white',
+                            }}
+                          >
+                            <Maximize2 size={16} />
+                            <span className="font-medium">Tablet</span>
+                            <span className="text-gray-400">1024×768</span>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() =>
+                              handlePresetChange(SCREEN_PRESETS.phone.iphone14)
+                            }
+                            className="rounded p-2 text-xs flex flex-col items-center justify-center gap-1 hover:bg-white/10 transition-colors"
+                            style={{
+                              backgroundColor:
+                                device_info.screen.width ===
+                                SCREEN_PRESETS.phone.iphone14.width
+                                  ? 'rgba(59, 130, 246, 0.2)'
+                                  : 'rgba(255,255,255,0.05)',
+                              border:
+                                device_info.screen.width ===
+                                SCREEN_PRESETS.phone.iphone14.width
+                                  ? '1px solid rgba(59, 130, 246, 0.5)'
+                                  : '1px solid transparent',
+                              color: 'white',
+                            }}
+                          >
+                            <Smartphone size={16} />
+                            <span className="font-medium">iPhone 14</span>
+                            <span className="text-gray-400">390×844</span>
+                          </button>
+                          <button
+                            onClick={() =>
+                              handlePresetChange(
+                                SCREEN_PRESETS.phone.iphone14pro,
+                              )
+                            }
+                            className="rounded p-2 text-xs flex flex-col items-center justify-center gap-1 hover:bg-white/10 transition-colors"
+                            style={{
+                              backgroundColor:
+                                device_info.screen.width ===
+                                SCREEN_PRESETS.phone.iphone14pro.width
+                                  ? 'rgba(59, 130, 246, 0.2)'
+                                  : 'rgba(255,255,255,0.05)',
+                              border:
+                                device_info.screen.width ===
+                                SCREEN_PRESETS.phone.iphone14pro.width
+                                  ? '1px solid rgba(59, 130, 246, 0.5)'
+                                  : '1px solid transparent',
+                              color: 'white',
+                            }}
+                          >
+                            <Smartphone size={16} />
+                            <span className="font-medium">iPhone 14 Pro</span>
+                            <span className="text-gray-400">393×852</span>
+                          </button>
+                          <button
+                            onClick={() =>
+                              handlePresetChange(SCREEN_PRESETS.phone.pixel7)
+                            }
+                            className="rounded p-2 text-xs flex flex-col items-center justify-center gap-1 hover:bg-white/10 transition-colors"
+                            style={{
+                              backgroundColor:
+                                device_info.screen.width ===
+                                SCREEN_PRESETS.phone.pixel7.width
+                                  ? 'rgba(59, 130, 246, 0.2)'
+                                  : 'rgba(255,255,255,0.05)',
+                              border:
+                                device_info.screen.width ===
+                                SCREEN_PRESETS.phone.pixel7.width
+                                  ? '1px solid rgba(59, 130, 246, 0.5)'
+                                  : '1px solid transparent',
+                              color: 'white',
+                            }}
+                          >
+                            <Smartphone size={16} />
+                            <span className="font-medium">Pixel 7</span>
+                            <span className="text-gray-400">412×915</span>
+                          </button>
+                        </>
+                      )}
+                      <button
+                        className="rounded p-2 text-xs flex flex-col items-center justify-center gap-1 hover:bg-white/10 transition-colors col-span-2"
+                        style={{
+                          backgroundColor: 'rgba(255,255,255,0.05)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          color: 'white',
+                        }}
+                        onClick={() => {
+                          const width = prompt(
+                            'Width (px):',
+                            device_info.screen.width.toString(),
+                          )
+                          const height = prompt(
+                            'Height (px):',
+                            device_info.screen.height.toString(),
+                          )
+                          if (width && height) {
+                            handlePresetChange({
+                              width: parseInt(width),
+                              height: parseInt(height),
+                            })
+                          }
+                        }}
+                      >
+                        <Grid3X3 size={16} />
+                        <span className="font-medium">Custom Size</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
