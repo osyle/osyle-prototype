@@ -25,6 +25,6 @@ python-multipart==0.0.20
 uvicorn==0.38.0
 python-dotenv==1.2.1
 
-# Playwright for web scraping
-playwright==1.49.1
-playwright-stealth==1.0.6
+# Playwright - DISABLED: Too large for Lambda zip, causes 250MB limit issues
+# playwright==1.49.1
+# playwright-stealth==1.0.6

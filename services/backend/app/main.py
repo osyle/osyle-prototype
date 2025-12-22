@@ -17,7 +17,7 @@ from app.routers import tastes, projects
 from app.llm_routes import router as llm_router
 from app.websocket_routes import router as ws_router
 from app.dtm_routes import router as dtm_router
-from app.routers.mobbin import router as mobbin_router
+# from app.routers.mobbin import router as mobbin_router  # DISABLED: Uses Playwright
 
 app = FastAPI(title="Osyle API", version="1.0.0")
 
@@ -195,7 +195,7 @@ app.include_router(projects.router)
 app.include_router(llm_router)
 app.include_router(ws_router)
 app.include_router(dtm_router)
-app.include_router(mobbin_router)
+# app.include_router(mobbin_router)  # DISABLED: Uses Playwright
 
 
 # Create Mangum handler for HTTP events
