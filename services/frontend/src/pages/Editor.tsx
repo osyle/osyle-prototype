@@ -53,6 +53,7 @@ export default function Editor() {
 
   // Canvas ref for programmatic control
   const canvasRef = useRef<InfiniteCanvasHandle>(null)
+  const hasInitialized = useRef(false)
 
   const [activeTab, setActiveTab] = useState('Concept')
   const [detailsValue, setDetailsValue] = useState(66)
@@ -142,6 +143,10 @@ export default function Editor() {
   }
 
   useEffect(() => {
+    // Prevent double execution in React StrictMode
+    if (hasInitialized.current) return
+    hasInitialized.current = true
+
     checkAndStartGeneration()
     loadInspirationImages()
   }, [])
