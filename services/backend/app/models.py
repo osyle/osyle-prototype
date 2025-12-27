@@ -126,6 +126,16 @@ class DeviceInfo(BaseModel):
 # FLOW MODELS (NEW)
 # ============================================================================
 
+class ScreenDefinition(BaseModel):
+    """Screen definition from user input"""
+    name: Optional[str] = ""
+    description: Optional[str] = ""
+    mode: str  # "exact" | "inspiration"
+    has_figma: bool = False
+    has_images: bool = False
+    image_count: int = 0  # Number of images for this screen
+
+
 class Position(BaseModel):
     """Canvas position for a screen"""
     x: float
@@ -183,6 +193,7 @@ class ProjectCreate(BaseModel):
     rendering_mode: Optional[str] = None  # 'react' or 'design-ml'
     flow_mode: Optional[bool] = True  # NEW: Generate flow vs single screen
     max_screens: Optional[int] = 5  # NEW: Max screens in flow
+    screen_definitions: Optional[List[ScreenDefinition]] = []  # NEW: Screen definitions from user
     metadata: Optional[dict] = {}
 
 

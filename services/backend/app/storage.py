@@ -60,6 +60,16 @@ def get_inspiration_image_key(owner_id: str, project_id: str, filename: str) -> 
     return f"projects/{owner_id}/{project_id}/inspiration/{filename}"
 
 
+def get_screen_reference_figma_key(owner_id: str, project_id: str, screen_index: int) -> str:
+    """Generate S3 key for screen reference figma.json"""
+    return f"projects/{owner_id}/{project_id}/screens/screen_{screen_index}/figma.json"
+
+
+def get_screen_reference_image_key(owner_id: str, project_id: str, screen_index: int, image_index: int = 0) -> str:
+    """Generate S3 key for screen reference image"""
+    return f"projects/{owner_id}/{project_id}/screens/screen_{screen_index}/image_{image_index}.png"
+
+
 # ============================================================================
 # PRESIGNED URL GENERATION
 # ============================================================================
@@ -449,6 +459,48 @@ def get_inspiration_images(user_id: str, project_id: str, image_keys: List[str])
             print(f"Error loading inspiration image {key}: {e}")
     
     return images
+
+
+def get_screen_reference_files(user_id: str, project_id: str, screen_index: int, has_figma: bool, image_count: int) -> dict:
+    """
+    Get screen reference files (figma.json and images)
+    
+    Returns dict with figma_data and images list
+    """
+    result = {
+        'figma_data': None,
+        'images': []
+    }
+    
+    # Get figma.json if available
+    if has_figma:
+        try:
+            figma_key = get_screen_reference_figma_key(user_id, project_id, screen_index)
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=figma_key)
+            figma_str = response['Body'].read().decode('utf-8')
+            result['figma_data'] = json.loads(figma_str)
+        except Exception as e:
+            print(f"Error loading screen {screen_index} figma: {e}")
+    
+    # Get images if available
+    for img_idx in range(image_count):
+        try:
+            img_key = get_screen_reference_image_key(user_id, project_id, screen_index, img_idx)
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=img_key)
+            image_bytes = response['Body'].read()
+            
+            import base64
+            base64_data = base64.b64encode(image_bytes).decode('utf-8')
+            content_type = response.get('ContentType', 'image/png')
+            
+            result['images'].append({
+                'data': base64_data,
+                'media_type': content_type
+            })
+        except Exception as e:
+            print(f"Error loading screen {screen_index} image {img_idx}: {e}")
+    
+    return result
 
 
 # ============================================================================

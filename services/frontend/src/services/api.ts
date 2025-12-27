@@ -375,6 +375,15 @@ export const projectsAPI = {
     selected_taste_id?: string
     selected_resource_ids?: string[]
     inspiration_images?: File[]
+    screen_definitions?: Array<{
+      name?: string
+      description?: string
+      mode: 'exact' | 'inspiration'
+      has_figma: boolean
+      has_images: boolean
+      image_count: number
+    }>
+    screen_files?: Record<string, File> // e.g., { 'screen_0_figma': file, 'screen_0_image_0': file }
     device_info?: DeviceInfo
     rendering_mode?: 'react' | 'design-ml'
     flow_mode?: boolean
@@ -410,6 +419,12 @@ export const projectsAPI = {
     if (data.max_screens !== undefined) {
       formData.append('max_screens', data.max_screens.toString())
     }
+    if (data.screen_definitions) {
+      formData.append(
+        'screen_definitions',
+        JSON.stringify(data.screen_definitions),
+      )
+    }
     if (data.metadata) {
       formData.append('metadata', JSON.stringify(data.metadata))
     }
@@ -418,6 +433,13 @@ export const projectsAPI = {
     if (data.inspiration_images && data.inspiration_images.length > 0) {
       data.inspiration_images.forEach(file => {
         formData.append('inspiration_images', file, file.name)
+      })
+    }
+
+    // Append screen files if provided
+    if (data.screen_files) {
+      Object.entries(data.screen_files).forEach(([key, file]) => {
+        formData.append(key, file, file.name)
       })
     }
 
@@ -700,6 +722,40 @@ export const llmAPI = {
     }>(`/api/llm/ui/revert?project_id=${projectId}&version=${version}`, {
       method: 'POST',
     })
+  },
+
+  /**
+   * Generate flow for a project (multi-screen UI flow) via WebSocket for progressive updates
+   */
+  generateFlowProgressive: async (
+    projectId: string,
+    callbacks: {
+      onProgress?: (
+        // eslint-disable-next-line no-unused-vars
+        stage: string,
+        // eslint-disable-next-line no-unused-vars
+        message: string,
+        // eslint-disable-next-line no-unused-vars
+        data?: Record<string, unknown>,
+      ) => void
+      onFlowArchitecture?: (
+        // eslint-disable-next-line no-unused-vars
+        flowArchitecture: import('./websocketClient').FlowArchitectureResult,
+      ) => void
+      // eslint-disable-next-line no-unused-vars
+      onScreenReady?: (screenId: string, uiCode: string) => void
+      // eslint-disable-next-line no-unused-vars
+      onScreenError?: (screenId: string, error: string) => void
+      onComplete?: (
+        // eslint-disable-next-line no-unused-vars
+        result: import('./websocketClient').FlowCompleteResult,
+      ) => void
+      // eslint-disable-next-line no-unused-vars
+      onError?: (error: string) => void
+    },
+  ): Promise<import('./websocketClient').FlowCompleteResult> => {
+    const { generateFlowWebSocket } = await import('./websocketClient')
+    return await generateFlowWebSocket(projectId, callbacks)
   },
 
   /**

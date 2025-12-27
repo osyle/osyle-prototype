@@ -37,25 +37,28 @@ export interface FlowTransition {
   from_screen_id: string
   to_screen_id: string
   trigger: string
-  trigger_type: 'tap' | 'submit' | 'auto' | 'link'
-  flow_type: 'forward' | 'back' | 'error' | 'branch' | 'success'
+  trigger_type: string // Accept any trigger type from backend
+  flow_type: string // Accept any flow type from backend
   label?: string
   condition?: string
   color?: string
+  [key: string]: unknown // Allow additional properties from backend
 }
 
 export interface FlowScreen {
   screen_id: string
   name: string
-  description: string
+  description?: string // Optional - backend may not always provide this
   task_description: string
-  platform: 'web' | 'phone'
+  platform: string // Accept any platform string from backend
   dimensions: { width: number; height: number }
-  screen_type?: 'entry' | 'intermediate' | 'success' | 'error' | 'exit'
+  screen_type?: string // Accept any screen type from backend
   semantic_role?: string
-  ui_code?: string
+  ui_code?: string | null // Can be null initially
   ui_loading?: boolean
   ui_error?: boolean
+  // Allow additional properties from backend (user_provided, reference_mode, etc.)
+  [key: string]: unknown
 }
 
 export interface FlowGraph {
@@ -66,7 +69,8 @@ export interface FlowGraph {
   screens: FlowScreen[]
   transitions: FlowTransition[]
   layout_positions?: Record<string, Position>
-  layout_algorithm?: 'hierarchical' | 'force-directed' | 'manual'
+  layout_algorithm?: string // Accept any layout algorithm from backend
+  [key: string]: unknown // Allow additional properties from backend
 }
 
 export interface ProjectDisplay {

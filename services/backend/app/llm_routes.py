@@ -24,6 +24,9 @@ from app.dtm_updater_v3 import DTMUpdaterV3
 from app.dtm_context_filter_v2 import DTMContextFilterV2
 from app.generation_orchestrator import GenerationOrchestrator
 
+# Import helper for Figma compression
+from app.unified_dtr_builder import prepare_figma_for_llm
+
 
 router = APIRouter(prefix="/api/llm", tags=["llm"])
 
@@ -1066,6 +1069,7 @@ async def generate_flow(
         task_description = project.get("task_description", "")
         device_info = project.get("device_info", {})
         max_screens = project.get("max_screens", 5)
+        screen_definitions = project.get("screen_definitions", [])  # NEW: Get screen definitions
         
         if not device_info:
             raise HTTPException(status_code=400, detail="Device info required")
@@ -1107,8 +1111,16 @@ async def generate_flow(
             inspiration_images = storage.get_inspiration_images(user_id, project_id, limited_keys)
         
         # Generate flow architecture
+        flow_arch_message = f"TASK: {task_description}\n\nDEVICE CONTEXT:\n{json.dumps(device_info, indent=2)}\n\nMAX SCREENS: {max_screens}"
+        
+        # Add screen definitions if provided
+        if screen_definitions:
+            flow_arch_message += f"\n\nSCREEN DEFINITIONS:\n{json.dumps(screen_definitions, indent=2)}"
+        else:
+            flow_arch_message += f"\n\nSCREEN DEFINITIONS: None provided - design the optimal flow from scratch based on the task."
+        
         flow_arch_content = [
-            {"type": "text", "text": f"TASK: {task_description}\n\nDEVICE CONTEXT:\n{json.dumps(device_info, indent=2)}\n\nMAX SCREENS: {max_screens}"}
+            {"type": "text", "text": flow_arch_message}
         ]
         
         # Add DTM data if available
@@ -1127,7 +1139,7 @@ async def generate_flow(
             })
         
         flow_arch_response = await llm.call_claude(
-            prompt_name="generate_flow_architecture",
+            prompt_name="generate_flow_architecture_v2",
             user_message=flow_arch_content,
             parse_json=True
         )
@@ -1153,6 +1165,11 @@ async def generate_flow(
             # Build task description with flow context
             screen_task = f"{screen['task_description']}\n\nFlow context: Screen {screen_index + 1} of {len(flow_architecture['screens'])} in '{flow_architecture.get('flow_name')}' flow"
             
+            # NEW: Extract reference mode metadata
+            user_provided = screen.get('user_provided', False)
+            reference_mode = screen.get('reference_mode')
+            screen_desc = screen.get('description', '')
+            
             # Use GenerationOrchestrator if we have DTM
             if dtm_data:
                 orchestrator = GenerationOrchestrator(llm, storage)
@@ -1169,22 +1186,87 @@ async def generate_flow(
                 )
             else:
                 # Fallback: Generate without taste
+                screen_message = f"TASK: {screen['task_description']}\n\nDEVICE CONTEXT:\n{json.dumps(device_info, indent=2)}\n\nFLOW CONTEXT:\n{json.dumps(flow_context, indent=2)}"
+                
+                # NEW: Add screen description if user-provided
+                if user_provided and screen_desc:
+                    screen_message += f"\n\nSCREEN DESCRIPTION: {screen_desc}"
+                
+                # NEW: Add reference mode
+                if reference_mode:
+                    screen_message += f"\n\nREFERENCE MODE: {reference_mode}"
+                    
+                    # NEW: Load screen reference files if available
+                    user_screen_index = screen.get('user_screen_index')
+                    if user_screen_index is not None and screen_definitions:
+                        screen_def = screen_definitions[user_screen_index]
+                        has_figma = screen_def.get('has_figma', False)
+                        image_count = screen_def.get('image_count', 0)
+                        
+                        if has_figma or image_count > 0:
+                            try:
+                                ref_files = storage.get_screen_reference_files(
+                                    user_id, project_id, user_screen_index, has_figma, image_count
+                                )
+                                
+                                # Add figma data if available
+                                if ref_files['figma_data']:
+                                    compressed_figma = prepare_figma_for_llm(ref_files['figma_data'], max_depth=6)
+                                    screen_message += f"\n\nREFERENCE FIGMA DATA:\n{compressed_figma}"
+                            except Exception as e:
+                                print(f"  ⚠ Error loading screen {user_screen_index} reference files: {e}")
+                
                 screen_content = [
-                    {"type": "text", "text": f"TASK: {screen['task_description']}\n\nDEVICE CONTEXT:\n{json.dumps(device_info, indent=2)}\n\nFLOW CONTEXT:\n{json.dumps(flow_context, indent=2)}"}
+                    {"type": "text", "text": screen_message}
                 ]
                 
-                for img in inspiration_images:
-                    screen_content.append({
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": img.get('media_type', 'image/png'),
-                            "data": img['data']
-                        }
-                    })
+                # NEW: Conditional image loading based on reference mode
+                if reference_mode == "exact" and screen.get('user_screen_index') is not None:
+                    # Load and add reference images for this specific screen
+                    user_screen_index = screen.get('user_screen_index')
+                    screen_def = screen_definitions[user_screen_index]
+                    image_count = screen_def.get('image_count', 0)
+                    if image_count > 0:
+                        try:
+                            ref_files = storage.get_screen_reference_files(
+                                user_id, project_id, user_screen_index, False, image_count
+                            )
+                            for img in ref_files['images']:
+                                screen_content.append({
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": img.get('media_type', 'image/png'),
+                                        "data": img['data']
+                                    }
+                                })
+                        except Exception as e:
+                            print(f"  ⚠ Error loading screen {user_screen_index} images: {e}")
+                elif reference_mode == "inspiration" or reference_mode is None:
+                    # Use general inspiration images
+                    for img in inspiration_images:
+                        screen_content.append({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": img.get('media_type', 'image/png'),
+                                "data": img['data']
+                            }
+                        })
+                else:
+                    # No reference mode - use general inspiration images
+                    for img in inspiration_images:
+                        screen_content.append({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": img.get('media_type', 'image/png'),
+                                "data": img['data']
+                            }
+                        })
                 
                 screen_response = await llm.call_claude(
-                    prompt_name="generate_ui_react_v3_dtm_flow",
+                    prompt_name="generate_ui_v2",
                     user_message=screen_content
                 )
                 

@@ -85,7 +85,9 @@ You receive:
 
 2. **Task Description** - What this specific screen should accomplish
 
-3. **Device Context**:
+3. **Screen Description** (Optional) - Additional details about what this screen should do or contain
+
+4. **Device Context**:
 
    ```typescript
    {
@@ -95,7 +97,7 @@ You receive:
    }
    ```
 
-4. **Flow Context** (if part of a multi-screen flow):
+5. **Flow Context** (if part of a multi-screen flow):
 
    ```typescript
    {
@@ -117,7 +119,24 @@ You receive:
    }
    ```
 
-5. **Visual Reference Examples** - Actual images from the designer's portfolio showing their aesthetic style
+6. **Reference Mode** (Optional) - How to interpret provided reference files:
+
+   ```typescript
+   {
+     mode: "exact" | "inspiration" | null,
+     has_figma: boolean,    // Whether figma.json provided
+     has_images: boolean    // Whether image(s) provided
+   }
+   ```
+
+7. **Reference Files** (Optional, if reference mode provided) - Design files from the user
+
+   May include:
+
+   - Figma JSON data (compressed structure)
+   - Image(s) showing the design
+
+8. **Visual Reference Examples** - Actual images from the designer's portfolio showing their aesthetic style
 
    **CRITICAL**: These images show the designer's SIGNATURE VISUAL STYLE:
 
@@ -129,7 +148,7 @@ You receive:
 
    These are NOT content reference - they're STYLE REFERENCE. Make the new UI look like it came from this designer's portfolio.
 
-6. **Inspiration Images** (Optional) - Reference images showing desired content/layout
+9. **Inspiration Images** (Optional) - Reference images showing desired content/layout
 
    **CRITICAL**: These images are for **CONTENT REFERENCE ONLY**:
 
@@ -138,6 +157,129 @@ You receive:
    - Understand content organization and information hierarchy
 
    **DO NOT** use inspiration images for visual style - that comes from the designer's portfolio examples above.
+
+---
+
+## Reference Mode: Two Approaches
+
+When reference files are provided, the `reference_mode` determines how to use them:
+
+### MODE: "exact" - Exact Recreation
+
+**Purpose**: User provided a specific design to recreate with improved styling.
+
+**What to do**:
+
+1. **Analyze the reference files** (figma.json and/or images):
+
+   - Identify ALL UI components (buttons, inputs, cards, headers, etc.)
+   - Note the exact content (text, labels, placeholders)
+   - Understand the layout structure (grid, columns, spacing relationships)
+   - Map out information hierarchy (what's prominent, what's secondary)
+   - Identify interactive elements and their purposes
+
+2. **Recreate EXACTLY the same screen**:
+
+   - ✅ Same components (if they have a button, you have a button)
+   - ✅ Same content (if they say "Sign Up", you say "Sign Up")
+   - ✅ Same layout structure (if they have 3 cards in a row, you have 3 cards in a row)
+   - ✅ Same information hierarchy (if title is largest, keep it largest)
+   - ✅ Same interactive elements (if they have a search bar, you have a search bar)
+
+3. **Apply DTM for ALL visual design**:
+   - ❌ DON'T use their colors → Use DTM colors
+   - ❌ DON'T use their spacing → Use DTM quantum spacing
+   - ❌ DON'T use their typography → Use DTM font sizes/scale
+   - ❌ DON'T use their border radius → Use DTM corner radii
+   - ✅ DO apply DTM invariants, contextual rules, and meta-rules
+   - ✅ DO apply signature patterns from visual reference examples
+   - ✅ DO enhance the design quality ("10x better design")
+
+**Example**:
+
+User's rough sketch shows:
+
+- Header: "Welcome"
+- Text: "Sign up to continue"
+- Email input field
+- Password input field
+- Button: "Create Account"
+
+Your output:
+
+- ✅ Header: "Welcome" (exact same text)
+- ✅ Text: "Sign up to continue" (exact same text)
+- ✅ Email input field (same component type)
+- ✅ Password input field (same component type)
+- ✅ Button: "Create Account" (exact same text)
+- ✅ BUT: Colors from DTM, spacing from DTM quantum, typography from DTM scale, corners from DTM radii, signature patterns applied
+
+**The Goal**: User's ugly sketch becomes a beautiful, professional design with the EXACT same functionality and content.
+
+---
+
+### MODE: "inspiration" - Loose Content Ideas
+
+**Purpose**: User provided reference images as inspiration for content ideas.
+
+**What to do**:
+
+1. **Study the reference images** for content inspiration:
+
+   - What type of components are shown? (cards, lists, grids)
+   - What kind of content structure? (headlines, descriptions, CTAs)
+   - What features/functionality appear? (search, filters, tabs)
+   - What's the general vibe/purpose? (dashboard, form, gallery)
+
+2. **Use as loose inspiration** - You have creative freedom:
+
+   - ✅ Borrow layout patterns that make sense
+   - ✅ Include similar component types if appropriate
+   - ✅ Adopt content structure ideas
+   - ❌ DON'T feel obligated to copy exactly
+   - ❌ DON'T use their visual styling
+   - ❌ DON'T replicate their exact content/text
+
+3. **Apply DTM for ALL design decisions**:
+   - Colors, spacing, typography, forms ALL from DTM
+   - Use invariants, contextual rules, meta-rules
+   - Apply signature patterns from visual reference examples
+   - Let DTM guide your creative choices
+
+**Example**:
+
+User's inspiration images show:
+
+- Dashboard with metric cards
+- Some kind of chart/graph
+- List of recent items
+- Search functionality
+
+Your output might:
+
+- ✅ Include metric cards (good idea from inspiration)
+- ✅ Include a visualization (inspired by their chart)
+- ✅ Include recent activity (similar pattern)
+- ⚠️ Skip search if not needed for task
+- ⚠️ Add filters if that makes more sense
+- ✅ Use completely different content/labels
+- ✅ Organize layout as DTM suggests
+
+**The Goal**: Get content/feature ideas from their images, but create your own design using DTM.
+
+---
+
+### MODE: null - No Reference Files
+
+**Purpose**: User only provided task/screen descriptions, no files.
+
+**What to do**:
+
+- Rely entirely on task description and screen description
+- Apply DTM for all design decisions
+- Apply signature patterns from visual reference examples
+- Use your expertise to determine best UI structure
+- No reference files to consider
 
 ---
 
@@ -693,7 +835,7 @@ const [selected, setSelected] = useState("option1");
 
 ---
 
-## Complete Example
+## Complete Example: Basic Flow
 
 **Input**:
 
@@ -874,6 +1016,152 @@ export default function App({ onTransition }) {
 
 ---
 
+## Complete Example: Exact Recreation Mode
+
+**Reference Mode**:
+
+```json
+{
+  "mode": "exact",
+  "has_figma": true,
+  "has_images": true
+}
+```
+
+**Reference Files Show**:
+
+- Header: "Welcome Back"
+- Subtext: "Login to your account"
+- Email input (placeholder: "Enter email")
+- Password input (placeholder: "Enter password")
+- Blue button: "Login"
+- Link at bottom: "Forgot password?"
+
+**Generated React** (with DTM styling):
+
+```jsx
+export default function App({ onTransition }) {
+  const quantum = 8;
+  const colors = ["#1A1A2E", "#6C63FF", "#FFFFFF", "#888888"];
+  const commonSizes = [12, 16, 24, 36];
+  const radii = [8, 16];
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  return (
+    <div
+      style={{
+        width: "375px",
+        height: "812px",
+        backgroundColor: colors[0],
+        padding: `${quantum * 4}px`,
+        fontFamily: "system-ui, sans-serif",
+        color: colors[2],
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+      }}
+    >
+      {/* EXACT: Header text from reference */}
+      <div
+        style={{
+          fontSize: `${commonSizes[3]}px`,
+          fontWeight: "700",
+          marginBottom: `${quantum}px`,
+        }}
+      >
+        Welcome Back
+      </div>
+
+      {/* EXACT: Subtext from reference */}
+      <div
+        style={{
+          fontSize: `${commonSizes[1]}px`,
+          color: colors[3],
+          marginBottom: `${quantum * 4}px`,
+        }}
+      >
+        Login to your account
+      </div>
+
+      {/* EXACT: Email input from reference, DTM styling */}
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Enter email"
+        style={{
+          padding: `${quantum * 2}px`,
+          borderRadius: `${radii[0]}px`,
+          border: `1px solid ${colors[3]}`,
+          backgroundColor: colors[0],
+          color: colors[2],
+          fontSize: `${commonSizes[1]}px`,
+          marginBottom: `${quantum * 2}px`,
+        }}
+      />
+
+      {/* EXACT: Password input from reference, DTM styling */}
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Enter password"
+        style={{
+          padding: `${quantum * 2}px`,
+          borderRadius: `${radii[0]}px`,
+          border: `1px solid ${colors[3]}`,
+          backgroundColor: colors[0],
+          color: colors[2],
+          fontSize: `${commonSizes[1]}px`,
+          marginBottom: `${quantum * 3}px`,
+        }}
+      />
+
+      {/* EXACT: Login button from reference, DTM styling */}
+      <button
+        onClick={() => {
+          if (email && password) {
+            onTransition("trans_login");
+          }
+        }}
+        style={{
+          padding: `${quantum * 2}px`,
+          backgroundColor: colors[1],
+          color: colors[2],
+          borderRadius: `${radii[1]}px`,
+          fontSize: `${commonSizes[2]}px`,
+          fontWeight: "600",
+          border: "none",
+          cursor: "pointer",
+          marginBottom: `${quantum * 3}px`,
+        }}
+      >
+        Login
+      </button>
+
+      {/* EXACT: Forgot password link from reference, DTM styling */}
+      <button
+        onClick={() => onTransition("trans_forgot")}
+        style={{
+          background: "none",
+          border: "none",
+          color: colors[1],
+          fontSize: `${commonSizes[0]}px`,
+          cursor: "pointer",
+          textDecoration: "underline",
+        }}
+      >
+        Forgot password?
+      </button>
+    </div>
+  );
+}
+```
+
+---
+
 ## Quality Checklist
 
 Before outputting, verify:
@@ -885,6 +1173,14 @@ Before outputting, verify:
 - ✓ All flow transitions implemented (one UI element per outgoing_transition)
 - ✓ Each transition uses correct transition_id in onTransition call
 - ✓ Transition styling matches flow_type (forward/back/error/success)
+
+**Reference Mode (if applicable)**:
+
+- ✓ **[EXACT MODE]** All components from reference recreated with exact content
+- ✓ **[EXACT MODE]** Layout structure matches reference exactly
+- ✓ **[EXACT MODE]** All styling comes from DTM (not from reference)
+- ✓ **[INSPIRATION MODE]** Content ideas borrowed appropriately
+- ✓ **[INSPIRATION MODE]** Not copying exact text/labels from inspiration
 
 **Tier 1 - Universal Principles**:
 
@@ -933,18 +1229,26 @@ Before outputting, verify:
 
 5. **Context Matters**: Use context-specific spacing (dashboard vs marketing) when available.
 
-6. **Inspiration vs Reference**:
+6. **Reference Mode Matters**:
+
+   - **exact**: Recreate same screen, apply DTM styling (10x the design)
+   - **inspiration**: Use as content ideas, full creative freedom with DTM
+   - **null**: No reference files, rely on descriptions
+
+7. **Exact Mode is Exact**: Same components, same content, same structure - only styling changes
+
+8. **Inspiration vs Reference**:
 
    - Inspiration images → content/layout only
    - Visual reference examples → aesthetic style (what to match)
 
-7. **Flow Integration**: Implement ALL outgoing_transitions with correct onTransition calls.
+9. **Flow Integration**: Implement ALL outgoing_transitions with correct onTransition calls.
 
-8. **Platform Adaptation**: Phone needs bigger touch targets, vertical layouts, larger spacing.
+10. **Platform Adaptation**: Phone needs bigger touch targets, vertical layouts, larger spacing.
 
-9. **Trust the DTM**: It's already filtered and optimized for this task.
+11. **Trust the DTM**: It's already filtered and optimized for this task.
 
-10. **Output Code Only**: No explanations, no markdown fences, just pure React code.
+12. **Output Code Only**: No explanations, no markdown fences, just pure React code.
 
 ---
 

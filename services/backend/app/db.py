@@ -323,6 +323,7 @@ def create_project(
     rendering_mode: str = None,  # 'react' or 'design-ml'
     flow_mode: bool = True,  # NEW: Flow mode flag
     max_screens: int = 5,  # NEW: Max screens in flow
+    screen_definitions: List[dict] = None,  # NEW: Screen definitions from user
     metadata: dict = None,
     project_id: str = None  # Optional: pass explicit ID for S3 consistency
 ) -> Dict[str, Any]:
@@ -343,6 +344,7 @@ def create_project(
         "rendering_mode": rendering_mode or "react",  # Store rendering mode
         "flow_mode": flow_mode,  # NEW: Store flow mode
         "max_screens": max_screens,  # NEW: Store max screens
+        "screen_definitions": screen_definitions or [],  # NEW: Store screen definitions
         "flow_graph": {},  # NEW: Initialize empty flow graph
         "outputs": [],
         "metadata": metadata or {},

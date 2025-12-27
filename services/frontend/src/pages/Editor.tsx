@@ -29,6 +29,23 @@ import { type FlowGraph } from '../types/home.types'
 
 type GenerationStage = 'idle' | 'generating' | 'complete' | 'error'
 
+// Extended screen type with loading states
+// These fields are added dynamically during progressive generation
+interface ScreenWithLoadingState {
+  screen_id: string
+  name: string
+  description?: string
+  task_description: string
+  platform: string
+  dimensions: { width: number; height: number }
+  screen_type?: string
+  semantic_role?: string
+  ui_code?: string | null
+  ui_loading?: boolean
+  ui_error?: boolean
+  [key: string]: unknown // Allow other fields from FlowGraph
+}
+
 export default function Editor() {
   const navigate = useNavigate()
 
@@ -451,21 +468,72 @@ export default function Editor() {
       const project = JSON.parse(currentProject)
       setGenerationStage('generating')
 
-      console.log('🚀 Starting flow generation...')
+      console.log('🚀 Starting progressive flow generation...')
 
-      const flowResult = await api.llm.generateFlow(project.project_id)
+      // Note: All updates happen via callbacks, no return value needed
+      await api.llm.generateFlowProgressive(project.project_id, {
+        onProgress: (stage, message) => {
+          console.log(`[${stage}] ${message}`)
+        },
+        onFlowArchitecture: flowArch => {
+          console.log('✅ Flow architecture ready!')
+          // Dismiss modal and show flow graph
+          setGenerationStage('complete')
+          // Add ui_loading flag to each screen for progressive rendering
+          const flowWithLoading: FlowGraph = {
+            ...flowArch,
+            screens: flowArch.screens.map(s => ({
+              ...s,
+              ui_loading: true,
+              ui_code: null,
+            })),
+          }
+          setFlowGraph(flowWithLoading)
+        },
+        onScreenReady: (screenId, uiCode) => {
+          console.log(`✅ Screen ready: ${screenId}`)
+          setFlowGraph(prev => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              screens: prev.screens.map(s =>
+                s.screen_id === screenId
+                  ? { ...s, ui_code: uiCode, ui_loading: false }
+                  : s,
+              ),
+            }
+          })
+        },
+        onScreenError: (screenId, error) => {
+          console.error(`❌ Screen ${screenId} failed:`, error)
+          setFlowGraph(prev => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              screens: prev.screens.map(s =>
+                s.screen_id === screenId
+                  ? { ...s, ui_error: true, ui_loading: false }
+                  : s,
+              ),
+            }
+          })
+        },
+        onComplete: result => {
+          console.log('✅ Flow generation complete!')
+          console.log('  Version:', result.version)
+          setCurrentFlowVersion(result.version)
+          setViewingVersion(null)
 
-      console.log('✅ Flow generation complete!')
-      console.log('  Version:', flowResult.version)
-
-      setFlowGraph(flowResult.flow_graph)
-      setCurrentFlowVersion(flowResult.version)
-      setGenerationStage('complete')
-      setViewingVersion(null) // Reset viewing version
-
-      // Update project in localStorage
-      project.flow_graph = flowResult.flow_graph
-      localStorage.setItem('current_project', JSON.stringify(project))
+          // Update project in localStorage
+          project.flow_graph = result.flow_graph
+          localStorage.setItem('current_project', JSON.stringify(project))
+        },
+        onError: error => {
+          console.error('❌ Generation error:', error)
+          setError(error)
+          setGenerationStage('error')
+        },
+      })
     } catch (err) {
       console.error('❌ Generation error:', err)
       setError(err instanceof Error ? err.message : 'Unknown error occurred')
@@ -516,8 +584,13 @@ export default function Editor() {
 
   // Render device content - FLOW MODE ONLY
   const renderDeviceContent = () => {
-    // Don't render anything during idle or generating states
-    if (generationStage === 'idle' || generationStage === 'generating') {
+    // Don't render anything during idle stage
+    if (generationStage === 'idle') {
+      return null
+    }
+
+    // During generating, show flow if architecture is ready
+    if (generationStage === 'generating' && !flowGraph) {
       return null
     }
 
@@ -563,7 +636,10 @@ export default function Editor() {
       )
     }
 
-    if (generationStage === 'complete' && flowGraph) {
+    if (
+      (generationStage === 'complete' || generationStage === 'generating') &&
+      flowGraph
+    ) {
       if (activeTab === 'Prototype') {
         return (
           <DeviceFrame>
@@ -640,7 +716,72 @@ export default function Editor() {
                   )}
 
                   <DeviceFrame>
-                    {screen.ui_code ? (
+                    {(screen as ScreenWithLoadingState).ui_loading ? (
+                      // Loading state with spinner
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: '#F9FAFB',
+                          flexDirection: 'column',
+                          gap: '16px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '48px',
+                            height: '48px',
+                            border: '4px solid #E5E7EB',
+                            borderTop: '4px solid #3B82F6',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite',
+                          }}
+                        />
+                        <div
+                          style={{
+                            fontSize: '13px',
+                            color: '#9CA3AF',
+                            fontWeight: 500,
+                          }}
+                        >
+                          Generating...
+                        </div>
+                      </div>
+                    ) : (screen as ScreenWithLoadingState).ui_error ? (
+                      // Error state
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: '#FEF2F2',
+                          padding: '20px',
+                          textAlign: 'center',
+                        }}
+                      >
+                        <div>
+                          <div
+                            style={{ fontSize: '32px', marginBottom: '8px' }}
+                          >
+                            ⚠️
+                          </div>
+                          <div
+                            style={{
+                              fontSize: '14px',
+                              color: '#DC2626',
+                              fontWeight: 600,
+                            }}
+                          >
+                            Generation Failed
+                          </div>
+                        </div>
+                      </div>
+                    ) : screen.ui_code ? (
                       <DynamicReactRenderer
                         jsxCode={screen.ui_code}
                         propsToInject={{
@@ -679,877 +820,886 @@ export default function Editor() {
   }
 
   return (
-    <div
-      className="relative h-screen w-screen overflow-hidden"
-      style={{
-        backgroundColor: '#EDEBE9',
-        fontFamily: "'Inter', -apple-system, sans-serif",
-      }}
-    >
-      {/* Back Button */}
-      {(generationStage === 'complete' || generationStage === 'error') && (
-        <button
-          onClick={handleBackToHome}
-          className="fixed top-6 left-6 w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 z-50"
-          style={{
-            backgroundColor: '#FFFFFF',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-          }}
-        >
-          <ArrowLeft size={20} style={{ color: '#3B3B3B' }} />
-        </button>
-      )}
-
-      {/* Flow Navigator */}
-      {flowGraph && generationStage === 'complete' && (
-        <div className="fixed top-24 left-6 z-50">
+    <>
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}
+      </style>
+      <div
+        className="relative h-screen w-screen overflow-hidden"
+        style={{
+          backgroundColor: '#EDEBE9',
+          fontFamily: "'Inter', -apple-system, sans-serif",
+        }}
+      >
+        {/* Back Button */}
+        {(generationStage === 'complete' || generationStage === 'error') && (
           <button
-            onClick={() => setIsFlowNavigatorOpen(!isFlowNavigatorOpen)}
-            className="w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 mb-2"
+            onClick={handleBackToHome}
+            className="fixed top-6 left-6 w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 z-50"
             style={{
               backgroundColor: '#FFFFFF',
               boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
             }}
           >
-            <List size={20} style={{ color: '#3B3B3B' }} />
+            <ArrowLeft size={20} style={{ color: '#3B3B3B' }} />
           </button>
+        )}
 
-          {isFlowNavigatorOpen && (
-            <div
-              className="rounded-2xl p-4 max-h-96 overflow-y-auto"
+        {/* Flow Navigator */}
+        {flowGraph && generationStage === 'complete' && (
+          <div className="fixed top-24 left-6 z-50">
+            <button
+              onClick={() => setIsFlowNavigatorOpen(!isFlowNavigatorOpen)}
+              className="w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 mb-2"
               style={{
                 backgroundColor: '#FFFFFF',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-                width: '240px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
               }}
             >
+              <List size={20} style={{ color: '#3B3B3B' }} />
+            </button>
+
+            {isFlowNavigatorOpen && (
               <div
-                className="text-xs font-semibold mb-3"
-                style={{ color: '#929397' }}
+                className="rounded-2xl p-4 max-h-96 overflow-y-auto"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                  width: '240px',
+                }}
               >
-                FLOW SCREENS ({flowGraph.screens.length})
-              </div>
-              {flowGraph.screens.map((screen, index) => (
-                <button
-                  key={screen.screen_id}
-                  onClick={() => {
-                    setSelectedScreenId(screen.screen_id)
-                    centerScreen(screen.screen_id, true)
-                    setIsFlowNavigatorOpen(false)
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-lg mb-1 transition-all hover:scale-[1.02]"
-                  style={{
-                    backgroundColor:
-                      selectedScreenId === screen.screen_id
-                        ? '#F0F7FF'
-                        : 'transparent',
-                    color: '#3B3B3B',
-                    border:
-                      selectedScreenId === screen.screen_id
-                        ? '1px solid #3B82F6'
-                        : '1px solid transparent',
-                  }}
+                <div
+                  className="text-xs font-semibold mb-3"
+                  style={{ color: '#929397' }}
                 >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-6 h-6 rounded flex items-center justify-center text-xs font-semibold"
-                      style={{
-                        backgroundColor:
-                          screen.screen_type === 'entry'
-                            ? '#10B981'
-                            : screen.screen_type === 'success'
-                              ? '#3B82F6'
-                              : '#E5E7EB',
-                        color:
-                          screen.screen_type === 'entry' ||
-                          screen.screen_type === 'success'
-                            ? '#FFFFFF'
-                            : '#6B7280',
-                      }}
-                    >
-                      {screen.screen_type === 'entry' ? '→' : index + 1}
+                  FLOW SCREENS ({flowGraph.screens.length})
+                </div>
+                {flowGraph.screens.map((screen, index) => (
+                  <button
+                    key={screen.screen_id}
+                    onClick={() => {
+                      setSelectedScreenId(screen.screen_id)
+                      centerScreen(screen.screen_id, true)
+                      setIsFlowNavigatorOpen(false)
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-lg mb-1 transition-all hover:scale-[1.02]"
+                    style={{
+                      backgroundColor:
+                        selectedScreenId === screen.screen_id
+                          ? '#F0F7FF'
+                          : 'transparent',
+                      color: '#3B3B3B',
+                      border:
+                        selectedScreenId === screen.screen_id
+                          ? '1px solid #3B82F6'
+                          : '1px solid transparent',
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-6 h-6 rounded flex items-center justify-center text-xs font-semibold"
+                        style={{
+                          backgroundColor:
+                            screen.screen_type === 'entry'
+                              ? '#10B981'
+                              : screen.screen_type === 'success'
+                                ? '#3B82F6'
+                                : '#E5E7EB',
+                          color:
+                            screen.screen_type === 'entry' ||
+                            screen.screen_type === 'success'
+                              ? '#FFFFFF'
+                              : '#6B7280',
+                        }}
+                      >
+                        {screen.screen_type === 'entry' ? '→' : index + 1}
+                      </div>
+                      <div className="flex-1 text-sm font-medium">
+                        {screen.name}
+                      </div>
                     </div>
-                    <div className="flex-1 text-sm font-medium">
-                      {screen.name}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Left Side Menu */}
-      <div className="fixed left-6 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-40">
-        <button
-          className="rounded-lg flex items-center justify-center transition-all hover:scale-105"
-          style={{
-            width: '56px',
-            height: '40px',
-            backgroundColor: '#FFFFFF',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-          }}
-        >
-          <div className="flex flex-col gap-1">
-            <div
-              style={{
-                width: '20px',
-                height: '2px',
-                backgroundColor: '#929397',
-              }}
-            />
-            <div
-              style={{
-                width: '20px',
-                height: '2px',
-                backgroundColor: '#929397',
-              }}
-            />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        </button>
+        )}
 
-        {inspirationImages.slice(-3).map(image => (
+        {/* Left Side Menu */}
+        <div className="fixed left-6 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-40">
           <button
-            key={image.key}
-            className="rounded-xl transition-all hover:scale-105"
+            className="rounded-lg flex items-center justify-center transition-all hover:scale-105"
+            style={{
+              width: '56px',
+              height: '40px',
+              backgroundColor: '#FFFFFF',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            }}
+          >
+            <div className="flex flex-col gap-1">
+              <div
+                style={{
+                  width: '20px',
+                  height: '2px',
+                  backgroundColor: '#929397',
+                }}
+              />
+              <div
+                style={{
+                  width: '20px',
+                  height: '2px',
+                  backgroundColor: '#929397',
+                }}
+              />
+            </div>
+          </button>
+
+          {inspirationImages.slice(-3).map(image => (
+            <button
+              key={image.key}
+              className="rounded-xl transition-all hover:scale-105"
+              style={{
+                width: '56px',
+                height: '56px',
+                backgroundColor: '#FFFFFF',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                overflow: 'hidden',
+              }}
+              title={image.filename}
+            >
+              <img
+                src={image.url}
+                alt={image.filename}
+                className="w-full h-full object-cover"
+              />
+            </button>
+          ))}
+
+          <button
+            onClick={() => setIsAddInspirationModalOpen(true)}
+            className="rounded-xl flex items-center justify-center transition-all hover:scale-105"
             style={{
               width: '56px',
               height: '56px',
               backgroundColor: '#FFFFFF',
               boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-              overflow: 'hidden',
             }}
-            title={image.filename}
+            title="Add inspiration images"
           >
-            <img
-              src={image.url}
-              alt={image.filename}
-              className="w-full h-full object-cover"
-            />
+            <Plus size={24} style={{ color: '#929397' }} />
           </button>
-        ))}
 
-        <button
-          onClick={() => setIsAddInspirationModalOpen(true)}
-          className="rounded-xl flex items-center justify-center transition-all hover:scale-105"
-          style={{
-            width: '56px',
-            height: '56px',
-            backgroundColor: '#FFFFFF',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-          }}
-          title="Add inspiration images"
-        >
-          <Plus size={24} style={{ color: '#929397' }} />
-        </button>
-
-        {/* Version History - RESTORED! */}
-        {generationStage === 'complete' && currentFlowVersion > 0 && (
-          <div className="mt-4">
-            <VersionHistory
-              currentVersion={currentFlowVersion}
-              onVersionSelect={handleVersionSelect}
-              onRevert={handleRevertVersion}
-              isReverting={isReverting}
-              viewingVersion={viewingVersion}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Tab Navigation */}
-      <div
-        className="fixed top-6 transition-all duration-300 z-40"
-        style={{
-          left: '80px',
-          right: isRightPanelCollapsed ? '80px' : 'calc(20% + 40px)',
-          display: 'flex',
-          justifyContent: 'center',
-        }}
-      >
-        <div
-          className="flex items-center gap-1 rounded-full px-2 py-1.5"
-          style={{
-            backgroundColor: '#FFFFFF',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-            border: '1px solid rgba(0, 0, 0, 0.05)',
-          }}
-        >
-          {tabs.map(tab => (
-            <button
-              key={tab.name}
-              onClick={() => tab.enabled && setActiveTab(tab.name)}
-              disabled={!tab.enabled}
-              className="px-6 py-2 rounded-full transition-all duration-300 text-sm font-medium relative group"
-              style={{
-                backgroundColor:
-                  activeTab === tab.name ? '#F4F4F4' : 'transparent',
-                color:
-                  activeTab === tab.name
-                    ? '#1F1F20'
-                    : tab.enabled
-                      ? '#6B7280'
-                      : '#D1D5DB',
-                cursor: tab.enabled ? 'pointer' : 'not-allowed',
-                opacity: tab.enabled ? 1 : 0.6,
-              }}
-            >
-              {tab.name}
-              {!tab.enabled && (
-                <span className="ml-2 text-xs opacity-50">🔒</span>
-              )}
-            </button>
-          ))}
+          {/* Version History - RESTORED! */}
+          {generationStage === 'complete' && currentFlowVersion > 0 && (
+            <div className="mt-4">
+              <VersionHistory
+                currentVersion={currentFlowVersion}
+                onVersionSelect={handleVersionSelect}
+                onRevert={handleRevertVersion}
+                isReverting={isReverting}
+                viewingVersion={viewingVersion}
+              />
+            </div>
+          )}
         </div>
-      </div>
 
-      {/* Canvas Container - Different for Concept vs Prototype */}
-      {activeTab === 'Prototype' &&
-      generationStage === 'complete' &&
-      flowGraph ? (
-        // Prototype mode - dark box container with light background
+        {/* Tab Navigation */}
         <div
-          className="fixed"
+          className="fixed top-6 transition-all duration-300 z-40"
           style={{
-            top: '80px',
-            bottom: '100px',
             left: '80px',
             right: isRightPanelCollapsed ? '80px' : 'calc(20% + 40px)',
             display: 'flex',
-            alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          {/* Wrapper to make box 20% narrower */}
           <div
+            className="flex items-center gap-1 rounded-full px-2 py-1.5"
             style={{
-              width: '80%',
-              height: '100%',
+              backgroundColor: '#FFFFFF',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+              border: '1px solid rgba(0, 0, 0, 0.05)',
+            }}
+          >
+            {tabs.map(tab => (
+              <button
+                key={tab.name}
+                onClick={() => tab.enabled && setActiveTab(tab.name)}
+                disabled={!tab.enabled}
+                className="px-6 py-2 rounded-full transition-all duration-300 text-sm font-medium relative group"
+                style={{
+                  backgroundColor:
+                    activeTab === tab.name ? '#F4F4F4' : 'transparent',
+                  color:
+                    activeTab === tab.name
+                      ? '#1F1F20'
+                      : tab.enabled
+                        ? '#6B7280'
+                        : '#D1D5DB',
+                  cursor: tab.enabled ? 'pointer' : 'not-allowed',
+                  opacity: tab.enabled ? 1 : 0.6,
+                }}
+              >
+                {tab.name}
+                {!tab.enabled && (
+                  <span className="ml-2 text-xs opacity-50">🔒</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Canvas Container - Different for Concept vs Prototype */}
+        {activeTab === 'Prototype' &&
+        generationStage === 'complete' &&
+        flowGraph ? (
+          // Prototype mode - dark box container with light background
+          <div
+            className="fixed"
+            style={{
+              top: '80px',
+              bottom: '100px',
+              left: '80px',
+              right: isRightPanelCollapsed ? '80px' : 'calc(20% + 40px)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
+            {/* Wrapper to make box 20% narrower */}
             <div
               style={{
-                width: '100%',
+                width: '80%',
                 height: '100%',
-                backgroundColor: '#1F1F20',
-                borderRadius: '24px',
-                overflow: 'hidden',
-                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-                border: '1px solid rgba(255, 255, 255, 0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              <PrototypeCanvas
-                deviceWidth={
-                  device_info.platform === 'phone'
-                    ? device_info.screen.width + 24 // Total width including DeviceFrame bezel
-                    : device_info.screen.width
-                }
-                deviceHeight={
-                  device_info.platform === 'phone'
-                    ? device_info.screen.height + 48 // Total height including DeviceFrame bezel
-                    : device_info.screen.height + 40 // Total height including browser chrome
-                }
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  backgroundColor: '#1F1F20',
+                  borderRadius: '24px',
+                  overflow: 'hidden',
+                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+                  border: '1px solid rgba(255, 255, 255, 0.05)',
+                }}
               >
-                {renderDeviceContent()}
-              </PrototypeCanvas>
-            </div>
-          </div>
-        </div>
-      ) : (
-        // Concept mode - infinite canvas with dark background
-        <InfiniteCanvas
-          ref={canvasRef}
-          width={
-            flowGraph && generationStage === 'complete'
-              ? (() => {
-                  const positions = calculateFlowLayout(flowGraph)
-                  const deviceWidth =
+                <PrototypeCanvas
+                  deviceWidth={
                     device_info.platform === 'phone'
-                      ? device_info.screen.width + 24
+                      ? device_info.screen.width + 24 // Total width including DeviceFrame bezel
                       : device_info.screen.width
-                  return (
-                    Math.max(...Object.values(positions).map(p => p.x), 0) +
-                    deviceWidth +
-                    deviceWidth * 0.6
-                  ) // Match HORIZONTAL_GAP
-                })()
-              : device_info.screen.width
-          }
-          height={
-            flowGraph && generationStage === 'complete'
-              ? (() => {
-                  const positions = calculateFlowLayout(flowGraph)
-                  const yValues = Object.values(positions).map(p => p.y)
-                  const minY = Math.min(...yValues, 0)
-                  const maxY = Math.max(...yValues, 0)
-                  const deviceHeight =
+                  }
+                  deviceHeight={
                     device_info.platform === 'phone'
-                      ? device_info.screen.height + 48
-                      : device_info.screen.height + 40
-                  return maxY - minY + deviceHeight + deviceHeight * 0.5 // Match VERTICAL_GAP
-                })()
-              : device_info.screen.height
-          }
-        >
-          {renderDeviceContent()}
-        </InfiniteCanvas>
-      )}
-
-      {/* Bottom Control Bar */}
-      <div
-        className="fixed bottom-6 transition-all duration-300 z-40"
-        style={{
-          left: '80px',
-          right: isRightPanelCollapsed ? '80px' : 'calc(20% + 40px)',
-          display: 'flex',
-          justifyContent: 'center',
-        }}
-      >
-        <div
-          className="rounded-2xl p-4"
-          style={{
-            backgroundColor: '#FFFFFF',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
-            width: '800px',
-            maxWidth: '90%',
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <input
-              type="text"
-              placeholder="Give feedback or direction..."
-              className="flex-1 bg-transparent border-none outline-none text-sm"
-              style={{ color: '#3B3B3B' }}
-            />
-            <div className="flex items-center gap-2">
-              <button
-                className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
-                style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
-              >
-                <Settings size={16} />
-              </button>
-              <button
-                className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
-                style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
-              >
-                <Smartphone size={16} />
-                iOS
-              </button>
-              <button
-                className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
-                style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
-              >
-                <Smile size={16} />
-                Mood
-              </button>
-              <button
-                className="w-10 h-10 rounded-lg flex items-center justify-center transition-all hover:scale-105"
-                style={{ backgroundColor: '#F7F5F3' }}
-              >
-                <Maximize2 size={16} style={{ color: '#3B3B3B' }} />
-              </button>
+                      ? device_info.screen.height + 48 // Total height including DeviceFrame bezel
+                      : device_info.screen.height + 40 // Total height including browser chrome
+                  }
+                >
+                  {renderDeviceContent()}
+                </PrototypeCanvas>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        ) : (
+          // Concept mode - infinite canvas with dark background
+          <InfiniteCanvas
+            ref={canvasRef}
+            width={
+              flowGraph && generationStage === 'complete'
+                ? (() => {
+                    const positions = calculateFlowLayout(flowGraph)
+                    const deviceWidth =
+                      device_info.platform === 'phone'
+                        ? device_info.screen.width + 24
+                        : device_info.screen.width
+                    return (
+                      Math.max(...Object.values(positions).map(p => p.x), 0) +
+                      deviceWidth +
+                      deviceWidth * 0.6
+                    ) // Match HORIZONTAL_GAP
+                  })()
+                : device_info.screen.width
+            }
+            height={
+              flowGraph && generationStage === 'complete'
+                ? (() => {
+                    const positions = calculateFlowLayout(flowGraph)
+                    const yValues = Object.values(positions).map(p => p.y)
+                    const minY = Math.min(...yValues, 0)
+                    const maxY = Math.max(...yValues, 0)
+                    const deviceHeight =
+                      device_info.platform === 'phone'
+                        ? device_info.screen.height + 48
+                        : device_info.screen.height + 40
+                    return maxY - minY + deviceHeight + deviceHeight * 0.5 // Match VERTICAL_GAP
+                  })()
+                : device_info.screen.height
+            }
+          >
+            {renderDeviceContent()}
+          </InfiniteCanvas>
+        )}
 
-      {/* Right Sidebar */}
-      <div
-        className="fixed right-0 top-0 h-screen transition-all duration-300 z-30"
-        style={{
-          width: isRightPanelCollapsed ? '0' : '20%',
-        }}
-      >
+        {/* Bottom Control Bar */}
         <div
-          className="relative rounded-3xl mt-6 mr-6 mb-6 ml-0 p-6 flex flex-col gap-6 h-[calc(100vh-48px)]"
+          className="fixed bottom-6 transition-all duration-300 z-40"
           style={{
-            backgroundColor: '#FFFFFF',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
-            opacity: isRightPanelCollapsed ? 0 : 1,
-            overflow: isRightPanelCollapsed ? 'hidden' : 'auto',
-          }}
-        >
-          {!isRightPanelCollapsed && (
-            <>
-              <div className="flex items-center justify-between">
-                <button
-                  className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-semibold transition-all hover:scale-105"
-                  style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
-                >
-                  L
-                </button>
-                <div className="flex items-center gap-3">
-                  <div
-                    className="px-4 py-2 rounded-lg text-sm font-medium"
-                    style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
-                  >
-                    25%
-                  </div>
-                  <button
-                    className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm"
-                    style={{ backgroundColor: '#3B3B3B', color: '#FFFFFF' }}
-                  >
-                    NI
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <h2
-                  className="text-2xl font-semibold mb-1"
-                  style={{ color: '#3B3B3B' }}
-                >
-                  Travel interface
-                </h2>
-                <p className="text-sm" style={{ color: '#929397' }}>
-                  App for travelling with partner, iOS app
-                </p>
-              </div>
-
-              <div className="relative">
-                <button
-                  onClick={() => setStyleDropdownOpen(!styleDropdownOpen)}
-                  className="w-full rounded-2xl p-4 flex flex-col transition-all hover:scale-[1.02]"
-                  style={{
-                    background: selectedStyle.bg,
-                    boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-                  }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <div
-                        className="text-xs mb-1"
-                        style={{ color: '#3B3B3B', opacity: 0.7 }}
-                      >
-                        Style
-                      </div>
-                      <div
-                        className="text-sm font-semibold"
-                        style={{ color: '#3B3B3B' }}
-                      >
-                        {selectedStyle.title}
-                      </div>
-                    </div>
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}
-                    >
-                      <ChevronDown
-                        size={16}
-                        style={{
-                          color: '#3B3B3B',
-                          transform: styleDropdownOpen
-                            ? 'rotate(180deg)'
-                            : 'rotate(0deg)',
-                          transition: 'transform 0.3s',
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div
-                    className="h-16 rounded-xl"
-                    style={{ backgroundColor: 'rgba(255,255,255,0.4)' }}
-                  />
-                </button>
-
-                {styleDropdownOpen && (
-                  <div
-                    className="absolute top-full left-0 right-0 mt-2 p-2 rounded-2xl z-10"
-                    style={{
-                      backgroundColor: '#FFFFFF',
-                      boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                    }}
-                  >
-                    {styleOptions.map((option, index) => (
-                      <button
-                        key={index}
-                        onClick={() => {
-                          setSelectedStyle(option)
-                          setStyleDropdownOpen(false)
-                        }}
-                        className="w-full rounded-xl p-3 mb-2 last:mb-0 transition-all hover:scale-[1.02]"
-                        style={{ background: option.bg }}
-                      >
-                        <div
-                          className="text-sm font-semibold text-left"
-                          style={{ color: '#3B3B3B' }}
-                        >
-                          {option.title}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="text-sm font-medium"
-                        style={{ color: '#3B3B3B' }}
-                      >
-                        Details
-                      </span>
-                      <span className="text-xs" style={{ color: '#929397' }}>
-                        ||
-                      </span>
-                    </div>
-                    <span
-                      className="text-sm font-medium"
-                      style={{ color: '#3B3B3B' }}
-                    >
-                      {getDetailsLabel()}
-                    </span>
-                  </div>
-                  <div
-                    className="relative h-2 rounded-full"
-                    style={{ backgroundColor: '#F4F4F4' }}
-                  >
-                    <div
-                      className="absolute left-0 top-0 h-full rounded-full"
-                      style={{
-                        backgroundColor: '#3B3B3B',
-                        width: `${detailsValue}%`,
-                      }}
-                    />
-                    <input
-                      type="range"
-                      min="10"
-                      max="100"
-                      value={detailsValue}
-                      onChange={e => setDetailsValue(Number(e.target.value))}
-                      className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="text-sm font-medium"
-                        style={{ color: '#3B3B3B' }}
-                      >
-                        Energy
-                      </span>
-                      <span className="text-xs" style={{ color: '#929397' }}>
-                        ||
-                      </span>
-                    </div>
-                    <span
-                      className="text-sm font-medium"
-                      style={{ color: '#3B3B3B' }}
-                    >
-                      {getEnergyValue()}
-                    </span>
-                  </div>
-                  <div
-                    className="relative h-2 rounded-full"
-                    style={{ backgroundColor: '#F4F4F4' }}
-                  >
-                    <div
-                      className="absolute left-0 top-0 h-full rounded-full"
-                      style={{
-                        backgroundColor: '#3B3B3B',
-                        width: `${energyValue}%`,
-                      }}
-                    />
-                    <input
-                      type="range"
-                      min="10"
-                      max="100"
-                      value={energyValue}
-                      onChange={e => setEnergyValue(Number(e.target.value))}
-                      className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="text-sm font-medium"
-                        style={{ color: '#3B3B3B' }}
-                      >
-                        Craft
-                      </span>
-                      <span className="text-xs" style={{ color: '#929397' }}>
-                        ||
-                      </span>
-                    </div>
-                    <span
-                      className="text-sm font-medium"
-                      style={{ color: '#3B3B3B' }}
-                    >
-                      {getCraftValue()}
-                    </span>
-                  </div>
-                  <div
-                    className="relative h-2 rounded-full"
-                    style={{ backgroundColor: '#F4F4F4' }}
-                  >
-                    <div
-                      className="absolute left-0 top-0 h-full rounded-full"
-                      style={{
-                        backgroundColor: '#3B3B3B',
-                        width: `${craftValue}%`,
-                      }}
-                    />
-                    <input
-                      type="range"
-                      min="10"
-                      max="100"
-                      value={craftValue}
-                      onChange={e => setCraftValue(Number(e.target.value))}
-                      className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-4 gap-3">
-                <button
-                  className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
-                  style={{ backgroundColor: '#F7F5F3' }}
-                >
-                  <RotateCcw size={20} style={{ color: '#4F515A' }} />
-                  <span className="text-xs" style={{ color: '#929397' }}>
-                    Vary
-                  </span>
-                </button>
-                <button
-                  className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
-                  style={{ backgroundColor: '#F7F5F3' }}
-                >
-                  <Palette size={20} style={{ color: '#4F515A' }} />
-                  <span className="text-xs" style={{ color: '#929397' }}>
-                    Colors
-                  </span>
-                </button>
-                <button
-                  className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
-                  style={{ backgroundColor: '#F7F5F3' }}
-                >
-                  <Sparkles size={20} style={{ color: '#4F515A' }} />
-                  <span className="text-xs" style={{ color: '#929397' }}>
-                    Taste
-                  </span>
-                </button>
-                <button
-                  className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
-                  style={{ backgroundColor: '#F7F5F3' }}
-                >
-                  <span className="text-lg">08</span>
-                  <span className="text-xs" style={{ color: '#929397' }}>
-                    Style
-                  </span>
-                </button>
-              </div>
-
-              <div className="mt-auto">
-                <div className="relative">
-                  <textarea
-                    placeholder="Add suggestions or feedback..."
-                    value={inputText}
-                    onChange={e => setInputText(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl resize-none focus:outline-none"
-                    style={{
-                      backgroundColor: '#F7F5F3',
-                      border: 'none',
-                      color: '#3B3B3B',
-                      fontSize: '14px',
-                    }}
-                    rows={3}
-                  />
-                  {inputText.length > 0 && (
-                    <div
-                      className="absolute bottom-3 right-4 px-2 py-1 rounded text-xs"
-                      style={{ backgroundColor: '#FFFFFF', color: '#929397' }}
-                    >
-                      Enter
-                    </div>
-                  )}
-                </div>
-                {inputText.length > 0 && (
-                  <button
-                    className="w-full mt-3 px-6 py-3 rounded-xl font-medium text-sm transition-all hover:scale-[1.02]"
-                    style={{
-                      backgroundColor: '#F5C563',
-                      color: '#1F1F20',
-                      boxShadow: '0 2px 12px rgba(245, 197, 99, 0.3)',
-                    }}
-                  >
-                    Submit
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {!isRightPanelCollapsed && (
-        <button
-          onClick={() => setIsRightPanelCollapsed(true)}
-          className="fixed bottom-1/6 right-0 -translate-y-1/2 w-10 h-16 rounded-l-xl flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg z-50 group"
-          style={{
-            backgroundColor: '#FFFFFF',
-            boxShadow: '-4px 4px 12px rgba(0,0,0,0.12)',
-          }}
-        >
-          <ChevronDown
-            size={20}
-            style={{
-              color: '#3B3B3B',
-              transform: 'rotate(-90deg)',
-            }}
-            className="group-hover:scale-110 transition-transform"
-          />
-        </button>
-      )}
-
-      {isRightPanelCollapsed && (
-        <button
-          onClick={() => setIsRightPanelCollapsed(false)}
-          className="fixed bottom-1/6 right-0 -translate-y-1/2 w-10 h-16 rounded-l-xl flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg z-50 group"
-          style={{
-            backgroundColor: '#FFFFFF',
-            boxShadow: '-4px 4px 12px rgba(0,0,0,0.12)',
-          }}
-        >
-          <ChevronDown
-            size={20}
-            style={{
-              color: '#3B3B3B',
-              transform: 'rotate(90deg)',
-            }}
-            className="group-hover:scale-110 transition-transform"
-          />
-        </button>
-      )}
-
-      {/* Initializing Overlay */}
-      {generationStage === 'idle' && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center"
-          style={{
-            backgroundColor: 'rgba(237, 235, 233, 0.8)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
+            left: '80px',
+            right: isRightPanelCollapsed ? '80px' : 'calc(20% + 40px)',
+            display: 'flex',
+            justifyContent: 'center',
           }}
         >
           <div
-            className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-in fade-in duration-500"
+            className="rounded-2xl p-4"
             style={{
               backgroundColor: '#FFFFFF',
-              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
-              maxWidth: '420px',
-              width: '90%',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+              width: '800px',
+              maxWidth: '90%',
             }}
           >
-            {/* Animated Loading Icon - Expanding Ripples */}
-            <div className="relative w-32 h-32 flex items-center justify-center">
-              {/* Center Icon */}
-              <div className="absolute inset-0 flex items-center justify-center z-10">
-                <div
-                  className="w-16 h-16 rounded-full flex items-center justify-center"
-                  style={{
-                    background:
-                      'linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)',
-                    boxShadow: '0 8px 32px rgba(245, 158, 11, 0.5)',
-                  }}
+            <div className="flex items-center justify-between">
+              <input
+                type="text"
+                placeholder="Give feedback or direction..."
+                className="flex-1 bg-transparent border-none outline-none text-sm"
+                style={{ color: '#3B3B3B' }}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
+                  style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
                 >
-                  <Sparkles size={28} style={{ color: '#FFFFFF' }} />
-                </div>
+                  <Settings size={16} />
+                </button>
+                <button
+                  className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
+                  style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
+                >
+                  <Smartphone size={16} />
+                  iOS
+                </button>
+                <button
+                  className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
+                  style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
+                >
+                  <Smile size={16} />
+                  Mood
+                </button>
+                <button
+                  className="w-10 h-10 rounded-lg flex items-center justify-center transition-all hover:scale-105"
+                  style={{ backgroundColor: '#F7F5F3' }}
+                >
+                  <Maximize2 size={16} style={{ color: '#3B3B3B' }} />
+                </button>
               </div>
+            </div>
+          </div>
+        </div>
 
-              {/* Expanding Ripples */}
-              {[0, 1, 2, 3].map(i => (
-                <div
-                  key={i}
-                  className="absolute inset-0 rounded-full"
-                  style={{
-                    border: '3px solid',
-                    borderColor: i % 2 === 0 ? '#F59E0B' : '#EF4444',
-                    opacity: 0,
-                    animation: `ripple 3s ease-out infinite`,
-                    animationDelay: `${i * 0.75}s`,
-                  }}
-                />
-              ))}
+        {/* Right Sidebar */}
+        <div
+          className="fixed right-0 top-0 h-screen transition-all duration-300 z-30"
+          style={{
+            width: isRightPanelCollapsed ? '0' : '20%',
+          }}
+        >
+          <div
+            className="relative rounded-3xl mt-6 mr-6 mb-6 ml-0 p-6 flex flex-col gap-6 h-[calc(100vh-48px)]"
+            style={{
+              backgroundColor: '#FFFFFF',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+              opacity: isRightPanelCollapsed ? 0 : 1,
+              overflow: isRightPanelCollapsed ? 'hidden' : 'auto',
+            }}
+          >
+            {!isRightPanelCollapsed && (
+              <>
+                <div className="flex items-center justify-between">
+                  <button
+                    className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-semibold transition-all hover:scale-105"
+                    style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
+                  >
+                    L
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="px-4 py-2 rounded-lg text-sm font-medium"
+                      style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
+                    >
+                      25%
+                    </div>
+                    <button
+                      className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm"
+                      style={{ backgroundColor: '#3B3B3B', color: '#FFFFFF' }}
+                    >
+                      NI
+                    </button>
+                  </div>
+                </div>
 
-              {/* Rotating Particles */}
-              {[0, 1, 2, 3, 4, 5].map(i => (
-                <div
-                  key={`particle-${i}`}
-                  className="absolute"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    animation: `rotate-particles 4s linear infinite`,
-                    animationDelay: `${i * 0.2}s`,
-                  }}
-                >
+                <div>
+                  <h2
+                    className="text-2xl font-semibold mb-1"
+                    style={{ color: '#3B3B3B' }}
+                  >
+                    Travel interface
+                  </h2>
+                  <p className="text-sm" style={{ color: '#929397' }}>
+                    App for travelling with partner, iOS app
+                  </p>
+                </div>
+
+                <div className="relative">
+                  <button
+                    onClick={() => setStyleDropdownOpen(!styleDropdownOpen)}
+                    className="w-full rounded-2xl p-4 flex flex-col transition-all hover:scale-[1.02]"
+                    style={{
+                      background: selectedStyle.bg,
+                      boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div
+                          className="text-xs mb-1"
+                          style={{ color: '#3B3B3B', opacity: 0.7 }}
+                        >
+                          Style
+                        </div>
+                        <div
+                          className="text-sm font-semibold"
+                          style={{ color: '#3B3B3B' }}
+                        >
+                          {selectedStyle.title}
+                        </div>
+                      </div>
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center"
+                        style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}
+                      >
+                        <ChevronDown
+                          size={16}
+                          style={{
+                            color: '#3B3B3B',
+                            transform: styleDropdownOpen
+                              ? 'rotate(180deg)'
+                              : 'rotate(0deg)',
+                            transition: 'transform 0.3s',
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div
+                      className="h-16 rounded-xl"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.4)' }}
+                    />
+                  </button>
+
+                  {styleDropdownOpen && (
+                    <div
+                      className="absolute top-full left-0 right-0 mt-2 p-2 rounded-2xl z-10"
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                      }}
+                    >
+                      {styleOptions.map((option, index) => (
+                        <button
+                          key={index}
+                          onClick={() => {
+                            setSelectedStyle(option)
+                            setStyleDropdownOpen(false)
+                          }}
+                          className="w-full rounded-xl p-3 mb-2 last:mb-0 transition-all hover:scale-[1.02]"
+                          style={{ background: option.bg }}
+                        >
+                          <div
+                            className="text-sm font-semibold text-left"
+                            style={{ color: '#3B3B3B' }}
+                          >
+                            {option.title}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="text-sm font-medium"
+                          style={{ color: '#3B3B3B' }}
+                        >
+                          Details
+                        </span>
+                        <span className="text-xs" style={{ color: '#929397' }}>
+                          ||
+                        </span>
+                      </div>
+                      <span
+                        className="text-sm font-medium"
+                        style={{ color: '#3B3B3B' }}
+                      >
+                        {getDetailsLabel()}
+                      </span>
+                    </div>
+                    <div
+                      className="relative h-2 rounded-full"
+                      style={{ backgroundColor: '#F4F4F4' }}
+                    >
+                      <div
+                        className="absolute left-0 top-0 h-full rounded-full"
+                        style={{
+                          backgroundColor: '#3B3B3B',
+                          width: `${detailsValue}%`,
+                        }}
+                      />
+                      <input
+                        type="range"
+                        min="10"
+                        max="100"
+                        value={detailsValue}
+                        onChange={e => setDetailsValue(Number(e.target.value))}
+                        className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="text-sm font-medium"
+                          style={{ color: '#3B3B3B' }}
+                        >
+                          Energy
+                        </span>
+                        <span className="text-xs" style={{ color: '#929397' }}>
+                          ||
+                        </span>
+                      </div>
+                      <span
+                        className="text-sm font-medium"
+                        style={{ color: '#3B3B3B' }}
+                      >
+                        {getEnergyValue()}
+                      </span>
+                    </div>
+                    <div
+                      className="relative h-2 rounded-full"
+                      style={{ backgroundColor: '#F4F4F4' }}
+                    >
+                      <div
+                        className="absolute left-0 top-0 h-full rounded-full"
+                        style={{
+                          backgroundColor: '#3B3B3B',
+                          width: `${energyValue}%`,
+                        }}
+                      />
+                      <input
+                        type="range"
+                        min="10"
+                        max="100"
+                        value={energyValue}
+                        onChange={e => setEnergyValue(Number(e.target.value))}
+                        className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="text-sm font-medium"
+                          style={{ color: '#3B3B3B' }}
+                        >
+                          Craft
+                        </span>
+                        <span className="text-xs" style={{ color: '#929397' }}>
+                          ||
+                        </span>
+                      </div>
+                      <span
+                        className="text-sm font-medium"
+                        style={{ color: '#3B3B3B' }}
+                      >
+                        {getCraftValue()}
+                      </span>
+                    </div>
+                    <div
+                      className="relative h-2 rounded-full"
+                      style={{ backgroundColor: '#F4F4F4' }}
+                    >
+                      <div
+                        className="absolute left-0 top-0 h-full rounded-full"
+                        style={{
+                          backgroundColor: '#3B3B3B',
+                          width: `${craftValue}%`,
+                        }}
+                      />
+                      <input
+                        type="range"
+                        min="10"
+                        max="100"
+                        value={craftValue}
+                        onChange={e => setCraftValue(Number(e.target.value))}
+                        className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-3">
+                  <button
+                    className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
+                    style={{ backgroundColor: '#F7F5F3' }}
+                  >
+                    <RotateCcw size={20} style={{ color: '#4F515A' }} />
+                    <span className="text-xs" style={{ color: '#929397' }}>
+                      Vary
+                    </span>
+                  </button>
+                  <button
+                    className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
+                    style={{ backgroundColor: '#F7F5F3' }}
+                  >
+                    <Palette size={20} style={{ color: '#4F515A' }} />
+                    <span className="text-xs" style={{ color: '#929397' }}>
+                      Colors
+                    </span>
+                  </button>
+                  <button
+                    className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
+                    style={{ backgroundColor: '#F7F5F3' }}
+                  >
+                    <Sparkles size={20} style={{ color: '#4F515A' }} />
+                    <span className="text-xs" style={{ color: '#929397' }}>
+                      Taste
+                    </span>
+                  </button>
+                  <button
+                    className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
+                    style={{ backgroundColor: '#F7F5F3' }}
+                  >
+                    <span className="text-lg">08</span>
+                    <span className="text-xs" style={{ color: '#929397' }}>
+                      Style
+                    </span>
+                  </button>
+                </div>
+
+                <div className="mt-auto">
+                  <div className="relative">
+                    <textarea
+                      placeholder="Add suggestions or feedback..."
+                      value={inputText}
+                      onChange={e => setInputText(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl resize-none focus:outline-none"
+                      style={{
+                        backgroundColor: '#F7F5F3',
+                        border: 'none',
+                        color: '#3B3B3B',
+                        fontSize: '14px',
+                      }}
+                      rows={3}
+                    />
+                    {inputText.length > 0 && (
+                      <div
+                        className="absolute bottom-3 right-4 px-2 py-1 rounded text-xs"
+                        style={{ backgroundColor: '#FFFFFF', color: '#929397' }}
+                      >
+                        Enter
+                      </div>
+                    )}
+                  </div>
+                  {inputText.length > 0 && (
+                    <button
+                      className="w-full mt-3 px-6 py-3 rounded-xl font-medium text-sm transition-all hover:scale-[1.02]"
+                      style={{
+                        backgroundColor: '#F5C563',
+                        color: '#1F1F20',
+                        boxShadow: '0 2px 12px rgba(245, 197, 99, 0.3)',
+                      }}
+                    >
+                      Submit
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {!isRightPanelCollapsed && (
+          <button
+            onClick={() => setIsRightPanelCollapsed(true)}
+            className="fixed bottom-1/6 right-0 -translate-y-1/2 w-10 h-16 rounded-l-xl flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg z-50 group"
+            style={{
+              backgroundColor: '#FFFFFF',
+              boxShadow: '-4px 4px 12px rgba(0,0,0,0.12)',
+            }}
+          >
+            <ChevronDown
+              size={20}
+              style={{
+                color: '#3B3B3B',
+                transform: 'rotate(-90deg)',
+              }}
+              className="group-hover:scale-110 transition-transform"
+            />
+          </button>
+        )}
+
+        {isRightPanelCollapsed && (
+          <button
+            onClick={() => setIsRightPanelCollapsed(false)}
+            className="fixed bottom-1/6 right-0 -translate-y-1/2 w-10 h-16 rounded-l-xl flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg z-50 group"
+            style={{
+              backgroundColor: '#FFFFFF',
+              boxShadow: '-4px 4px 12px rgba(0,0,0,0.12)',
+            }}
+          >
+            <ChevronDown
+              size={20}
+              style={{
+                color: '#3B3B3B',
+                transform: 'rotate(90deg)',
+              }}
+              className="group-hover:scale-110 transition-transform"
+            />
+          </button>
+        )}
+
+        {/* Initializing Overlay */}
+        {generationStage === 'idle' && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center"
+            style={{
+              backgroundColor: 'rgba(237, 235, 233, 0.8)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+            }}
+          >
+            <div
+              className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-in fade-in duration-500"
+              style={{
+                backgroundColor: '#FFFFFF',
+                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+                maxWidth: '420px',
+                width: '90%',
+              }}
+            >
+              {/* Animated Loading Icon - Expanding Ripples */}
+              <div className="relative w-32 h-32 flex items-center justify-center">
+                {/* Center Icon */}
+                <div className="absolute inset-0 flex items-center justify-center z-10">
                   <div
-                    className="absolute w-2 h-2 rounded-full"
+                    className="w-16 h-16 rounded-full flex items-center justify-center"
                     style={{
                       background:
-                        i % 3 === 0
-                          ? 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)'
-                          : i % 3 === 1
-                            ? 'linear-gradient(135deg, #FB923C 0%, #F97316 100%)'
-                            : 'linear-gradient(135deg, #FCA5A5 0%, #EF4444 100%)',
-                      boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)',
-                      top: '0',
-                      left: '50%',
-                      transform: 'translateX(-50%)',
+                        'linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)',
+                      boxShadow: '0 8px 32px rgba(245, 158, 11, 0.5)',
+                    }}
+                  >
+                    <Sparkles size={28} style={{ color: '#FFFFFF' }} />
+                  </div>
+                </div>
+
+                {/* Expanding Ripples */}
+                {[0, 1, 2, 3].map(i => (
+                  <div
+                    key={i}
+                    className="absolute inset-0 rounded-full"
+                    style={{
+                      border: '3px solid',
+                      borderColor: i % 2 === 0 ? '#F59E0B' : '#EF4444',
+                      opacity: 0,
+                      animation: `ripple 3s ease-out infinite`,
+                      animationDelay: `${i * 0.75}s`,
                     }}
                   />
-                </div>
-              ))}
-            </div>
+                ))}
 
-            {/* Loading Text */}
-            <div className="text-center">
-              <h3
-                className="text-xl font-semibold mb-2"
-                style={{ color: '#1F1F20' }}
-              >
-                Initializing...
-              </h3>
-              <p
-                className="text-sm leading-relaxed"
-                style={{ color: '#929397' }}
-              >
-                Setting up your workspace
-              </p>
-            </div>
+                {/* Rotating Particles */}
+                {[0, 1, 2, 3, 4, 5].map(i => (
+                  <div
+                    key={`particle-${i}`}
+                    className="absolute"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      animation: `rotate-particles 4s linear infinite`,
+                      animationDelay: `${i * 0.2}s`,
+                    }}
+                  >
+                    <div
+                      className="absolute w-2 h-2 rounded-full"
+                      style={{
+                        background:
+                          i % 3 === 0
+                            ? 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)'
+                            : i % 3 === 1
+                              ? 'linear-gradient(135deg, #FB923C 0%, #F97316 100%)'
+                              : 'linear-gradient(135deg, #FCA5A5 0%, #EF4444 100%)',
+                        boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)',
+                        top: '0',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
 
-            {/* Pulsing Bar Indicator */}
-            <div className="w-full flex items-center gap-1.5">
-              {[0, 1, 2, 3, 4].map(i => (
-                <div
-                  key={i}
-                  className="flex-1 h-1.5 rounded-full"
-                  style={{
-                    background:
-                      'linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)',
-                    animation: 'pulse-bar 1.5s ease-in-out infinite',
-                    animationDelay: `${i * 0.15}s`,
-                  }}
-                />
-              ))}
-            </div>
+              {/* Loading Text */}
+              <div className="text-center">
+                <h3
+                  className="text-xl font-semibold mb-2"
+                  style={{ color: '#1F1F20' }}
+                >
+                  Initializing...
+                </h3>
+                <p
+                  className="text-sm leading-relaxed"
+                  style={{ color: '#929397' }}
+                >
+                  Setting up your workspace
+                </p>
+              </div>
 
-            {/* Animation Styles */}
-            <style>{`
+              {/* Pulsing Bar Indicator */}
+              <div className="w-full flex items-center gap-1.5">
+                {[0, 1, 2, 3, 4].map(i => (
+                  <div
+                    key={i}
+                    className="flex-1 h-1.5 rounded-full"
+                    style={{
+                      background:
+                        'linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)',
+                      animation: 'pulse-bar 1.5s ease-in-out infinite',
+                      animationDelay: `${i * 0.15}s`,
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Animation Styles */}
+              <style>{`
               @keyframes ripple {
                 0% {
                   transform: scale(0.5);
@@ -1591,127 +1741,127 @@ export default function Editor() {
                 animation: fade-in 0.5s ease-out;
               }
             `}</style>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Generating Flow Overlay */}
-      {generationStage === 'generating' && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center"
-          style={{
-            backgroundColor: 'rgba(237, 235, 233, 0.8)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-          }}
-        >
+        {/* Generating Flow Overlay */}
+        {generationStage === 'generating' && (
           <div
-            className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-in fade-in duration-500"
+            className="fixed inset-0 z-[100] flex items-center justify-center"
             style={{
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
-              maxWidth: '420px',
-              width: '90%',
+              backgroundColor: 'rgba(237, 235, 233, 0.8)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
             }}
           >
-            {/* Animated Loading Icon - Orbiting Dots */}
-            <div className="relative w-32 h-32 flex items-center justify-center">
-              {/* Center Circle */}
-              <div
-                className="absolute inset-0 flex items-center justify-center"
-                style={{
-                  animation: 'pulse 2s ease-in-out infinite',
-                }}
-              >
+            <div
+              className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-in fade-in duration-500"
+              style={{
+                backgroundColor: '#FFFFFF',
+                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+                maxWidth: '420px',
+                width: '90%',
+              }}
+            >
+              {/* Animated Loading Icon - Orbiting Dots */}
+              <div className="relative w-32 h-32 flex items-center justify-center">
+                {/* Center Circle */}
                 <div
-                  className="w-16 h-16 rounded-full flex items-center justify-center"
+                  className="absolute inset-0 flex items-center justify-center"
                   style={{
-                    background:
-                      'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
-                    boxShadow: '0 8px 32px rgba(102, 126, 234, 0.4)',
-                  }}
-                >
-                  <Sparkles size={28} style={{ color: '#FFFFFF' }} />
-                </div>
-              </div>
-
-              {/* Orbiting Dots */}
-              {[0, 1, 2, 3].map(i => (
-                <div
-                  key={i}
-                  className="absolute inset-0"
-                  style={{
-                    animation: `orbit 3s linear infinite`,
-                    animationDelay: `${i * 0.75}s`,
+                    animation: 'pulse 2s ease-in-out infinite',
                   }}
                 >
                   <div
-                    className="absolute w-4 h-4 rounded-full"
+                    className="w-16 h-16 rounded-full flex items-center justify-center"
                     style={{
                       background:
-                        i % 2 === 0
-                          ? 'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)'
-                          : 'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
-                      boxShadow:
-                        i % 2 === 0
-                          ? '0 4px 12px rgba(245, 87, 108, 0.5)'
-                          : '0 4px 12px rgba(0, 242, 254, 0.5)',
-                      top: '0',
-                      left: '50%',
-                      transform: 'translateX(-50%)',
+                        'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+                      boxShadow: '0 8px 32px rgba(102, 126, 234, 0.4)',
                     }}
-                  />
+                  >
+                    <Sparkles size={28} style={{ color: '#FFFFFF' }} />
+                  </div>
                 </div>
-              ))}
 
-              {/* Rotating Ring */}
-              <div
-                className="absolute inset-4"
-                style={{
-                  border: '2px solid transparent',
-                  borderTopColor: '#667EEA',
-                  borderRightColor: '#667EEA',
-                  borderRadius: '50%',
-                  animation: 'spin 4s linear infinite',
-                  opacity: 0.3,
-                }}
-              />
-            </div>
+                {/* Orbiting Dots */}
+                {[0, 1, 2, 3].map(i => (
+                  <div
+                    key={i}
+                    className="absolute inset-0"
+                    style={{
+                      animation: `orbit 3s linear infinite`,
+                      animationDelay: `${i * 0.75}s`,
+                    }}
+                  >
+                    <div
+                      className="absolute w-4 h-4 rounded-full"
+                      style={{
+                        background:
+                          i % 2 === 0
+                            ? 'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)'
+                            : 'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
+                        boxShadow:
+                          i % 2 === 0
+                            ? '0 4px 12px rgba(245, 87, 108, 0.5)'
+                            : '0 4px 12px rgba(0, 242, 254, 0.5)',
+                        top: '0',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                      }}
+                    />
+                  </div>
+                ))}
 
-            {/* Loading Text */}
-            <div className="text-center">
-              <h3
-                className="text-xl font-semibold mb-2"
-                style={{ color: '#1F1F20' }}
-              >
-                Generating your flow
-              </h3>
-              <p
-                className="text-sm leading-relaxed"
-                style={{ color: '#929397' }}
-              >
-                Creating screens and connecting interactions...
-              </p>
-            </div>
-
-            {/* Animated Progress Dots */}
-            <div className="flex items-center gap-2">
-              {[0, 1, 2].map(i => (
+                {/* Rotating Ring */}
                 <div
-                  key={i}
-                  className="w-2 h-2 rounded-full"
+                  className="absolute inset-4"
                   style={{
-                    background:
-                      'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
-                    animation: 'bounce 1.4s ease-in-out infinite',
-                    animationDelay: `${i * 0.2}s`,
+                    border: '2px solid transparent',
+                    borderTopColor: '#667EEA',
+                    borderRightColor: '#667EEA',
+                    borderRadius: '50%',
+                    animation: 'spin 4s linear infinite',
+                    opacity: 0.3,
                   }}
                 />
-              ))}
-            </div>
+              </div>
 
-            {/* Animation Styles */}
-            <style>{`
+              {/* Loading Text */}
+              <div className="text-center">
+                <h3
+                  className="text-xl font-semibold mb-2"
+                  style={{ color: '#1F1F20' }}
+                >
+                  Generating your flow
+                </h3>
+                <p
+                  className="text-sm leading-relaxed"
+                  style={{ color: '#929397' }}
+                >
+                  Creating screens and connecting interactions...
+                </p>
+              </div>
+
+              {/* Animated Progress Dots */}
+              <div className="flex items-center gap-2">
+                {[0, 1, 2].map(i => (
+                  <div
+                    key={i}
+                    className="w-2 h-2 rounded-full"
+                    style={{
+                      background:
+                        'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+                      animation: 'bounce 1.4s ease-in-out infinite',
+                      animationDelay: `${i * 0.2}s`,
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Animation Styles */}
+              <style>{`
               @keyframes orbit {
                 0% { transform: rotate(0deg); }
                 100% { transform: rotate(360deg); }
@@ -1748,18 +1898,19 @@ export default function Editor() {
                 animation: fade-in 0.5s ease-out;
               }
             `}</style>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <AddInspirationModal
-        isOpen={isAddInspirationModalOpen}
-        onClose={() => setIsAddInspirationModalOpen(false)}
-        onConfirm={handleAddInspiration}
-        isLoading={isAddingInspiration}
-        maxImages={5}
-        currentCount={inspirationImages.length}
-      />
-    </div>
+        <AddInspirationModal
+          isOpen={isAddInspirationModalOpen}
+          onClose={() => setIsAddInspirationModalOpen(false)}
+          onConfirm={handleAddInspiration}
+          isLoading={isAddingInspiration}
+          maxImages={5}
+          currentCount={inspirationImages.length}
+        />
+      </div>
+    </>
   )
 }

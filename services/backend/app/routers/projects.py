@@ -1,7 +1,7 @@
 """
 Projects API endpoints
 """
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form, Request
 from typing import List, Optional
 from app.auth import get_current_user
 from app import db, storage
@@ -24,16 +24,8 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 @router.post("/", response_model=ProjectOut, status_code=201)
 async def create_project(
-    name: str = Form(...),
-    task_description: Optional[str] = Form(""),
-    selected_taste_id: Optional[str] = Form(None),
-    selected_resource_ids: Optional[List[str]] = Form(None),
-    inspiration_images: List[UploadFile] = File(default=[]),
-    device_info: Optional[str] = Form(None),  # JSON string of device settings
-    rendering_mode: Optional[str] = Form(None),  # 'react' or 'design-ml'
-    max_screens: Optional[int] = Form(5),  # Max screens for flow generation
-    metadata: Optional[str] = Form(None),
-    user: dict = Depends(get_current_user)
+    request: Request,
+    user: dict = Depends(get_current_user),
 ):
     """
     Create a new project
@@ -43,10 +35,42 @@ async def create_project(
     - **selected_taste_id**: Optional ID of selected taste
     - **selected_resource_ids**: Optional list of resource IDs (must all belong to selected_taste)
     - **inspiration_images**: Optional list of image files for visual inspiration (max 5)
+    - **screen_definitions**: Optional JSON array of screen definitions
     - **device_info**: Optional JSON string of device settings (platform, screen dimensions)
     - **rendering_mode**: Optional rendering mode ('react' or 'design-ml')
     - **metadata**: Optional JSON metadata
+    - **screen_N_figma**: Optional figma.json file for screen N
+    - **screen_N_image_M**: Optional image M for screen N
     """
+    # Parse multipart form data
+    form_data = await request.form()
+    
+    # Extract basic fields
+    name = form_data.get('name')
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    
+    task_description = form_data.get('task_description', '')
+    selected_taste_id = form_data.get('selected_taste_id')
+    device_info_str = form_data.get('device_info')
+    rendering_mode = form_data.get('rendering_mode')
+    max_screens = int(form_data.get('max_screens', 5))
+    metadata_str = form_data.get('metadata')
+    screen_definitions_str = form_data.get('screen_definitions')
+    
+    # Parse selected_resource_ids
+    selected_resource_ids_raw = form_data.getlist('selected_resource_ids')
+    resource_ids = [id for id in selected_resource_ids_raw if id] if selected_resource_ids_raw else []
+    
+    # Parse metadata if provided
+    metadata_dict = json.loads(metadata_str) if metadata_str else {}
+    
+    # Parse device_info if provided
+    device_info_dict = json.loads(device_info_str) if device_info_str else None
+    
+    # Parse screen_definitions if provided
+    screen_defs = json.loads(screen_definitions_str) if screen_definitions_str else []
+    
     # Ensure user exists in database
     db.ensure_user(
         user_id=user["user_id"],
@@ -54,15 +78,6 @@ async def create_project(
         name=user.get("name"),
         picture=user.get("picture")
     )
-    
-    # Parse metadata if provided
-    metadata_dict = json.loads(metadata) if metadata else {}
-    
-    # Parse device_info if provided
-    device_info_dict = json.loads(device_info) if device_info else None
-    
-    # Parse selected_resource_ids if it's a string
-    resource_ids = selected_resource_ids or []
     
     # Validate taste ownership if provided
     if selected_taste_id:
@@ -99,11 +114,83 @@ async def create_project(
                     detail=f"Resource {resource_id} does not belong to the selected taste"
                 )
     
+    # Generate project ID upfront for S3 consistency
+    project_id = str(uuid.uuid4())
+    
+    # Handle screen reference files if screen_definitions provided
+    if screen_defs:
+        for screen_idx, screen_def in enumerate(screen_defs):
+            # Handle figma.json file for this screen
+            if screen_def.get('has_figma', False):
+                figma_field_name = f'screen_{screen_idx}_figma'
+                figma_file = form_data.get(figma_field_name)
+                
+                if figma_file and hasattr(figma_file, 'read'):
+                    # Upload to S3
+                    s3_key = storage.get_screen_reference_figma_key(
+                        user["user_id"],
+                        project_id,
+                        screen_idx
+                    )
+                    
+                    try:
+                        content = await figma_file.read()
+                        storage.s3_client.put_object(
+                            Bucket=storage.S3_BUCKET,
+                            Key=s3_key,
+                            Body=content,
+                            ContentType='application/json'
+                        )
+                    except Exception as e:
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"Failed to upload figma.json for screen {screen_idx}: {str(e)}"
+                        )
+            
+            # Handle reference images for this screen
+            image_count = screen_def.get('image_count', 0)
+            for img_idx in range(image_count):
+                image_field_name = f'screen_{screen_idx}_image_{img_idx}'
+                image_file = form_data.get(image_field_name)
+                
+                if image_file and hasattr(image_file, 'read'):
+                    # Validate it's an image
+                    if not image_file.content_type or not image_file.content_type.startswith('image/'):
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"File for screen {screen_idx} image {img_idx} is not an image"
+                        )
+                    
+                    # Upload to S3
+                    s3_key = storage.get_screen_reference_image_key(
+                        user["user_id"],
+                        project_id,
+                        screen_idx,
+                        img_idx
+                    )
+                    
+                    try:
+                        content = await image_file.read()
+                        storage.s3_client.put_object(
+                            Bucket=storage.S3_BUCKET,
+                            Key=s3_key,
+                            Body=content,
+                            ContentType=image_file.content_type
+                        )
+                    except Exception as e:
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"Failed to upload image {img_idx} for screen {screen_idx}: {str(e)}"
+                        )
+    
     # Handle inspiration images
-    project_id = str(uuid.uuid4())  # Generate ID upfront for S3 consistency
     inspiration_keys = []
+    inspiration_images = form_data.getlist('inspiration_images')
     
     if inspiration_images:
+        # Filter out empty entries
+        inspiration_images = [img for img in inspiration_images if img and hasattr(img, 'read')]
+        
         # Validate max 5 images
         if len(inspiration_images) > 5:
             raise HTTPException(
@@ -158,6 +245,7 @@ async def create_project(
         rendering_mode=rendering_mode,
         flow_mode=True,  # Always use flow mode
         max_screens=max_screens,
+        screen_definitions=screen_defs,
         metadata=metadata_dict,
         project_id=project_id
     )

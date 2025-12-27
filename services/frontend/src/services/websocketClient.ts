@@ -49,6 +49,53 @@ export interface WSCallbacks {
 }
 
 /**
+ * Flow generation result types
+ */
+export interface FlowArchitectureResult {
+  flow_id: string
+  flow_name: string
+  description?: string
+  entry_screen_id: string
+  screens: Array<{
+    screen_id: string
+    name: string
+    description?: string
+    task_description: string
+    platform: string
+    dimensions: { width: number; height: number }
+    screen_type?: string
+    semantic_role?: string
+    user_provided?: boolean
+    user_screen_index?: number
+    reference_mode?: string
+    ui_code?: string
+    ui_loading?: boolean
+    ui_error?: boolean
+    [key: string]: unknown
+  }>
+  transitions: Array<{
+    transition_id: string
+    from_screen_id: string
+    to_screen_id: string
+    trigger: string
+    trigger_type: string
+    flow_type: string
+    label?: string
+    condition?: string
+    color?: string
+  }>
+  layout_positions?: Record<string, { x: number; y: number }>
+  layout_algorithm?: string
+}
+
+export interface FlowCompleteResult {
+  status: string
+  version: number
+  flow_graph: FlowArchitectureResult
+  [key: string]: unknown
+}
+
+/**
  * Connect to WebSocket and handle LLM operation
  */
 function connectWebSocket(
@@ -170,4 +217,141 @@ export function generateUIWebSocket(
     },
     callbacks,
   )
+}
+
+/**
+ * Generate Flow via WebSocket with progressive updates
+ */
+export interface FlowGenerationCallbacks {
+  onProgress?: (
+    // eslint-disable-next-line no-unused-vars
+    stage: string,
+    // eslint-disable-next-line no-unused-vars
+    message: string,
+    // eslint-disable-next-line no-unused-vars
+    data?: Record<string, unknown>,
+  ) => void
+  // eslint-disable-next-line no-unused-vars
+  onFlowArchitecture?: (flowArchitecture: FlowArchitectureResult) => void
+  onScreenReady?: (
+    // eslint-disable-next-line no-unused-vars
+    screenId: string,
+    // eslint-disable-next-line no-unused-vars
+    uiCode: string,
+  ) => void
+  onScreenError?: (
+    // eslint-disable-next-line no-unused-vars
+    screenId: string,
+    // eslint-disable-next-line no-unused-vars
+    error: string,
+  ) => void
+  // eslint-disable-next-line no-unused-vars
+  onComplete?: (result: FlowCompleteResult) => void
+  // eslint-disable-next-line no-unused-vars
+  onError?: (error: string) => void
+}
+
+export function generateFlowWebSocket(
+  projectId: string,
+  callbacks: FlowGenerationCallbacks,
+): Promise<FlowCompleteResult> {
+  return new Promise((resolve, reject) => {
+    void fetchAuthSession()
+      .then(session => {
+        const token = session.tokens?.idToken?.toString()
+        const userId = session.tokens?.idToken?.payload?.sub as string
+
+        if (!token) {
+          reject(new Error('No authentication token'))
+          return
+        }
+
+        if (!userId) {
+          reject(new Error('No user ID in token'))
+          return
+        }
+
+        const ws = new WebSocket(
+          `${WS_BASE_URL}${WS_PATH}?token=${encodeURIComponent(token)}`,
+        )
+
+        ws.onopen = () => {
+          console.log('WebSocket connected for flow generation')
+          ws.send(
+            JSON.stringify({
+              action: 'generate-flow',
+              data: {
+                project_id: projectId,
+                user_id: userId,
+              },
+            }),
+          )
+        }
+
+        ws.onmessage = event => {
+          try {
+            const message = JSON.parse(event.data) as
+              | ProgressUpdate
+              | CompleteUpdate
+              | ErrorUpdate
+              | {
+                  type: 'flow_architecture'
+                  data: FlowArchitectureResult
+                }
+              | {
+                  type: 'screen_ready'
+                  data: { screen_id: string; ui_code: string }
+                }
+              | {
+                  type: 'screen_error'
+                  data: { screen_id: string; error: string }
+                }
+
+            if (message.type === 'progress') {
+              callbacks.onProgress?.(
+                message.stage,
+                message.message,
+                message.data,
+              )
+            } else if (message.type === 'flow_architecture') {
+              callbacks.onFlowArchitecture?.(message.data)
+            } else if (message.type === 'screen_ready') {
+              callbacks.onScreenReady?.(
+                message.data.screen_id,
+                message.data.ui_code,
+              )
+            } else if (message.type === 'screen_error') {
+              callbacks.onScreenError?.(
+                message.data.screen_id,
+                message.data.error,
+              )
+            } else if (message.type === 'complete') {
+              const result = message.result as FlowCompleteResult
+              callbacks.onComplete?.(result)
+              ws.close()
+              resolve(result)
+            } else if (message.type === 'error') {
+              callbacks.onError?.(message.error)
+              ws.close()
+              reject(new Error(message.error))
+            }
+          } catch (err) {
+            console.error('Failed to parse WebSocket message:', err)
+          }
+        }
+
+        ws.onerror = error => {
+          console.error('WebSocket error:', error)
+          callbacks.onError?.('WebSocket connection error')
+          reject(new Error('WebSocket connection error'))
+        }
+
+        ws.onclose = () => {
+          console.log('WebSocket closed')
+        }
+      })
+      .catch((error: Error) => {
+        reject(error)
+      })
+  })
 }

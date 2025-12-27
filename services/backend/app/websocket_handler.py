@@ -6,6 +6,7 @@ Supports both single-screen and flow-based generation
 import json
 import base64
 import re
+from decimal import Decimal
 from fastapi import WebSocket, WebSocketDisconnect
 from typing import Dict, Any, List
 
@@ -19,6 +20,9 @@ from app.dtr_builder_v6 import DTRBuilderV6
 from app.dtm_builder_v2 import DTMBuilderV2
 from app.dtm_updater_v3 import DTMUpdaterV3
 from app.generation_orchestrator import GenerationOrchestrator
+
+# Import helper for Figma compression
+from app.unified_dtr_builder import prepare_figma_for_llm
 
 
 async def send_progress(websocket: WebSocket, stage: str, message: str, data: Dict[str, Any] = None):
@@ -45,6 +49,21 @@ async def send_complete(websocket: WebSocket, result: Dict[str, Any]):
         "type": "complete",
         "result": result
     })
+
+
+def convert_floats_to_decimals(obj):
+    """
+    Recursively convert all float values to Decimal for DynamoDB compatibility.
+    DynamoDB doesn't support Python float types, only Decimal.
+    """
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    elif isinstance(obj, dict):
+        return {k: convert_floats_to_decimals(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_floats_to_decimals(item) for item in obj]
+    else:
+        return obj
 
 
 async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: str):
@@ -232,16 +251,14 @@ async def smart_dtm_update(
             
             return {
                 "status": "built",
-                "message": "Initial DTM v2 built successfully",
+                "message": "DTM v2 built successfully",
                 "total_resources": total_dtrs,
-                "confidence": dtm_v2["meta"]["overall_confidence"],
-                "signature_patterns": len(dtm_v2.get("signature_patterns", []))
+                "confidence": dtm_v2["meta"]["overall_confidence"]
             }
-        
+            
         except Exception as e:
-            print(f"DTM build failed: {e}")
             return {
-                "status": "failed",
+                "status": "error",
                 "error": str(e)
             }
     
@@ -250,18 +267,18 @@ async def smart_dtm_update(
         await send_progress(
             websocket,
             "updating_dtm",
-            f"Updating DTM v2 incrementally (now {total_dtrs} resources)..."
+            f"Updating DTM v2 with new resource..."
         )
         
         try:
-            # Load existing DTM
+            # Get existing DTM
             dtm = storage.get_taste_dtm(user_id, taste_id)
             
-            # Load new DTR
+            # Get new DTR
             new_dtr = storage.get_resource_dtr(user_id, taste_id, new_resource_id)
             
             if not new_dtr:
-                raise Exception("New DTR not found")
+                raise Exception("DTR not found for new resource")
             
             # Incremental update
             updater = DTMUpdaterV3()
@@ -275,38 +292,28 @@ async def smart_dtm_update(
             
             return {
                 "status": "updated",
-                "message": "DTM v2 updated incrementally",
-                "total_resources": total_dtrs,
-                "confidence": updated_dtm["meta"]["overall_confidence"],
-                "signature_patterns": len(updated_dtm.get("signature_patterns", []))
+                "message": "DTM v2 updated successfully",
+                "total_resources": updated_dtm["meta"]["total_resources"],
+                "confidence": updated_dtm["meta"]["overall_confidence"]
             }
-        
+            
         except Exception as e:
-            print(f"DTM update failed: {e}")
             return {
-                "status": "failed",
+                "status": "error",
                 "error": str(e)
             }
 
 
 async def handle_generate_ui(websocket: WebSocket, data: Dict[str, Any], user_id: str):
-    """
-    Handle generate-ui WebSocket request using DTM v2 with flow support
-    
-    Supports both:
-    - Single screen generation (flow_mode=False)
-    - Flow generation (flow_mode=True) - multiple screens
-    """
+    """Handle generate-ui WebSocket request"""
     try:
         project_id = data.get("project_id")
         task_description = data.get("task_description")
         device_info = data.get("device_info")
-        rendering_mode = data.get("rendering_mode", "design-ml")
-        flow_mode = data.get("flow_mode", True)  # Default to flow
-        max_screens = data.get("max_screens", 5)
+        rendering_mode = data.get("rendering_mode", "react")
         
-        if not project_id or not task_description:
-            await send_error(websocket, "Missing project_id or task_description")
+        if not project_id or not task_description or not device_info:
+            await send_error(websocket, "Missing required fields")
             return
         
         # Get project
@@ -321,84 +328,70 @@ async def handle_generate_ui(websocket: WebSocket, data: Dict[str, Any], user_id
             await send_error(websocket, "Not authorized")
             return
         
-        # Get taste and selected resources
-        taste_id = project.get("selected_taste_id")
+        # Load DTM
+        await send_progress(websocket, "loading_dtm", "Loading designer taste model...")
+        
+        dtm = None
+        selected_taste_id = project.get("selected_taste_id")
         selected_resource_ids = project.get("selected_resource_ids", [])
         
-        # Setup device dict
-        device_dict = {
-            "platform": device_info.get("platform", "web") if device_info else "web",
-            "screen": {
-                "width": device_info.get("screen", {}).get("width", 1440) if device_info else 1440,
-                "height": device_info.get("screen", {}).get("height", 900) if device_info else 900
-            }
-        }
-        
-        # Load DTM v2 if taste selected
-        dtm = None
-        if taste_id:
-            await send_progress(websocket, "loading_dtm", "Loading Designer Taste Model...")
+        if selected_taste_id:
             try:
-                dtm = storage.get_taste_dtm(user_id, taste_id)
-                await send_progress(
-                    websocket,
-                    "dtm_loaded",
-                    f"DTM loaded: {len(dtm.get('signature_patterns', []))} signature patterns"
-                )
-            except Exception as e:
-                print(f"Could not load DTM: {e}")
-                # Fallback: Try to load DTRs and convert to minimal DTM
-                await send_progress(websocket, "loading_dtr", "No DTM found, checking for DTRs...")
-                try:
-                    resources = db.list_resources_for_taste(taste_id)
-                    resources_with_dtr = []
-                    
-                    for resource in resources:
-                        if storage.resource_dtr_exists(user_id, taste_id, resource["resource_id"]):
-                            dtr = storage.get_resource_dtr(user_id, taste_id, resource["resource_id"])
-                            if dtr:
-                                resources_with_dtr.append(dtr)
-                    
-                    if resources_with_dtr:
-                        # Convert single DTR to minimal DTM structure
-                        dtm = _convert_dtr_to_dtm(resources_with_dtr[0], taste_id, user_id)
-                        await send_progress(
-                            websocket,
-                            "dtr_loaded",
-                            f"Using DTR from single resource (minimal taste model)"
-                        )
-                except Exception as dtr_error:
-                    print(f"Could not load DTR either: {dtr_error}")
-                    # Continue without any taste data
+                dtm = storage.get_taste_dtm(user_id, selected_taste_id)
+            except:
+                # Try converting single DTR
+                resources = db.list_resources_for_taste(selected_taste_id)
+                resources_with_dtr = [
+                    r for r in resources
+                    if storage.resource_dtr_exists(user_id, selected_taste_id, r["resource_id"])
+                ]
+                
+                if len(resources_with_dtr) == 1:
+                    dtr = storage.get_resource_dtr(
+                        user_id,
+                        selected_taste_id,
+                        resources_with_dtr[0]["resource_id"]
+                    )
+                    dtm = _convert_dtr_to_dtm(dtr, selected_taste_id, user_id)
         
-        # FLOW MODE: Generate multiple screens
-        if flow_mode:
-            await handle_flow_generation(
-                websocket=websocket,
-                project_id=project_id,
-                task_description=task_description,
-                device_dict=device_dict,
+        # Generate UI
+        await send_progress(websocket, "generating", "Generating UI...")
+        
+        llm = get_llm_service()
+        
+        if dtm:
+            # Use DTM with orchestrator
+            orchestrator = GenerationOrchestrator(llm, storage)
+            
+            ui_code = await orchestrator.generate_ui(
                 dtm=dtm,
+                task_description=task_description,
+                device_info=device_info,
                 user_id=user_id,
-                taste_id=taste_id,
-                selected_resource_ids=selected_resource_ids,
-                max_screens=max_screens,
-                rendering_mode=rendering_mode
+                taste_id=selected_taste_id,
+                selected_resource_ids=selected_resource_ids if selected_resource_ids else None,
+                max_examples=3
             )
-        
-        # SINGLE SCREEN MODE: Generate one screen
         else:
-            await handle_single_screen_generation(
-                websocket=websocket,
-                project_id=project_id,
-                task_description=task_description,
-                device_dict=device_dict,
-                dtm=dtm,
-                user_id=user_id,
-                taste_id=taste_id,
-                selected_resource_ids=selected_resource_ids,
-                rendering_mode=rendering_mode
+            # Generate without DTM
+            simple_prompt = f"Generate React component: {task_description}\nDevice: {device_info}"
+            response = await llm.call_claude(
+                prompt_name="generate_ui_v2",
+                user_message=simple_prompt,
+                max_tokens=6000
             )
+            ui_code = response.get("text", "")
+        
+        # Save output
+        await send_progress(websocket, "saving", "Saving output...")
+        storage.put_project_output(user_id, project_id, ui_code.encode('utf-8'))
+        
+        # Complete
+        await send_complete(websocket, {
+            "status": "success",
+            "ui_code": ui_code,
+            "rendering_mode": rendering_mode
+        })
         
     except Exception as e:
         import traceback
@@ -406,256 +399,350 @@ async def handle_generate_ui(websocket: WebSocket, data: Dict[str, Any], user_id
         await send_error(websocket, str(e))
 
 
-async def handle_single_screen_generation(
-    websocket: WebSocket,
-    project_id: str,
-    task_description: str,
-    device_dict: Dict,
-    dtm: Dict,
-    user_id: str,
-    taste_id: str,
-    selected_resource_ids: List[str],
-    rendering_mode: str
-):
-    """Generate single screen using DTM v2 with visual examples"""
+async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_id: str):
+    """Handle generate-flow WebSocket request with progressive screen updates"""
+    import asyncio
     
-    if dtm:
-        # Use GenerationOrchestrator with DTM v2
-        await send_progress(
-            websocket,
-            "generating",
-            "Generating UI with designer's taste (selecting visual examples)..."
-        )
+    try:
+        project_id = data.get("project_id")
         
-        llm = get_llm_service()
-        orchestrator = GenerationOrchestrator(llm, storage)
+        if not project_id:
+            await send_error(websocket, "Missing project_id")
+            return
         
-        ui_code = await orchestrator.generate_ui(
-            dtm=dtm,
-            task_description=task_description,
-            device_info=device_dict,
-            user_id=user_id,
-            taste_id=taste_id,
-            selected_resource_ids=selected_resource_ids if selected_resource_ids else None,
-            max_examples=3
-        )
+        # Get project
+        await send_progress(websocket, "init", "Loading project...")
+        project = db.get_project(project_id)
         
-        # Save
-        await send_progress(websocket, "saving", "Saving generated UI...")
-        current_version = 1
-        storage.put_project_ui(user_id, project_id, {"code": ui_code}, version=current_version)
+        if not project:
+            await send_error(websocket, "Project not found")
+            return
         
-        # Complete
-        await send_complete(websocket, {
-            "status": "success",
-            "type": "react",
-            "ui": ui_code,
-            "version": current_version,
-            "taste_applied": True
-        })
-    
-    else:
-        # Generate without DTM (from scratch)
-        await send_progress(
-            websocket,
-            "generating",
-            "Generating UI from scratch (no taste model available)..."
-        )
+        if project.get("owner_id") != user_id:
+            await send_error(websocket, "Not authorized")
+            return
         
-        llm = get_llm_service()
+        task_description = project.get("task_description", "")
+        device_info = project.get("device_info", {})
+        max_screens = project.get("max_screens", 5)
+        screen_definitions = project.get("screen_definitions", [])  # NEW: Get screen definitions
         
-        # Simple prompt without taste
-        user_message = f"""Generate a React component for this task:
-
-TASK: {task_description}
-
-DEVICE: {device_dict["platform"]} ({device_dict["screen"]["width"]}x{device_dict["screen"]["height"]}px)
-
-Return ONLY the React component code.
-"""
+        if not device_info:
+            await send_error(websocket, "Device info required")
+            return
         
-        response = await llm.call_claude(
-            prompt_name="generate_ui_react_v2",
-            user_message=user_message,
-            max_tokens=8000
-        )
+        # Load DTM if available
+        await send_progress(websocket, "loading_dtm", "Loading designer taste model...")
+        dtm_guidance = None
+        selected_taste_id = project.get("selected_taste_id")
         
-        ui_code = response.get("text", "")
+        if selected_taste_id:
+            try:
+                dtm_data = storage.get_taste_dtm(user_id, selected_taste_id)
+                if dtm_data:
+                    dtm_guidance = f"DTM (Designer Taste Model):\n{json.dumps(dtm_data, indent=2)}"
+            except:
+                pass
         
-        # Save
-        await send_progress(websocket, "saving", "Saving generated UI...")
-        storage.put_project_ui(user_id, project_id, {"code": ui_code}, version=1)
+        # Load inspiration images
+        await send_progress(websocket, "loading_images", "Loading inspiration images...")
+        inspiration_images = []
+        image_keys = project.get("inspiration_image_keys", [])
         
-        # Complete
-        await send_complete(websocket, {
-            "status": "success",
-            "type": "react",
-            "ui": ui_code,
-            "version": 1,
-            "taste_applied": False
-        })
-
-
-async def handle_flow_generation(
-    websocket: WebSocket,
-    project_id: str,
-    task_description: str,
-    device_dict: Dict,
-    dtm: Dict,
-    user_id: str,
-    taste_id: str,
-    selected_resource_ids: List[str],
-    max_screens: int,
-    rendering_mode: str
-):
-    """
-    Generate flow (multiple screens) using DTM v2
-    
-    Strategy:
-    1. Generate flow architecture (screens + transitions)
-    2. For each screen, generate UI using DTM v2 + visual examples
-    3. Build flow graph
-    """
-    
-    llm = get_llm_service()
-    
-    # Step 1: Generate flow architecture
-    await send_progress(
-        websocket,
-        "planning_flow",
-        f"Planning user flow (max {max_screens} screens)..."
-    )
-    
-    flow_architecture_prompt = f"""Design a user flow for this task:
-
-TASK: {task_description}
-
-MAX SCREENS: {max_screens}
-
-Design a logical flow with:
-- Entry point
-- Intermediate screens
-- Success/error states
-- Transitions between screens
-
-Return JSON:
-{{
-  "flow_name": "...",
-  "entry_screen_id": "screen_1",
-  "screens": [
-    {{
-      "screen_id": "screen_1",
-      "name": "...",
-      "description": "...",
-      "task_description": "Specific UI task for this screen",
-      "screen_type": "entry|intermediate|success|error"
-    }}
-  ],
-  "transitions": [
-    {{
-      "transition_id": "t1",
-      "from_screen_id": "screen_1",
-      "to_screen_id": "screen_2",
-      "trigger": "User taps Submit",
-      "trigger_type": "tap|submit|auto",
-      "flow_type": "forward|back|error|success"
-    }}
-  ]
-}}
-"""
-    
-    response = await llm.call_claude(
-        prompt_name="generate_flow_architecture",
-        user_message=flow_architecture_prompt,
-        max_tokens=4000,
-        parse_json=True
-    )
-    
-    flow_architecture = response.get("json", {})
-    screens = flow_architecture.get("screens", [])
-    
-    await send_progress(
-        websocket,
-        "flow_planned",
-        f"Flow planned: {len(screens)} screens",
-        {"screen_count": len(screens)}
-    )
-    
-    # Step 2: Generate UI for each screen
-    for idx, screen in enumerate(screens, 1):
-        screen_id = screen["screen_id"]
-        screen_task = screen["task_description"]
+        if image_keys:
+            MAX_INSPIRATION_IMAGES_FOR_LLM = 5
+            limited_keys = image_keys[-MAX_INSPIRATION_IMAGES_FOR_LLM:]
+            inspiration_images = storage.get_inspiration_images(user_id, project_id, limited_keys)
         
-        await send_progress(
-            websocket,
-            "generating_screen",
-            f"Generating screen {idx}/{len(screens)}: {screen['name']}...",
-            {"screen_id": screen_id, "progress": idx / len(screens)}
-        )
+        # Generate flow architecture
+        await send_progress(websocket, "generating_flow", "Generating flow architecture...")
+        flow_arch_message = f"TASK: {task_description}\n\nDEVICE CONTEXT:\n{json.dumps(device_info, indent=2)}\n\nMAX SCREENS: {max_screens}"
         
-        # Generate UI for this screen
-        if dtm:
-            # Use DTM v2 with visual examples
-            orchestrator = GenerationOrchestrator(llm, storage)
-            
-            ui_code = await orchestrator.generate_ui(
-                dtm=dtm,
-                task_description=screen_task,
-                device_info=device_dict,
-                user_id=user_id,
-                taste_id=taste_id,
-                selected_resource_ids=selected_resource_ids if selected_resource_ids else None,
-                max_examples=2  # Fewer examples for faster flow generation
-            )
+        # Add screen definitions if provided
+        if screen_definitions:
+            flow_arch_message += f"\n\nSCREEN DEFINITIONS:\n{json.dumps(screen_definitions, indent=2)}"
         else:
-            # Generate without DTM
-            simple_prompt = f"Generate React component: {screen_task}\nDevice: {device_dict}"
-            response = await llm.call_claude(
-                prompt_name="generate_ui_react_v2",
-                user_message=simple_prompt,
-                max_tokens=6000
-            )
-            ui_code = response.get("text", "")
+            flow_arch_message += f"\n\nSCREEN DEFINITIONS: None provided - design the optimal flow from scratch based on the task."
+            
+        flow_arch_content = [
+            {"type": "text", "text": flow_arch_message}
+        ]
         
-        # Add UI to screen
-        screen["ui_code"] = ui_code
-        screen["ui_loading"] = False
-        screen["ui_error"] = False
-        screen["platform"] = device_dict["platform"]
-        screen["dimensions"] = device_dict["screen"]
-    
-    # Step 3: Build flow graph
-    await send_progress(websocket, "building_flow", "Building flow graph...")
-    
-    flow_graph = {
-        "flow_id": f"flow_{project_id}",
-        "flow_name": flow_architecture.get("flow_name", "User Flow"),
-        "description": task_description,
-        "entry_screen_id": flow_architecture.get("entry_screen_id"),
-        "screens": screens,
-        "transitions": flow_architecture.get("transitions", []),
-        "layout_positions": {},  # Frontend will calculate
-        "layout_algorithm": "hierarchical"
-    }
-    
-    # Save flow
-    await send_progress(websocket, "saving_flow", "Saving flow...")
-    
-    existing_versions = storage.list_project_flow_versions(user_id, project_id)
-    new_version = max(existing_versions) + 1 if existing_versions else 1
-    
-    storage.put_project_flow(user_id, project_id, flow_graph, new_version)
-    db.update_project_flow_graph(project_id, flow_graph)
-    
-    # Complete
-    await send_complete(websocket, {
-        "status": "success",
-        "type": "flow",
-        "flow_graph": flow_graph,
-        "version": new_version,
-        "screen_count": len(screens),
-        "taste_applied": dtm is not None
-    })
+        if dtm_guidance:
+            flow_arch_content.append({"type": "text", "text": f"\n\n{dtm_guidance}"})
+        
+        for img in inspiration_images:
+            flow_arch_content.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": img.get('media_type', 'image/png'),
+                    "data": img['data']
+                }
+            })
+        
+        llm = get_llm_service()
+        flow_arch_response = await llm.call_claude(
+            prompt_name="generate_flow_architecture_v2",
+            user_message=flow_arch_content,
+            parse_json=True
+        )
+        
+        flow_architecture = flow_arch_response["json"]
+        
+        # Send flow architecture to client immediately
+        await websocket.send_json({
+            "type": "flow_architecture",
+            "data": flow_architecture
+        })
+        
+        # Generate UI for each screen in parallel
+        async def generate_screen_ui(screen, screen_index):
+            try:
+                await send_progress(websocket, "generating_screen", f"Generating screen: {screen['name']}...", {
+                    "screen_id": screen['screen_id'],
+                    "screen_name": screen['name']
+                })
+                
+                outgoing_transitions = [
+                    t for t in flow_architecture.get('transitions', [])
+                    if t['from_screen_id'] == screen['screen_id']
+                ]
+                
+                flow_context = {
+                    "flow_name": flow_architecture.get('flow_name'),
+                    "screen_id": screen['screen_id'],
+                    "screen_name": screen['name'],
+                    "position_in_flow": screen_index + 1,
+                    "total_screens": len(flow_architecture['screens']),
+                    "outgoing_transitions": outgoing_transitions
+                }
+                
+                # Build base message
+                screen_message = f"TASK: {screen['task_description']}\n\nDEVICE CONTEXT:\n{json.dumps(device_info, indent=2)}\n\nFLOW CONTEXT:\n{json.dumps(flow_context, indent=2)}"
+                
+                # Add reference mode and screen description if from user-provided screen
+                user_provided = screen.get('user_provided', False)
+                reference_mode = screen.get('reference_mode')
+                screen_desc = screen.get('description', '')
+                
+                if user_provided and screen_desc:
+                    screen_message += f"\n\nSCREEN DESCRIPTION: {screen_desc}"
+                
+                if reference_mode:
+                    screen_message += f"\n\nREFERENCE MODE: {reference_mode}"
+                    
+                    # Load screen reference files if available
+                    user_screen_index = screen.get('user_screen_index')
+                    if user_screen_index is not None and screen_definitions:
+                        screen_def = screen_definitions[user_screen_index]
+                        has_figma = screen_def.get('has_figma', False)
+                        image_count = screen_def.get('image_count', 0)
+                        
+                        if has_figma or image_count > 0:
+                            try:
+                                ref_files = storage.get_screen_reference_files(
+                                    user_id, project_id, user_screen_index, has_figma, image_count
+                                )
+                                
+                                # Add figma data if available
+                                if ref_files['figma_data']:
+                                    compressed_figma = prepare_figma_for_llm(ref_files['figma_data'], max_depth=6)
+                                    screen_message += f"\n\nREFERENCE FIGMA DATA:\n{compressed_figma}"
+                                
+                                # Note: reference images will be added as image blocks below
+                            except Exception as e:
+                                print(f"Error loading screen {user_screen_index} reference files: {e}")
+                
+                screen_content = [
+                    {"type": "text", "text": screen_message}
+                ]
+                
+                if dtm_guidance:
+                    screen_content.append({"type": "text", "text": f"\n\n{dtm_guidance}"})
+                
+                # Add reference images if available (for exact mode) or inspiration images (for inspiration mode)
+                if reference_mode == "exact" and user_screen_index is not None:
+                    # Load and add reference images for this specific screen
+                    screen_def = screen_definitions[user_screen_index]
+                    image_count = screen_def.get('image_count', 0)
+                    if image_count > 0:
+                        try:
+                            ref_files = storage.get_screen_reference_files(
+                                user_id, project_id, user_screen_index, False, image_count
+                            )
+                            for img in ref_files['images']:
+                                screen_content.append({
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": img.get('media_type', 'image/png'),
+                                        "data": img['data']
+                                    }
+                                })
+                        except Exception as e:
+                            print(f"Error loading screen {user_screen_index} images: {e}")
+                elif reference_mode == "inspiration":
+                    # Use general inspiration images
+                    for img in inspiration_images:
+                        screen_content.append({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": img.get('media_type', 'image/png'),
+                                "data": img['data']
+                            }
+                        })
+                else:
+                    # No reference mode or null - use general inspiration images
+                    for img in inspiration_images:
+                        screen_content.append({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": img.get('media_type', 'image/png'),
+                                "data": img['data']
+                            }
+                        })
+                
+                screen_response = await llm.call_claude(
+                    prompt_name="generate_ui_v2",
+                    user_message=screen_content
+                )
+                
+                ui_code = screen_response["text"].strip()
+                
+                # Strip markdown code fences
+                if ui_code.startswith("```jsx") or ui_code.startswith("```javascript") or ui_code.startswith("```tsx"):
+                    first_newline = ui_code.find('\n')
+                    if first_newline != -1:
+                        ui_code = ui_code[first_newline + 1:]
+                elif ui_code.startswith("```"):
+                    ui_code = ui_code[3:]
+                if ui_code.endswith("```"):
+                    ui_code = ui_code[:-3]
+                ui_code = ui_code.strip()
+                
+                # Send screen completion immediately
+                await websocket.send_json({
+                    "type": "screen_ready",
+                    "data": {
+                        "screen_id": screen['screen_id'],
+                        "ui_code": ui_code
+                    }
+                })
+                
+                return {"screen_id": screen['screen_id'], "ui_code": ui_code}
+            
+            except Exception as e:
+                await websocket.send_json({
+                    "type": "screen_error",
+                    "data": {
+                        "screen_id": screen['screen_id'],
+                        "error": str(e)
+                    }
+                })
+                return {"screen_id": screen['screen_id'], "ui_code": None, "error": str(e)}
+        
+        # Run all screen generations in parallel
+        screen_tasks = [
+            generate_screen_ui(screen, i)
+            for i, screen in enumerate(flow_architecture['screens'])
+        ]
+        screen_results = await asyncio.gather(*screen_tasks)
+        
+        # Merge results into flow architecture
+        for result in screen_results:
+            for screen in flow_architecture['screens']:
+                if screen['screen_id'] == result['screen_id']:
+                    screen['ui_code'] = result['ui_code']
+                    if result.get('error'):
+                        screen['ui_error'] = True
+                    break
+        
+        # Calculate layout positions
+        await send_progress(websocket, "calculating_layout", "Calculating screen positions...")
+        
+        def calculate_layout(flow_arch):
+            screens = flow_arch['screens']
+            transitions = flow_arch.get('transitions', [])
+            
+            graph = {screen['screen_id']: [] for screen in screens}
+            for trans in transitions:
+                if trans['from_screen_id'] in graph:
+                    graph[trans['from_screen_id']].append(trans['to_screen_id'])
+            
+            entry_id = flow_arch['entry_screen_id']
+            depths = {entry_id: 0}
+            visited = set()
+            
+            def assign_depth(screen_id, depth):
+                if screen_id in visited:
+                    return
+                visited.add(screen_id)
+                depths[screen_id] = depth
+                for next_id in graph.get(screen_id, []):
+                    assign_depth(next_id, depth + 1)
+            
+            assign_depth(entry_id, 0)
+            
+            for screen in screens:
+                if screen['screen_id'] not in depths:
+                    depths[screen['screen_id']] = max(depths.values(), default=0) + 1
+            
+            level_groups = {}
+            for screen_id, depth in depths.items():
+                if depth not in level_groups:
+                    level_groups[depth] = []
+                level_groups[depth].append(screen_id)
+            
+            positions = {}
+            HORIZONTAL_GAP = 800
+            VERTICAL_GAP = 600
+            
+            for level, screen_ids in level_groups.items():
+                x = level * HORIZONTAL_GAP
+                total_height = len(screen_ids) * VERTICAL_GAP
+                start_y = -total_height / 2
+                
+                for idx, screen_id in enumerate(screen_ids):
+                    y = start_y + idx * VERTICAL_GAP
+                    positions[screen_id] = {"x": x, "y": y}
+            
+            return positions
+        
+        layout_positions = calculate_layout(flow_architecture)
+        flow_architecture['layout_positions'] = layout_positions
+        
+        # Save to S3
+        await send_progress(websocket, "saving", "Saving flow...")
+        current_version = project.get("metadata", {}).get("flow_version", 0)
+        new_version = current_version + 1
+        
+        storage.put_project_flow(user_id, project_id, flow_architecture, version=new_version)
+        
+        # Update project metadata
+        metadata = project.get("metadata", {})
+        metadata["flow_version"] = new_version
+        db.update_project(project_id, metadata=metadata)
+        
+        # Convert floats to Decimals for DynamoDB compatibility
+        flow_architecture_for_db = convert_floats_to_decimals(flow_architecture)
+        
+        # Update project flow_graph
+        db.update_project_flow_graph(project_id, flow_architecture_for_db)
+        
+        # Send completion (use original flow_architecture with floats for JSON response)
+        await send_complete(websocket, {
+            "status": "success",
+            "flow_graph": flow_architecture,
+            "version": new_version
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        await send_error(websocket, str(e))
 
 
 def _convert_dtr_to_dtm(dtr: Dict[str, Any], taste_id: str, owner_id: str) -> Dict[str, Any]:
@@ -779,6 +866,8 @@ async def handle_websocket(websocket: WebSocket, user_id: str):
                 await handle_build_dtr(websocket, data, user_id)
             elif action == "generate-ui":
                 await handle_generate_ui(websocket, data, user_id)
+            elif action == "generate-flow":
+                await handle_generate_flow(websocket, data, user_id)
             else:
                 await send_error(websocket, f"Unknown action: {action}")
                 
