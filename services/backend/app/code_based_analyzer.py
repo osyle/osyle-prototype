@@ -224,7 +224,7 @@ class CodeBasedDesignAnalyzer:
                     self.corner_radii.append(int(radius))
     
     def _extract_gradients_from_node(self, node: Dict[str, Any]):
-        """Extract gradient information"""
+        """Extract gradient information with full color details"""
         
         if "style" not in node:
             return
@@ -233,28 +233,97 @@ class CodeBasedDesignAnalyzer:
         gradient = style.get("gradient")
         
         if gradient and isinstance(gradient, dict):
+            gradient_type = gradient.get("type")
+            stops = gradient.get("stops", [])
+            
+            # Extract colors from gradient stops
+            gradient_colors = []
+            for stop in stops:
+                if isinstance(stop, dict):
+                    color = stop.get("color")
+                    alpha = stop.get("alpha", 1.0)
+                    position = stop.get("position", 0)
+                    
+                    if color:
+                        # Store color for color palette extraction
+                        self._add_color_with_alpha(color, alpha, "gradient")
+                        
+                        # Build gradient stop info
+                        gradient_colors.append({
+                            "color": color,
+                            "alpha": alpha,
+                            "position": position
+                        })
+            
+            # Build CSS gradient string
+            css_gradient = self._build_css_gradient(gradient_type, gradient_colors)
+            
             self.gradients.append({
-                "type": gradient.get("type"),
-                "stops_count": len(gradient.get("stops", [])),
-                "angle": gradient.get("angle")
+                "type": gradient_type,
+                "stops_count": len(stops),
+                "angle": gradient.get("angle"),
+                "colors": gradient_colors,
+                "css": css_gradient,
+                "opacity": style.get("opacity", 1.0)
             })
     
     def _extract_effects_from_node(self, node: Dict[str, Any]):
-        """Extract effects (shadows, blurs)"""
+        """Extract effects (shadows, blurs) with full details"""
         
         if "style" not in node:
             return
         
         style = node["style"]
-        effects = style.get("effects")
+        effects_list = style.get("effects")
         
-        if effects and isinstance(effects, list):
-            for effect in effects:
+        if effects_list and isinstance(effects_list, list):
+            for effect in effects_list:
                 if isinstance(effect, dict):
-                    self.effects.append({
-                        "type": effect.get("type"),
-                        "radius": effect.get("radius")
-                    })
+                    effect_type = effect.get("type")
+                    
+                    effect_data = {
+                        "type": effect_type,
+                        "radius": effect.get("radius"),
+                    }
+                    
+                    # Add type-specific data
+                    if effect_type in ["DROP_SHADOW", "INNER_SHADOW"]:
+                        offset = effect.get("offset", {})
+                        effect_data.update({
+                            "offset_x": offset.get("x", 0),
+                            "offset_y": offset.get("y", 0),
+                            "spread": effect.get("spread", 0),
+                            "color": effect.get("color", "rgba(0,0,0,0.25)")
+                        })
+                    
+                    # Differentiate blur types
+                    elif effect_type == "BACKGROUND_BLUR":
+                        effect_data["is_glassmorphism"] = True
+                        effect_data["css"] = f"backdrop-filter: blur({effect.get('radius', 0)}px)"
+                    
+                    elif effect_type == "LAYER_BLUR":
+                        effect_data["is_glassmorphism"] = False
+                        effect_data["css"] = f"filter: blur({effect.get('radius', 0)}px)"
+                    
+                    self.effects.append(effect_data)
+        
+        # Also capture blend mode and opacity
+        blend_mode = style.get("blend_mode")
+        opacity = style.get("opacity")
+        
+        if blend_mode and blend_mode not in ["PASS_THROUGH", "NORMAL"]:
+            self.effects.append({
+                "type": "BLEND_MODE",
+                "blend_mode": blend_mode,
+                "css": f"mix-blend-mode: {self._convert_blend_mode(blend_mode)}"
+            })
+        
+        if opacity is not None and opacity < 1.0:
+            self.effects.append({
+                "type": "OPACITY",
+                "opacity": opacity,
+                "css": f"opacity: {opacity}"
+            })
     
     def _extract_layout_from_node(self, node: Dict[str, Any]):
         """Extract layout mode information"""
@@ -523,38 +592,64 @@ class CodeBasedDesignAnalyzer:
         }
     
     def _analyze_gradients(self) -> Dict[str, Any]:
-        """Analyze gradient usage"""
+        """Analyze gradient usage with full color and CSS details"""
         
         if not self.gradients:
             return {
                 "has_gradients": False,
                 "gradient_types": [],
-                "average_stops": 0
+                "average_stops": 0,
+                "gradients": []
             }
         
         types = [g["type"] for g in self.gradients if g.get("type")]
         avg_stops = sum(g["stops_count"] for g in self.gradients) / len(self.gradients)
         
+        # Extract full gradient data
+        gradient_details = []
+        for g in self.gradients:
+            if g.get("css"):
+                gradient_details.append({
+                    "type": g.get("type"),
+                    "css": g.get("css"),
+                    "colors": [c.get("color") for c in g.get("colors", [])],
+                    "opacity": g.get("opacity", 1.0)
+                })
+        
         return {
             "has_gradients": True,
             "gradient_types": list(set(types)),
-            "average_stops": round(avg_stops, 1)
+            "average_stops": round(avg_stops, 1),
+            "gradients": gradient_details  # Full gradient data with CSS
         }
     
     def _analyze_effects(self) -> Dict[str, Any]:
-        """Analyze shadow and blur effects"""
+        """Analyze shadow and blur effects with full details"""
         
         if not self.effects:
             return {
                 "has_effects": False,
-                "effect_types": []
+                "effect_types": [],
+                "effects": []
             }
         
         types = [e["type"] for e in self.effects if e.get("type")]
         
+        # Categorize effects
+        glassmorphism_effects = [e for e in self.effects if e.get("is_glassmorphism")]
+        blur_effects = [e for e in self.effects if e.get("type") in ["LAYER_BLUR", "BACKGROUND_BLUR"]]
+        shadow_effects = [e for e in self.effects if e.get("type") in ["DROP_SHADOW", "INNER_SHADOW"]]
+        blend_modes = [e for e in self.effects if e.get("type") == "BLEND_MODE"]
+        
         return {
             "has_effects": True,
-            "effect_types": list(set(types))
+            "effect_types": list(set(types)),
+            "has_glassmorphism": len(glassmorphism_effects) > 0,
+            "glassmorphism_effects": glassmorphism_effects,
+            "blur_effects": blur_effects,
+            "shadow_effects": shadow_effects,
+            "blend_modes": [b.get("blend_mode") for b in blend_modes],
+            "effects": self.effects  # Full effects data
         }
     
     def _analyze_layout(self) -> Dict[str, Any]:
@@ -709,6 +804,80 @@ class CodeBasedDesignAnalyzer:
         
         return color_str
     
+    def _add_color_with_alpha(self, color_str: str, alpha: float, context: str):
+        """Add color to colors list, handling alpha transparency"""
+        if not color_str:
+            return
+        
+        # Create rgba string if alpha < 1
+        if alpha < 1.0:
+            # Parse rgb values
+            numbers = re.findall(r'\d+', color_str)
+            if len(numbers) >= 3:
+                rgba_str = f"rgba({numbers[0]},{numbers[1]},{numbers[2]},{alpha})"
+                color_info = self._parse_color(rgba_str, context)
+                if color_info:
+                    self.colors.append(color_info)
+        else:
+            # Regular color
+            color_info = self._parse_color(color_str, context)
+            if color_info:
+                self.colors.append(color_info)
+    
+    def _build_css_gradient(self, gradient_type: str, colors: List[Dict]) -> str:
+        """Build CSS gradient string from gradient data"""
+        if not colors:
+            return ""
+        
+        # Build color stops
+        stops = []
+        for color_data in colors:
+            color = color_data.get("color", "")
+            alpha = color_data.get("alpha", 1.0)
+            position = color_data.get("position", 0)
+            
+            # Parse color components
+            numbers = re.findall(r'\d+', color)
+            if len(numbers) >= 3:
+                if alpha < 1.0:
+                    color_str = f"rgba({numbers[0]},{numbers[1]},{numbers[2]},{alpha})"
+                else:
+                    color_str = f"rgb({numbers[0]},{numbers[1]},{numbers[2]})"
+                
+                stops.append(f"{color_str} {int(position * 100)}%")
+        
+        stops_str = ", ".join(stops)
+        
+        # Build gradient CSS
+        if gradient_type == "GRADIENT_LINEAR":
+            return f"linear-gradient(135deg, {stops_str})"
+        elif gradient_type == "GRADIENT_RADIAL":
+            return f"radial-gradient(circle, {stops_str})"
+        else:
+            return f"linear-gradient({stops_str})"
+    
+    def _convert_blend_mode(self, figma_mode: str) -> str:
+        """Convert Figma blend mode to CSS mix-blend-mode"""
+        mode_map = {
+            "NORMAL": "normal",
+            "MULTIPLY": "multiply",
+            "SCREEN": "screen",
+            "OVERLAY": "overlay",
+            "DARKEN": "darken",
+            "LIGHTEN": "lighten",
+            "COLOR_DODGE": "color-dodge",
+            "COLOR_BURN": "color-burn",
+            "HARD_LIGHT": "hard-light",
+            "SOFT_LIGHT": "soft-light",
+            "DIFFERENCE": "difference",
+            "EXCLUSION": "exclusion",
+            "HUE": "hue",
+            "SATURATION": "saturation",
+            "COLOR": "color",
+            "LUMINOSITY": "luminosity"
+        }
+        return mode_map.get(figma_mode, "normal")
+    
     def _empty_analysis(self) -> Dict[str, Any]:
         """Return empty analysis structure"""
         return {
@@ -741,11 +910,18 @@ class CodeBasedDesignAnalyzer:
             "gradient_analysis": {
                 "has_gradients": False,
                 "gradient_types": [],
-                "average_stops": 0
+                "average_stops": 0,
+                "gradients": []
             },
             "effects_analysis": {
                 "has_effects": False,
-                "effect_types": []
+                "effect_types": [],
+                "has_glassmorphism": False,
+                "glassmorphism_effects": [],
+                "blur_effects": [],
+                "shadow_effects": [],
+                "blend_modes": [],
+                "effects": []
             },
             "layout_analysis": {
                 "uses_auto_layout": False,

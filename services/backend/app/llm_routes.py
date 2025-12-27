@@ -1,6 +1,6 @@
 """
-LLM Endpoints for DTR v3 and UI generation with Designer Intelligence
-Complete file with corrected build_dtr endpoint for plugin v3 format
+LLM Routes v2 - Using DTR v5 and DTM v2 Architecture
+Redesigned for visual-first taste learning
 """
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -11,18 +11,18 @@ import re
 
 from app.auth import get_current_user
 from app.llm import get_llm_service, LLMService
-from app import db
-from app import storage
+from app import db, storage
 
-# Import DTR v3 modules
+# Import code analyzer (keep from v1)
 from app.code_based_analyzer import analyze_figma_design
-from app.unified_dtr_builder import (
-    build_unified_dtr,
-    extract_llm_context,
-    format_llm_context_for_prompt,
-    prepare_figma_for_llm
-)
-from app.dtr_utils import extract_generative_rules
+
+# Import NEW v5/v2 modules
+from app.dtr_builder_v5 import DTRBuilderV5
+from app.dtr_builder_v6 import DTRBuilderV6
+from app.dtm_builder_v2 import DTMBuilderV2
+from app.dtm_updater_v3 import DTMUpdaterV3
+from app.dtm_context_filter_v2 import DTMContextFilterV2
+from app.generation_orchestrator import GenerationOrchestrator
 
 
 router = APIRouter(prefix="/api/llm", tags=["llm"])
@@ -38,13 +38,124 @@ MAX_INSPIRATION_IMAGES_FOR_LLM = 5
 
 
 # ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def _convert_dtr_to_dtm(dtr: Dict[str, Any], taste_id: str, owner_id: str) -> Dict[str, Any]:
+    """
+    Convert single DTR to minimal DTM structure for generation
+    
+    This allows generation to work with 1 resource by creating a DTM-like
+    structure from the DTR data
+    """
+    from datetime import datetime
+    
+    # Extract from DTR
+    resource_id = dtr["meta"]["resource_id"]
+    quantitative = dtr.get("quantitative", {})
+    visual_patterns = dtr.get("visual_patterns", [])
+    signature_patterns = dtr.get("signature_patterns", [])
+    semantic = dtr.get("semantic", {})
+    context = dtr["meta"].get("context", {})
+    
+    # Build minimal DTM structure
+    minimal_dtm = {
+        "version": "2.0",
+        "taste_id": taste_id,
+        "owner_id": owner_id,
+        "meta": {
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "total_resources": 1,
+            "total_dtrs_analyzed": 1,
+            "overall_confidence": dtr["meta"]["confidence_scores"]["overall"],
+            "analysis_method": "single_dtr_conversion",
+            "note": "Minimal DTM from single resource - add more resources for better patterns"
+        },
+        
+        # Tier 1: Universal principles (standard)
+        "universal_principles": {
+            "accessibility": {
+                "min_contrast_ratio": 4.5,
+                "min_touch_target": 44,
+                "note": "Based on WCAG 2.1 AA standards"
+            },
+            "usability": {
+                "clear_hierarchy": "MUST",
+                "consistent_spacing": "SHOULD",
+                "predictable_interactions": "MUST"
+            }
+        },
+        
+        # Tier 2: Designer systems from quantitative data
+        "designer_systems": {
+            "spacing": {
+                "by_context": {
+                    context.get("primary_use_case", "general"): {
+                        "quantum": quantitative.get("spacing", {}).get("quantum", 8),
+                        "confidence": 1.0,
+                        "evidence_count": 1
+                    }
+                },
+                "default": quantitative.get("spacing", {}).get("quantum", 8)
+            },
+            "typography": {
+                "scale_ratio": {
+                    "mean": quantitative.get("typography", {}).get("scale_ratio", 1.5),
+                    "range": [quantitative.get("typography", {}).get("scale_ratio", 1.5)],
+                    "consistency": 1.0
+                },
+                "common_sizes": quantitative.get("typography", {}).get("common_sizes", [16]),
+                "weights": quantitative.get("typography", {}).get("weights", ["Regular"])
+            },
+            "color_system": {
+                "common_palette": quantitative.get("colors", {}).get("primary_palette", [])[:15],
+                "temperature_preference": quantitative.get("colors", {}).get("temperature", {}),
+                "saturation_preference": quantitative.get("colors", {}).get("saturation", {})
+            },
+            "form_language": {
+                "common_radii": quantitative.get("forms", {}).get("common_radii", [8])
+            }
+        },
+        
+        # Tier 3: Signature patterns from DTR
+        "signature_patterns": signature_patterns,
+        
+        # Visual library
+        "visual_library": {
+            "by_context": {
+                context.get("primary_use_case", "general"): [resource_id]
+            },
+            "by_signature": {
+                sig.get("pattern_type", "unknown"): [resource_id]
+                for sig in signature_patterns
+            },
+            "all_resources": [resource_id]
+        },
+        
+        # Context map
+        "context_map": {
+            resource_id: {
+                "use_case": context.get("primary_use_case"),
+                "platform": context.get("platform"),
+                "content_density": context.get("content_density"),
+                "confidence": dtr["meta"]["confidence_scores"]["overall"]
+            }
+        }
+    }
+    
+    return minimal_dtm
+
+
+# ============================================================================
 # REQUEST MODELS
 # ============================================================================
 
 class BuildDTRRequest(BaseModel):
-    """Request body for building DTR"""
+    """Request body for building DTR v5"""
     resource_id: str
     taste_id: str
+    context_override: Optional[Dict[str, str]] = None
 
 
 class DeviceScreen(BaseModel):
@@ -61,11 +172,11 @@ class GenerateUIRequest(BaseModel):
     project_id: str
     task_description: str
     device_info: Optional[DeviceInfo] = None
-    rendering_mode: Optional[str] = "design-ml"  # 'design-ml' | 'react'
+    max_visual_examples: Optional[int] = 3
 
 
 # ============================================================================
-# BUILD DTR v3 ENDPOINT (UPDATED FOR PLUGIN v3)
+# BUILD DTR v5 ENDPOINT
 # ============================================================================
 
 @router.post("/build-dtr")
@@ -75,15 +186,15 @@ async def build_dtr(
     llm: LLMService = Depends(get_llm_service),
 ):
     """
-    Build Design Taste Representation (DTR) v3 using hybrid code+LLM analysis
+    Build Design Taste Representation v5 - Visual-First Architecture
     
     Flow:
-    1. Load Figma JSON from plugin v3 (already compressed & intelligent)
-    2. Run code-based quantitative analysis
-    3. Extract LLM context from code analysis
-    4. Send to LLM: Figma JSON + Code context + Image
-    5. Merge LLM semantic DTR with code validation
-    6. Save unified DTR v3
+    1. Load Figma JSON and image
+    2. Run code-based quantitative analysis (deterministic)
+    3. Extract visual patterns from structure
+    4. Build semantic understanding with LLM
+    5. Save DTR v5
+    6. Trigger DTM update (smart: skip/build/update)
     """
     user_id = user.get("user_id")
     
@@ -93,7 +204,10 @@ async def build_dtr(
         
         if not resource:
             raise HTTPException(status_code=404, detail="Resource not found")
-
+        
+        if resource.get("owner_id") != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
         # Check if DTR already exists
         if storage.resource_dtr_exists(user_id, request.taste_id, request.resource_id):
             return {
@@ -102,7 +216,7 @@ async def build_dtr(
             }
         
         print(f"\n{'='*60}")
-        print(f"BUILD DTR v3 (HYBRID CODE+LLM)")
+        print(f"BUILD DTR v5 - Visual-First Architecture")
         print(f"{'='*60}")
         print(f"User: {user_id}")
         print(f"Taste: {request.taste_id}")
@@ -111,7 +225,7 @@ async def build_dtr(
         # ====================================================================
         # STEP 1: Load Figma JSON from S3
         # ====================================================================
-        print(f"\n[1/9] Loading figma.json from S3...")
+        print(f"\n[1/7] Loading figma.json from S3...")
         try:
             figma_json_str = storage.get_resource_figma(
                 user_id, request.taste_id, request.resource_id
@@ -134,176 +248,250 @@ async def build_dtr(
             )
         
         # ====================================================================
-        # STEP 2: Parse JSON (handle encoding issues)
+        # STEP 2: Parse JSON
         # ====================================================================
-        print(f"\n[2/9] Parsing JSON...")
+        print(f"\n[2/7] Parsing JSON...")
         
-        # Handle encoding
         if isinstance(figma_json_str, bytes):
             figma_json_str = figma_json_str.decode('utf-8', errors='replace')
         
-        # Remove control characters
         figma_json_str = re.sub(r'[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]', '', figma_json_str)
-        
         figma_json = json.loads(figma_json_str)
+        
         print(f"✓ JSON parsed successfully")
         
-        # Check version
-        version = figma_json.get('version', 'unknown')
-        print(f"  Plugin version: {version}")
+        # ====================================================================
+        # STEP 3: Load image if available
+        # ====================================================================
+        print(f"\n[3/7] Loading image...")
         
-        if version != '3.0':
-            print(f"  ⚠️  Warning: Expected plugin version 3.0, got {version}")
+        image_base64 = None
+        has_image = resource.get("has_image", False)
+        
+        if has_image:
+            try:
+                image_bytes = storage.get_resource_image(
+                    user_id, request.taste_id, request.resource_id
+                )
+                if image_bytes:
+                    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+                    print(f"✓ Image loaded: {len(image_bytes):,} bytes")
+                else:
+                    print(f"⚠️  Image not found")
+                    has_image = False
+            except Exception as e:
+                print(f"⚠️  Could not load image: {e}")
+                has_image = False
+        else:
+            print(f"  No image available")
         
         # ====================================================================
-        # STEP 3: Run code-based quantitative analysis
+        # STEP 4: Run code-based quantitative analysis
         # ====================================================================
-        print(f"\n[3/9] Running code-based analysis...")
+        print(f"\n[4/7] Running code-based analysis...")
         
         code_analysis = analyze_figma_design(figma_json)
         code_conf = code_analysis.get('overall_confidence', 0)
         
         print(f"✓ Code analysis complete")
         print(f"  Overall confidence: {code_conf:.2f}")
-        print(f"  Colors found: {code_analysis.get('color_analysis', {}).get('total_colors', 0)}")
         print(f"  Spacing quantum: {code_analysis.get('spacing_analysis', {}).get('spacing_quantum', 'N/A')}")
-        print(f"  Type scale ratio: {code_analysis.get('typography_analysis', {}).get('type_scale_ratio', 'N/A')}")
+        print(f"  Colors found: {code_analysis.get('color_analysis', {}).get('total_colors', 0)}")
         
         # ====================================================================
-        # STEP 4: Extract LLM context from code analysis
+        # STEP 5: Build DTR v6 using new builder with quirk analysis
         # ====================================================================
-        print(f"\n[4/9] Extracting LLM context from code analysis...")
+        print(f"\n[5/7] Building DTR v6 with quirks...")
         
-        llm_context = extract_llm_context(code_analysis)
-        llm_context_formatted = format_llm_context_for_prompt(llm_context)
+        v5_builder = DTRBuilderV5(llm)
+        dtr_builder = DTRBuilderV6(llm, v5_builder)
         
-        print(f"✓ LLM context extracted: {len(llm_context_formatted):,} chars")
-        
-        # ====================================================================
-        # STEP 5: Prepare Figma JSON for LLM
-        # ====================================================================
-        print(f"\n[5/9] Preparing Figma JSON for LLM...")
-        
-        figma_for_llm = prepare_figma_for_llm(figma_json, max_depth=5)
-        
-        print(f"✓ Figma JSON prepared: {len(figma_for_llm):,} chars")
-        print(f"  Token estimate: ~{len(figma_for_llm) // 4:,} tokens")
-        
-        # ====================================================================
-        # STEP 6: Build message content for LLM
-        # ====================================================================
-        print(f"\n[6/9] Building message for LLM...")
-        
-        content = []
-        
-        # Add Figma design structure
-        content.append({
-            "type": "text",
-            "text": f"FIGMA DESIGN STRUCTURE:\n\n{figma_for_llm}"
-        })
-        
-        # Add quantitative analysis context
-        content.append({
-            "type": "text",
-            "text": f"\n\n{llm_context_formatted}"
-        })
-        
-        # Add image if available
-        image_included = False
-        if resource.get("has_image"):
-            try:
-                image_bytes = storage.get_resource_image(
-                    user_id, request.taste_id, request.resource_id
-                )
-                if image_bytes:
-                    print(f"  ✓ Adding image: {len(image_bytes):,} bytes")
-                    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-                    content.append({
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": image_base64
-                        }
-                    })
-                    image_included = True
-            except Exception as e:
-                print(f"  ⚠ Could not load image (non-critical): {e}")
-        
-        print(f"✓ Message built: {len(content)} parts (image: {image_included})")
-        
-        # ====================================================================
-        # STEP 7: Call LLM with DTR v3 prompt
-        # ====================================================================
-        print(f"\n[7/9] Calling LLM (DTR v3 prompt)...")
-        
-        response = await llm.call_claude(
-            prompt_name="build_dtr_v4",
-            user_message=content,
-            parse_json=True,
+        dtr_v6 = await dtr_builder.build_dtr(
+            figma_json=figma_json,
+            code_analysis=code_analysis,
+            resource_id=request.resource_id,
+            taste_id=request.taste_id,
+            has_image=has_image,
+            image_base64=image_base64,
+            context_override=request.context_override
         )
         
-        llm_dtr = response["json"]
-        print(f"✓ LLM analysis complete")
+        print(f"✓ DTR v6 built")
+        print(f"  Confidence: {dtr_v6['meta']['confidence_scores']['overall']:.2f}")
+        print(f"  Visual patterns: {len(dtr_v6.get('visual_patterns', []))}")
+        print(f"  Signatures detected: {len(dtr_v6.get('signature_patterns', []))}")
         
         # ====================================================================
-        # STEP 8: Merge LLM + code analyses into unified DTR v3
+        # STEP 6: Save DTR v6 to S3
         # ====================================================================
-        print(f"\n[8/9] Merging LLM and code analyses...")
+        print(f"\n[6/7] Saving DTR v6 to S3...")
         
-        unified_dtr = build_unified_dtr(llm_dtr, code_analysis)
+        storage.put_resource_dtr(user_id, request.taste_id, request.resource_id, dtr_v6)
         
-        confidence_scores = unified_dtr.get('meta', {}).get('confidence_scores', {})
-        overall_conf = confidence_scores.get('overall', 0)
-        
-        print(f"✓ Unified DTR v3 built")
-        print(f"  Overall confidence: {overall_conf:.2f}")
-        print(f"  Spatial: {confidence_scores.get('spatial', 0):.2f}")
-        print(f"  Color: {confidence_scores.get('color', 0):.2f}")
-        print(f"  Typography: {confidence_scores.get('typography', 0):.2f}")
-        print(f"  Forms: {confidence_scores.get('forms', 0):.2f}")
+        print(f"✓ DTR v6 saved")
         
         # ====================================================================
-        # STEP 9: Save to S3 and update database
+        # STEP 7: Smart DTM update
         # ====================================================================
-        print(f"\n[9/9] Saving DTR v3...")
+        print(f"\n[7/7] Smart DTM update...")
         
-        storage.put_resource_dtr(
-            user_id,
-            request.taste_id,
-            request.resource_id,
-            unified_dtr
-        )
-
-        # Update resource metadata
-        metadata = resource.get("metadata", {})
-        metadata["has_dtr"] = True
-        metadata["dtr_version"] = "3.0"
-        db.update_resource(
-            request.resource_id,
-            metadata=metadata
+        dtm_result = await smart_dtm_update(
+            user_id=user_id,
+            taste_id=request.taste_id,
+            new_resource_id=request.resource_id,
+            llm=llm
         )
         
-        print(f"✓ DTR v4 saved successfully")
-        print(f"{'='*60}\n")
-       
+        print(f"✓ DTM update: {dtm_result['status']}")
+        
+        # ====================================================================
+        # RETURN
+        # ====================================================================
+        
         return {
             "status": "success",
-            "resource_id": request.resource_id,
-            "dtr_version": "4.0",
-            "confidence": overall_conf
+            "dtr_version": "6.0",
+            "confidence": dtr_v6["meta"]["confidence_scores"]["overall"],
+            "context": dtr_v6["meta"]["context"],
+            "dtm_update": dtm_result
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"\n❌ ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to build DTR v3: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to build DTR: {str(e)}")
+
+
+# ============================================================================
+# SMART DTM UPDATE (Internal Function)
+# ============================================================================
+
+async def smart_dtm_update(
+    user_id: str,
+    taste_id: str,
+    new_resource_id: str,
+    llm: LLMService
+) -> Dict[str, Any]:
+    """
+    Smart DTM update logic:
+    - 1 resource: Skip (need 2+ for pattern detection)
+    - 2 resources: Build initial DTM
+    - 3+ resources: Incremental update
+    
+    Returns status dict for API response
+    """
+    
+    # Count resources with DTRs
+    resources = db.list_resources_for_taste(taste_id)
+    resources_with_dtr = []
+    
+    for resource in resources:
+        if storage.resource_dtr_exists(user_id, taste_id, resource["resource_id"]):
+            resources_with_dtr.append(resource)
+    
+    total_dtrs = len(resources_with_dtr)
+    
+    print(f"\n  DTM Update Logic: {total_dtrs} DTRs in taste")
+    
+    # CASE 1: Only 1 resource → Skip
+    if total_dtrs < 2:
+        print(f"  → Skip (need 2+ resources for pattern detection)")
+        return {
+            "status": "skipped",
+            "reason": "Need at least 2 resources to build DTM",
+            "total_resources": total_dtrs
+        }
+    
+    # Check if DTM exists
+    dtm_exists = storage.taste_dtm_exists(user_id, taste_id)
+    
+    # CASE 2: 2+ resources, no DTM → Build
+    if not dtm_exists:
+        print(f"  → Building initial DTM v2...")
+        
+        try:
+            # Load all DTRs
+            dtrs = []
+            for resource in resources_with_dtr:
+                dtr = storage.get_resource_dtr(
+                    user_id, taste_id, resource["resource_id"]
+                )
+                if dtr:
+                    dtrs.append(dtr)
+            
+            if not dtrs:
+                raise Exception("No DTRs could be loaded")
+            
+            # Build DTM v2
+            dtm_builder = DTMBuilderV2(llm)
+            dtm_v2 = await dtm_builder.build_dtm(
+                dtrs=dtrs,
+                taste_id=taste_id,
+                owner_id=user_id
+            )
+            
+            # Save DTM v2
+            storage.put_taste_dtm(user_id, taste_id, dtm_v2)
+            
+            print(f"  ✓ Initial DTM v2 built (confidence: {dtm_v2['meta']['overall_confidence']:.2f})")
+            
+            return {
+                "status": "built",
+                "message": "Initial DTM v2 built successfully",
+                "total_resources": total_dtrs,
+                "confidence": dtm_v2["meta"]["overall_confidence"],
+                "signature_patterns": len(dtm_v2.get("signature_patterns", []))
+            }
+        
+        except Exception as e:
+            print(f"  ✗ DTM build failed: {e}")
+            return {
+                "status": "failed",
+                "error": str(e)
+            }
+    
+    # CASE 3: DTM exists → Incremental update
+    else:
+        print(f"  → Updating DTM v2 incrementally...")
+        
+        try:
+            # Load existing DTM
+            dtm = storage.get_taste_dtm(user_id, taste_id)
+            
+            # Load new DTR
+            new_dtr = storage.get_resource_dtr(user_id, taste_id, new_resource_id)
+            
+            if not new_dtr:
+                raise Exception("New DTR not found")
+            
+            # Incremental update
+            updater = DTMUpdaterV3()
+            updated_dtm = await updater.update_dtm(
+                existing_dtm=dtm,
+                new_dtr=new_dtr
+            )
+            
+            # Save updated DTM
+            storage.put_taste_dtm(user_id, taste_id, updated_dtm)
+            
+            print(f"  ✓ DTM v2 updated (confidence: {updated_dtm['meta']['overall_confidence']:.2f})")
+            
+            return {
+                "status": "updated",
+                "message": "DTM v2 updated incrementally",
+                "total_resources": total_dtrs,
+                "confidence": updated_dtm["meta"]["overall_confidence"],
+                "signature_patterns": len(updated_dtm.get("signature_patterns", []))
+            }
+        
+        except Exception as e:
+            print(f"  ✗ DTM update failed: {e}")
+            return {
+                "status": "failed",
+                "error": str(e)
+            }
 
 
 # ============================================================================
@@ -332,7 +520,7 @@ async def check_dtr_exists(
 
 
 # ============================================================================
-# GENERATE UI ENDPOINT (USES DTR v3)
+# GENERATE UI v2 ENDPOINT
 # ============================================================================
 
 @router.post("/generate-ui")
@@ -342,274 +530,285 @@ async def generate_ui(
     llm: LLMService = Depends(get_llm_service),
 ):
     """
-    Generate UI from task description using DTM (Designer Taste Model)
+    Generate UI using DTM v2 - Visual-First Generation
     
     Flow:
-    1. Check if DTM exists for selected taste
-    2. If yes: Use filtered DTM (prioritizing selected resources)
-    3. If no: Fall back to individual DTRs (legacy behavior)
-    4. Extract task-relevant rules from DTM
-    5. Generate UI with DTM guidance
-    
-    Supports both React and Design ML v2 rendering modes
+    1. Load project and selected resources
+    2. Load/filter DTM v2
+    3. Select relevant visual examples
+    4. Extract three-tier rules
+    5. Generate with LLM (rules + visual examples)
+    6. Return React code
     """
     user_id = user.get("user_id")
     
     try:
+        # Get project
         project = db.get_project(request.project_id)
         
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         
         if project.get("owner_id") != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized")
+            raise HTTPException(status_code=403, detail="Access denied")
         
         print(f"\n{'='*60}")
-        print(f"GENERATE UI with DTM")
+        print(f"GENERATE UI v2 - Visual-First Generation")
         print(f"{'='*60}")
         print(f"Project: {request.project_id}")
-        print(f"Task: {request.task_description[:80]}...")
-        print(f"Rendering mode: {request.rendering_mode}")
+        print(f"Task: {request.task_description}")
         
-        # Import DTM modules
-        from app.dtm_context_filter import DTMContextFilter
-        from app.dtm_for_generation import DTMForGeneration
-        
-        # Get selected resources and taste
+        # Get taste and selected resources
+        taste_id = project.get("selected_taste_id")
         selected_resource_ids = project.get("selected_resource_ids", [])
-        selected_taste_id = project.get("selected_taste_id")
         
-        dtm_guidance = None
-        
-        # STRATEGY 1: Try to use DTM (preferred)
-        if selected_taste_id:
-            try:
-                print(f"Checking for DTM in taste {selected_taste_id}...")
-                
-                # Get DTM from storage
-                dtm = storage.get_taste_dtm(user_id, selected_taste_id)
-                
-                if dtm:
-                    print(f"✓ DTM found (version {dtm.get('version', '1.0')})")
-                    print(f"  Total resources: {dtm.get('meta', {}).get('total_resources', 0)}")
-                    
-                    # Filter DTM by selected resources if specified
-                    if selected_resource_ids:
-                        print(f"  Filtering DTM by {len(selected_resource_ids)} selected resource(s)")
-                        filter = DTMContextFilter()
-                        dtm = filter.filter_by_resources(
-                            dtm=dtm,
-                            selected_resource_ids=selected_resource_ids,
-                            fallback_to_all=True
-                        )
-                        print(f"  ✓ DTM filtered")
-                    
-                    # Build device context for task inference
-                    platform = "web"
-                    if request.device_info:
-                        platform = request.device_info.platform
-                    
-                    # Extract relevant rules for this task
-                    print(f"  Extracting task-relevant rules...")
-                    extractor = DTMForGeneration()
-                    relevant_rules = extractor.extract_for_task(
-                        dtm=dtm,
-                        task_description=request.task_description,
-                        platform=platform
-                    )
-                    
-                    # Format for prompt
-                    dtm_guidance = extractor.format_for_prompt(relevant_rules)
-                    
-                    print(f"✓ DTM guidance prepared ({len(dtm_guidance):,} chars)")
-                    print(f"  Invariants: {len(relevant_rules.get('invariants', []))}")
-                    print(f"  Contextual rules: {len(relevant_rules.get('contextual_rules', []))}")
-                    print(f"  Meta-rules: {len(relevant_rules.get('meta_rules', []))}")
-                
-                else:
-                    print(f"⚠️  No DTM found for taste {selected_taste_id}")
-            
-            except Exception as e:
-                print(f"⚠️  Could not load DTM: {e}")
-        
-        # STRATEGY 2: Fall back to individual DTRs (legacy)
-        if not dtm_guidance and selected_resource_ids and selected_taste_id:
-            print(f"Falling back to individual DTRs...")
-            print(f"Loading DTRs for {len(selected_resource_ids)} resource(s)")
-            
-            dtr_sections = []
-            
-            for idx, resource_id in enumerate(selected_resource_ids):
-                try:
-                    dtr_json = storage.get_resource_dtr(
-                        user_id,
-                        selected_taste_id,
-                        resource_id
-                    )
-                    
-                    if dtr_json:
-                        dtr_version = dtr_json.get('version', 'unknown')
-                        print(f"✓ Loaded DTR {idx+1}/{len(selected_resource_ids)} (version: {dtr_version})")
-                        
-                        # Extract rules for this resource
-                        rules = extract_generative_rules(dtr_json)
-                        
-                        # Add header for multi-resource case
-                        if len(selected_resource_ids) > 1:
-                            resource = db.get_resource(resource_id)
-                            resource_name = resource.get("name", f"Resource {idx+1}") if resource else f"Resource {idx+1}"
-                            dtr_sections.append(f"\n=== DTR from: {resource_name} ===\n{rules}")
-                        else:
-                            dtr_sections.append(rules)
-                    else:
-                        print(f"⚠️  No DTR found for resource {resource_id}")
-                        
-                except Exception as e:
-                    print(f"⚠️  Could not load DTR for resource {resource_id}: {e}")
-            
-            # Combine all DTR sections
-            if dtr_sections:
-                if len(dtr_sections) > 1:
-                    dtm_guidance = "\n\n".join(dtr_sections)
-                    dtm_guidance = f"MULTIPLE DESIGN REFERENCES:\nYou have been provided with {len(dtr_sections)} different design styles. Synthesize the best elements from each to create a cohesive design.\n\n{dtm_guidance}"
-                else:
-                    dtm_guidance = dtr_sections[0]
-                
-                print(f"✓ Combined DTR rules ({len(dtm_guidance):,} chars)")
-        
-        # Build device context
-        device_dict = None
-        if request.device_info:
-            device_dict = {
-                "platform": request.device_info.platform,
-                "width": request.device_info.screen.width,
-                "height": request.device_info.screen.height
-            }
-            print(f"Device: {device_dict['platform']} {device_dict['width']}x{device_dict['height']}")
-        
-        # Determine prompt name based on rendering mode
-        # Use v3 prompts (DTM-aware)
-        if request.rendering_mode == "react":
-            prompt_name = "generate_ui_react_v3_dtm"
-            parse_json = False
-        else:  # design-ml
-            prompt_name = "generate_ui_dml_v3_dtm"
-            parse_json = True
-        
-        # Build user message with structured data
-        user_message_parts = [
-            f"Task: {request.task_description}"
-        ]
-        
-        if dtm_guidance:
-            user_message_parts.append(f"\n\n{dtm_guidance}")
-        else:
-            user_message_parts.append("\n\n(No DTM/DTR available - generate from scratch with best practices)")
-        
-        if device_dict:
-            user_message_parts.append(f"\n\nDevice Context:\n{json.dumps(device_dict, indent=2)}")
-        
-        user_message = "\n".join(user_message_parts)
-        
-        # Load inspiration images if they exist
-        inspiration_images = []
-        inspiration_keys = project.get("inspiration_image_keys", [])
-        if inspiration_keys:
-            # Limit to last N images (most recent)
-            limited_keys = inspiration_keys[-MAX_INSPIRATION_IMAGES_FOR_LLM:]
-            
-            if len(inspiration_keys) > MAX_INSPIRATION_IMAGES_FOR_LLM:
-                print(f"Project has {len(inspiration_keys)} images, using last {MAX_INSPIRATION_IMAGES_FOR_LLM}")
-            else:
-                print(f"Loading {len(limited_keys)} inspiration image(s)...")
-            
-            inspiration_images = storage.get_inspiration_images(
-                user_id,
-                request.project_id,
-                limited_keys
+        if not taste_id:
+            raise HTTPException(
+                status_code=400,
+                detail="No taste selected for this project"
             )
-            print(f"✓ Loaded {len(inspiration_images)} inspiration image(s)")
-
         
-        # Build message content with images if present
-        if inspiration_images:
-            # If images exist, use content array format
-            message_content = [{"type": "text", "text": user_message}]
-            
-            # Add separator text with clear instructions
-            message_content.append({
-                "type": "text",
-                "text": "\n\n=== INSPIRATION IMAGES (CONTENT REFERENCE ONLY) ===\n\nThe following images are provided by the user to help you understand what UI components, layout, and content structure they want. Use these images ONLY for:\n- Understanding what components to include (buttons, cards, charts, forms, etc.)\n- Layout structure and information hierarchy\n- Content organization and placement\n\nIMPORTANT: Do NOT copy visual style, colors, typography, spacing, or design aesthetic from these images. ALL design decisions must come from the DTM/DTR provided above.\n\nInspiration images:"
-            })
-            
-            # Add each inspiration image
-            for img in inspiration_images:
-                message_content.append({
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": img['media_type'],
-                        "data": img['data']
-                    }
-                })
-        else:
-            # No images, use simple text message
-            message_content = user_message
+        print(f"Taste: {taste_id}")
+        print(f"Selected resources: {len(selected_resource_ids)}")
         
-        # Call LLM with appropriate prompt
-        print(f"Calling LLM with {prompt_name}...")
-        response = await llm.call_claude(
-            prompt_name=prompt_name,
-            user_message=message_content,
-            parse_json=parse_json,
+        # ====================================================================
+        # STEP 1: Load DTM v2
+        # ====================================================================
+        print(f"\n[1/3] Loading DTM v2...")
+        
+        try:
+            dtm = storage.get_taste_dtm(user_id, taste_id)
+        except:
+            raise HTTPException(
+                status_code=404,
+                detail="DTM not found. Please add at least 2 resources to build taste model."
+            )
+        
+        print(f"✓ DTM v2 loaded")
+        print(f"  Total resources: {dtm['meta']['total_resources']}")
+        print(f"  Confidence: {dtm['meta']['overall_confidence']:.2f}")
+        print(f"  Signature patterns: {len(dtm.get('signature_patterns', []))}")
+        
+        # Filter DTM if specific resources are selected
+        if selected_resource_ids:
+            print(f"\n[1.5/3] Filtering DTM to selected resources...")
+            dtm_filter = DTMContextFilterV2()
+            dtm = dtm_filter.filter_by_resources(
+                dtm=dtm,
+                selected_resource_ids=selected_resource_ids
+            )
+        
+        # ====================================================================
+        # STEP 2: Setup device info
+        # ====================================================================
+        print(f"\n[2/3] Setting up device info...")
+        
+        device_info = request.device_info
+        if not device_info:
+            # Use project's stored device info or default
+            stored_device = project.get("device_info", {})
+            device_info = DeviceInfo(
+                platform=stored_device.get("platform", "web"),
+                screen=DeviceScreen(
+                    width=stored_device.get("screen", {}).get("width", 1440),
+                    height=stored_device.get("screen", {}).get("height", 900)
+                )
+            )
+        
+        device_dict = {
+            "platform": device_info.platform,
+            "screen": {
+                "width": device_info.screen.width,
+                "height": device_info.screen.height
+            }
+        }
+        
+        print(f"✓ Device: {device_info.platform} ({device_info.screen.width}x{device_info.screen.height}px)")
+        
+        # ====================================================================
+        # STEP 3: Generate UI
+        # ====================================================================
+        print(f"\n[3/3] Generating UI...")
+        
+        orchestrator = GenerationOrchestrator(llm, storage)
+        
+        ui_code = await orchestrator.generate_ui(
+            dtm=dtm,
+            task_description=request.task_description,
+            device_info=device_dict,
+            user_id=user_id,
+            taste_id=taste_id,
+            selected_resource_ids=selected_resource_ids if selected_resource_ids else None,
+            max_examples=request.max_visual_examples or 3
         )
         
-        # Extract output based on mode
-        if request.rendering_mode == "design-ml":
-            ui_output = response["json"]
-            ui_confidence = ui_output.get('meta', {}).get('generation_confidence', 0)
-            print(f"✓ Generated Design ML v2 (confidence: {ui_confidence:.2f})")
-        else:  # react mode
-            ui_output = response["text"]
-            print(f"✓ Generated React component ({len(ui_output):,} chars)")
+        print(f"✓ UI generated")
         
-        # Save UI to storage
-        current_version = project.get("metadata", {}).get("ui_version", 0)
-        new_version = int(current_version) + 1
-        
-        storage.put_project_ui(
-            user_id,
-            request.project_id,
-            ui_output,
-            version=new_version
-        )
-        
-        # Update project metadata
-        updated_metadata = project.get("metadata", {})
-        updated_metadata["ui_version"] = new_version
-        db.update_project(
-            project_id=request.project_id,
-            metadata=updated_metadata
-        )
-        
-        print(f"✓ UI saved (version {new_version})")
+        # ====================================================================
+        # RETURN
+        # ====================================================================
         
         return {
             "status": "success",
-            "project_id": request.project_id,
-            "rendering_mode": request.rendering_mode,
-            "ui_output": ui_output,
-            "version": new_version,
-            "used_dtm": bool(dtm_guidance and 'DTM' in dtm_guidance)  # Indicate if DTM was used
+            "ui_code": ui_code,
+            "device_info": device_dict,
+            "generation_method": "three_tier_visual_first"
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error generating UI: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to generate UI: {str(e)}")
+
+
+# ============================================================================
+# DTM MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@router.get("/dtm/{taste_id}")
+async def get_dtm(
+    taste_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Get DTM v2 for a taste"""
+    user_id = user.get("user_id")
+    
+    # Check taste ownership
+    taste = db.get_taste(taste_id)
+    if not taste or taste.get("owner_id") != user_id:
+        raise HTTPException(status_code=404, detail="Taste not found")
+    
+    # Get DTM
+    try:
+        dtm = storage.get_taste_dtm(user_id, taste_id)
+    except:
+        raise HTTPException(
+            status_code=404,
+            detail="DTM not found. Build DTM by adding 2+ resources."
+        )
+    
+    return {
+        "status": "success",
+        "dtm": dtm
+    }
+
+
+@router.post("/dtm/{taste_id}/rebuild")
+async def rebuild_dtm(
+    taste_id: str,
+    user: dict = Depends(get_current_user),
+    llm: LLMService = Depends(get_llm_service)
+):
+    """Force rebuild DTM from scratch"""
+    user_id = user.get("user_id")
+    
+    # Check taste ownership
+    taste = db.get_taste(taste_id)
+    if not taste or taste.get("owner_id") != user_id:
+        raise HTTPException(status_code=404, detail="Taste not found")
+    
+    # Get all resources with DTRs
+    resources = db.list_resources_for_taste(taste_id)
+    resources_with_dtr = []
+    
+    for resource in resources:
+        if storage.resource_dtr_exists(user_id, taste_id, resource["resource_id"]):
+            resources_with_dtr.append(resource)
+    
+    if len(resources_with_dtr) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="Need at least 2 resources with DTRs to build DTM"
+        )
+    
+    # Load all DTRs
+    dtrs = []
+    for resource in resources_with_dtr:
+        dtr = storage.get_resource_dtr(user_id, taste_id, resource["resource_id"])
+        if dtr:
+            dtrs.append(dtr)
+    
+    if not dtrs:
+        raise HTTPException(status_code=400, detail="No DTRs could be loaded")
+    
+    # Build DTM v2
+    dtm_builder = DTMBuilderV2(llm)
+    dtm_v2 = await dtm_builder.build_dtm(
+        dtrs=dtrs,
+        taste_id=taste_id,
+        owner_id=user_id
+    )
+    
+    # Save DTM v2
+    storage.put_taste_dtm(user_id, taste_id, dtm_v2)
+    
+    return {
+        "status": "success",
+        "message": "DTM v2 rebuilt successfully",
+        "total_resources": len(dtrs),
+        "confidence": dtm_v2["meta"]["overall_confidence"],
+        "signature_patterns": len(dtm_v2.get("signature_patterns", []))
+    }
+
+
+@router.post("/dtm/update")
+async def update_dtm_endpoint(
+    taste_id: str,
+    resource_id: str,
+    user: dict = Depends(get_current_user),
+    llm: LLMService = Depends(get_llm_service)
+):
+    """Update DTM incrementally with new resource"""
+    user_id = user.get("user_id")
+    
+    # Check taste ownership
+    taste = db.get_taste(taste_id)
+    if not taste or taste.get("owner_id") != user_id:
+        raise HTTPException(status_code=404, detail="Taste not found")
+    
+    print(f"DTM Update: taste_id={taste_id}, resource_id={resource_id}")
+    
+    try:
+        # Call smart update logic
+        result = await smart_dtm_update(
+            user_id=user_id,
+            taste_id=taste_id,
+            new_resource_id=resource_id,
+            llm=llm
+        )
+        
+        if result["status"] == "failed":
+            raise HTTPException(status_code=500, detail=f"Failed to update DTM: {result.get('error', 'Unknown error')}")
+        
+        return result
+    
+    except Exception as e:
+        print(f"DTM update error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update DTM: {str(e)}")
+
+
+@router.delete("/dtm/{taste_id}")
+async def delete_dtm(
+    taste_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Delete DTM for a taste"""
+    user_id = user.get("user_id")
+    
+    # Check taste ownership
+    taste = db.get_taste(taste_id)
+    if not taste or taste.get("owner_id") != user_id:
+        raise HTTPException(status_code=404, detail="Taste not found")
+    
+    # Delete DTM
+    storage.delete_taste_dtm(user_id, taste_id)
+    
+    return {
+        "status": "success",
+        "message": "DTM deleted successfully"
+    }
 
 
 # ============================================================================
@@ -871,17 +1070,33 @@ async def generate_flow(
         if not device_info:
             raise HTTPException(status_code=400, detail="Device info required")
         
-        # Load DTM if available
-        dtm_guidance = None
+        # Load DTM v2 if available (with DTR fallback)
+        dtm_data = None
         selected_taste_id = project.get("selected_taste_id")
         
         if selected_taste_id:
             try:
                 dtm_data = storage.get_taste_dtm(user_id, selected_taste_id)
-                if dtm_data:
-                    dtm_guidance = f"DTM (Designer Taste Model):\n{json.dumps(dtm_data, indent=2)}"
-            except:
-                pass
+                print(f"✓ DTM loaded: {len(dtm_data.get('signature_patterns', []))} signatures")
+            except Exception as e:
+                print(f"Could not load DTM: {e}")
+                # Fallback: Try to load DTR and convert to minimal DTM
+                try:
+                    resources = db.list_resources_for_taste(selected_taste_id)
+                    resources_with_dtr = []
+                    
+                    for resource in resources:
+                        if storage.resource_dtr_exists(user_id, selected_taste_id, resource["resource_id"]):
+                            dtr = storage.get_resource_dtr(user_id, selected_taste_id, resource["resource_id"])
+                            if dtr:
+                                resources_with_dtr.append(dtr)
+                    
+                    if resources_with_dtr:
+                        # Convert single DTR to minimal DTM structure
+                        dtm_data = _convert_dtr_to_dtm(resources_with_dtr[0], selected_taste_id, user_id)
+                        print(f"✓ Using DTR from single resource (minimal DTM created)")
+                except Exception as dtr_error:
+                    print(f"Could not load DTR either: {dtr_error}")
         
         # Load inspiration images
         inspiration_images = []
@@ -896,7 +1111,9 @@ async def generate_flow(
             {"type": "text", "text": f"TASK: {task_description}\n\nDEVICE CONTEXT:\n{json.dumps(device_info, indent=2)}\n\nMAX SCREENS: {max_screens}"}
         ]
         
-        if dtm_guidance:
+        # Add DTM data if available
+        if dtm_data:
+            dtm_guidance = f"DTM (Designer Taste Model):\n{json.dumps(dtm_data, indent=2)}"
             flow_arch_content.append({"type": "text", "text": f"\n\n{dtm_guidance}"})
         
         for img in inspiration_images:
@@ -917,7 +1134,7 @@ async def generate_flow(
         
         flow_architecture = flow_arch_response["json"]
         
-        # Generate UI for each screen
+        # Generate UI for each screen using GenerationOrchestrator
         async def generate_screen_ui(screen, screen_index):
             outgoing_transitions = [
                 t for t in flow_architecture.get('transitions', [])
@@ -933,30 +1150,47 @@ async def generate_flow(
                 "outgoing_transitions": outgoing_transitions
             }
             
-            screen_content = [
-                {"type": "text", "text": f"TASK: {screen['task_description']}\n\nDEVICE CONTEXT:\n{json.dumps(device_info, indent=2)}\n\nFLOW CONTEXT:\n{json.dumps(flow_context, indent=2)}"}
-            ]
+            # Build task description with flow context
+            screen_task = f"{screen['task_description']}\n\nFlow context: Screen {screen_index + 1} of {len(flow_architecture['screens'])} in '{flow_architecture.get('flow_name')}' flow"
             
-            if dtm_guidance:
-                screen_content.append({"type": "text", "text": f"\n\n{dtm_guidance}"})
+            # Use GenerationOrchestrator if we have DTM
+            if dtm_data:
+                orchestrator = GenerationOrchestrator(llm, storage)
+                
+                ui_code = await orchestrator.generate_ui(
+                    dtm=dtm_data,
+                    task_description=screen_task,
+                    device_info=device_info,
+                    user_id=user_id,
+                    taste_id=selected_taste_id,
+                    selected_resource_ids=project.get("selected_resource_ids"),
+                    max_examples=2,  # Fewer for faster flow generation
+                    flow_context=flow_context  # NEW: Pass flow context for navigation
+                )
+            else:
+                # Fallback: Generate without taste
+                screen_content = [
+                    {"type": "text", "text": f"TASK: {screen['task_description']}\n\nDEVICE CONTEXT:\n{json.dumps(device_info, indent=2)}\n\nFLOW CONTEXT:\n{json.dumps(flow_context, indent=2)}"}
+                ]
+                
+                for img in inspiration_images:
+                    screen_content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": img.get('media_type', 'image/png'),
+                            "data": img['data']
+                        }
+                    })
+                
+                screen_response = await llm.call_claude(
+                    prompt_name="generate_ui_react_v3_dtm_flow",
+                    user_message=screen_content
+                )
+                
+                ui_code = screen_response["text"].strip()
             
-            for img in inspiration_images:
-                screen_content.append({
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": img.get('media_type', 'image/png'),
-                        "data": img['data']
-                    }
-                })
-            
-            screen_response = await llm.call_claude(
-                prompt_name="generate_ui_react_v3_dtm_flow",
-                user_message=screen_content
-            )
-            
-            ui_code = screen_response["text"].strip()
-            # Strip markdown code fences
+            # Strip markdown code fences if present
             if ui_code.startswith("```jsx") or ui_code.startswith("```javascript") or ui_code.startswith("```tsx"):
                 first_newline = ui_code.find('\n')
                 if first_newline != -1:

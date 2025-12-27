@@ -8,8 +8,9 @@ from app.auth import get_current_user
 from app import db, storage
 from app.llm import get_llm_service, LLMService
 
-from app.dtm_builder import DTMBuilder
-from app.dtm_updater import DTMIncrementalUpdater
+# V2 imports - new three-tier architecture
+from app.dtm_builder_v2 import DTMBuilderV2
+from app.dtm_updater_v3 import DTMUpdaterV3
 from app.dtm_context_filter import DTMContextFilter
 
 router = APIRouter(prefix="/api/dtm", tags=["dtm"])
@@ -63,6 +64,10 @@ async def build_dtm(
     # Get all resources with DTRs
     resources = db.list_resources_for_taste(request.taste_id)
     
+    print(f"📊 Found {len(resources)} resources in taste")
+    for i, resource in enumerate(resources):
+        print(f"  [{i+1}] {resource['resource_id'][:8]}... - {resource.get('name', 'unnamed')}")
+    
     if len(resources) < 1:
         raise HTTPException(
             status_code=400,
@@ -71,17 +76,23 @@ async def build_dtm(
     
     # Load DTRs from S3
     dtrs = []
+    loaded_resource_ids = []
     for resource in resources:
         try:
+            resource_id = resource["resource_id"]
             dtr = storage.get_resource_dtr(
                 user_id,
                 request.taste_id,
-                resource["resource_id"]
+                resource_id
             )
             if dtr:
                 dtrs.append(dtr)
+                loaded_resource_ids.append(resource_id)
+                print(f"  ✓ Loaded DTR for {resource_id[:8]}...")
         except Exception as e:
-            print(f"Warning: Could not load DTR for {resource['resource_id']}: {e}")
+            print(f"  ✗ Could not load DTR for {resource['resource_id'][:8]}...: {e}")
+    
+    print(f"\n📊 Loaded {len(dtrs)} DTRs from {len(loaded_resource_ids)} unique resources")
     
     if not dtrs:
         raise HTTPException(
@@ -89,21 +100,26 @@ async def build_dtm(
             detail="No DTRs found. Please build DTRs first for each resource."
         )
     
-    print(f"Building DTM from {len(dtrs)} DTRs...")
+    print(f"Building DTM v2 from {len(dtrs)} DTRs...")
     
-    # Build DTM
-    builder = DTMBuilder(llm)
+    # Build DTM v2
+    builder = DTMBuilderV2(llm)
     dtm = await builder.build_dtm(
         dtrs=dtrs,
         taste_id=request.taste_id,
-        owner_id=user_id,
-        use_llm=True
+        owner_id=user_id
     )
     
     # Save DTM to S3
     storage.put_taste_dtm(user_id, request.taste_id, dtm)
     
-    summary = builder.get_dtm_summary(dtm)
+    # Simple summary (v2 doesn't have get_dtm_summary method)
+    summary = {
+        "total_resources": dtm["meta"]["total_resources"],
+        "confidence": dtm["meta"]["overall_confidence"],
+        "signature_patterns": len(dtm.get("signature_patterns", [])),
+        "visual_examples": len(dtm.get("visual_library", {}).get("all_resources", []))
+    }
     
     return {
         "status": "built",
@@ -185,13 +201,12 @@ async def update_dtm(
                     detail="No DTRs could be loaded"
                 )
             
-            # Build DTM
-            builder = DTMBuilder(llm)
+            # Build DTM v2
+            builder = DTMBuilderV2(llm)
             dtm = await builder.build_dtm(
                 dtrs=dtrs,
                 taste_id=request.taste_id,
-                owner_id=user_id,
-                use_llm=True
+                owner_id=user_id
             )
             
             # Save DTM
@@ -201,10 +216,11 @@ async def update_dtm(
             
             return {
                 "status": "built",
-                "message": "DTM built successfully",
+                "message": "DTM v2 built successfully",
                 "taste_id": request.taste_id,
                 "total_resources": total_dtrs,
-                "confidence": dtm["meta"]["overall_confidence"]
+                "confidence": dtm["meta"]["overall_confidence"],
+                "signature_patterns": len(dtm.get("signature_patterns", []))
             }
         
         except Exception as e:
@@ -232,12 +248,11 @@ async def update_dtm(
                     detail="DTR not found for this resource"
                 )
             
-            # Incremental update (code-only by default, fast)
-            updater = DTMIncrementalUpdater(llm if request.resynthesize else None)
+            # Incremental update with v2
+            updater = DTMUpdaterV3()
             updated_dtm = await updater.update_dtm(
                 existing_dtm=dtm,
-                new_dtr=new_dtr,
-                resynthesize_semantic=request.resynthesize
+                new_dtr=new_dtr
             )
             
             # Save updated DTM
@@ -247,11 +262,12 @@ async def update_dtm(
             
             return {
                 "status": "updated",
-                "message": "DTM updated successfully",
+                "message": "DTM v2 updated successfully",
                 "taste_id": request.taste_id,
                 "total_resources": updated_dtm["meta"]["total_resources"],
                 "confidence": updated_dtm["meta"]["overall_confidence"],
-                "incremental": not request.resynthesize
+                "signature_patterns": len(updated_dtm.get("signature_patterns", [])),
+                "incremental": True
             }
         
         except HTTPException:
@@ -348,9 +364,15 @@ async def get_dtm_summary(
     except:
         raise HTTPException(status_code=404, detail="DTM not found")
     
-    # Generate summary
-    builder = DTMBuilder()
-    summary = builder.get_dtm_summary(dtm)
+    # Generate summary for v2
+    summary = {
+        "version": dtm.get("version", "2.0"),
+        "total_resources": dtm["meta"]["total_resources"],
+        "confidence": dtm["meta"]["overall_confidence"],
+        "signature_patterns": len(dtm.get("signature_patterns", [])),
+        "visual_examples": len(dtm.get("visual_library", {}).get("all_resources", [])),
+        "contexts": list(dtm.get("visual_library", {}).get("by_context", {}).keys())
+    }
     
     return {
         "taste_id": taste_id,
