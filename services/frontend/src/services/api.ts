@@ -840,17 +840,6 @@ export const llmAPI = {
   },
 
   /**
-   * Get a random test UI (for testing)
-   */
-  getTestUI: async (): Promise<
-    GenerateUIResponse & { project_id: string; project_name: string }
-  > => {
-    return apiRequest<
-      GenerateUIResponse & { project_id: string; project_name: string }
-    >('/api/llm/ui/get/test')
-  },
-
-  /**
    * Get a random UI by rendering mode
    */
   getRandomUIByMode: async (
