@@ -117,16 +117,7 @@ export default function Home() {
     figmaFile: File | null
     imageFiles: File[] // Single for exact, multiple for inspiration
   }
-  const [screens, setScreens] = useState<ScreenInput[]>([
-    {
-      id: '1',
-      name: '',
-      description: '',
-      mode: 'redesign',
-      figmaFile: null,
-      imageFiles: [],
-    },
-  ])
+  const [screens, setScreens] = useState<ScreenInput[]>([])
 
   // Continue project state
   const [hasActiveProject, setHasActiveProject] = useState(false)
@@ -761,8 +752,19 @@ export default function Home() {
     try {
       setIsCreatingProject(true)
 
-      // Build screen_definitions metadata array
-      const screenDefsMetadata = screens.map(sd => ({
+      // Filter out blank screens (screens with no meaningful content)
+      // This ensures empty defaults don't get sent as screen definitions
+      const nonBlankScreens = screens.filter(sd => {
+        const hasName = sd.name.trim().length > 0
+        const hasDescription = (sd.description?.trim().length ?? 0) > 0
+        const hasFigma = sd.figmaFile !== null
+        const hasImages = sd.imageFiles.length > 0
+
+        return hasName || hasDescription || hasFigma || hasImages
+      })
+
+      // Build screen_definitions metadata array from non-blank screens only
+      const screenDefsMetadata = nonBlankScreens.map(sd => ({
         name: sd.name || '',
         description: sd.description || '',
         mode: sd.mode,
@@ -771,9 +773,9 @@ export default function Home() {
         image_count: sd.imageFiles.length,
       }))
 
-      // Build screen_files object with dynamic keys
+      // Build screen_files object with dynamic keys (only for non-blank screens)
       const screenFiles: Record<string, File> = {}
-      screens.forEach((sd, idx) => {
+      nonBlankScreens.forEach((sd, idx) => {
         if (sd.figmaFile) {
           screenFiles[`screen_${idx}_figma`] = sd.figmaFile
         }
@@ -793,8 +795,9 @@ export default function Home() {
         device_info: device_info, // Save current device settings
         rendering_mode: rendering_mode, // Save current rendering mode
         flow_mode: true, // NEW: Enable flow mode by default
-        max_screens: screens.length, // NEW: Use actual screen count
-        screen_definitions: screenDefsMetadata, // NEW: Screen definitions metadata
+        max_screens:
+          screenDefsMetadata.length > 0 ? screenDefsMetadata.length : 5, // Default to 5 when no screens defined - lets LLM decide optimal count
+        screen_definitions: screenDefsMetadata, // NEW: Screen definitions metadata (empty array if none)
         screen_files: screenFiles, // NEW: Screen reference files
         metadata: {},
       })
@@ -821,16 +824,7 @@ export default function Home() {
       // Reset form and clear active project flag
       setIdeaText('')
       setSelectedResourceIds([])
-      setScreens([
-        {
-          id: '1',
-          name: '',
-          description: '',
-          mode: 'redesign',
-          figmaFile: null,
-          imageFiles: [],
-        },
-      ])
+      setScreens([]) // Reset to empty array
       setHasActiveProject(false)
       setActiveProjectName(null)
 
