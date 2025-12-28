@@ -328,9 +328,14 @@ Your output might:
 
 Return a React functional component that accepts an `onTransition` callback:
 
+**CRITICAL: DO NOT USE IMPORT STATEMENTS**
+
+React hooks (`useState`, `useEffect`, `useCallback`, `useMemo`, `useRef`) are already available - use them directly without imports.
+
 ```jsx
 export default function App({ onTransition }) {
   // ✅ React hooks ARE allowed for internal UI state
+  // ✅ Use directly - NO import statements needed
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -1281,11 +1286,13 @@ Before outputting, verify:
 
 9. **Flow Integration**: Implement ALL outgoing_transitions with correct onTransition calls.
 
-10. **Platform Adaptation**: Phone needs bigger touch targets, vertical layouts, larger spacing.
+10. **NO IMPORT STATEMENTS**: React hooks (useState, useEffect, etc.) are already available. Use them directly without any import statements.
 
-11. **Trust the DTM**: It's already filtered and optimized for this task.
+11. **Platform Adaptation**: Phone needs bigger touch targets, vertical layouts, larger spacing.
 
-12. **Output Code Only**: No explanations, no markdown fences, just pure React code.
+12. **Trust the DTM**: It's already filtered and optimized for this task.
+
+13. **Output Code Only**: No explanations, no markdown fences, just pure React code.
 
 ---
 

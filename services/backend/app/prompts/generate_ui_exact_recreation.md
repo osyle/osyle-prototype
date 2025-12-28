@@ -135,9 +135,15 @@ Analyze the reference files and recreate the design **exactly**:
 
 Return **only** the React component code:
 
+**CRITICAL: DO NOT USE IMPORT STATEMENTS**
+
+React hooks (`useState`, `useEffect`, etc.) are already available - use them directly without imports.
+
 ```jsx
 export default function App({ onTransition }) {
   // Use exact values extracted from reference
+  // ✅ Use hooks directly - NO imports needed
+  const [email, setEmail] = useState("");
 
   return (
     <div
@@ -160,7 +166,8 @@ export default function App({ onTransition }) {
 3. **Implement all transitions** (one UI element per outgoing_transition from flow context)
 4. **Use inline styles** for exact pixel values
 5. **Match everything** - no creative interpretation, no improvements, just accurate copying
-6. **No markdown** - just pure React code
+6. **NO IMPORT STATEMENTS** - React hooks (useState, useEffect, etc.) are already available, use them directly
+7. **No markdown** - just pure React code
 
 ---
 

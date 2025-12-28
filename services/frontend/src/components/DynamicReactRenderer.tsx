@@ -30,6 +30,16 @@ export default function DynamicReactRenderer({
       cleanCode = cleanCode.replace(/```\s*$/m, '')
       cleanCode = cleanCode.trim()
 
+      // 🛡️ SAFETY: Remove any import statements
+      // React hooks are provided as function parameters, imports will break execution
+      // This catches cases where LLM ignores prompt instructions
+      cleanCode = cleanCode.replace(
+        /^import\s+.+?from\s+['"][^'"]+['"]\s*;?\s*$/gm,
+        '',
+      )
+      cleanCode = cleanCode.replace(/^import\s+['"][^'"]+['"]\s*;?\s*$/gm, '')
+      cleanCode = cleanCode.trim()
+
       // Transform JSX to JS using Babel
       const transformedCode = Babel.transform(cleanCode, {
         presets: ['react'],
