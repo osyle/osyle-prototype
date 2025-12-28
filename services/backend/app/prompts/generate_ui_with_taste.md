@@ -332,6 +332,10 @@ Return a React functional component that accepts an `onTransition` callback:
 
 React hooks (`useState`, `useEffect`, `useCallback`, `useMemo`, `useRef`) are already available - use them directly without imports.
 
+**CRITICAL: FUNCTION MUST BE NAMED "App"**
+
+Always use `function App` or `const App =` - never use custom names like `function MyComponent`.
+
 ```jsx
 export default function App({ onTransition }) {
   // ✅ React hooks ARE allowed for internal UI state
@@ -1288,11 +1292,13 @@ Before outputting, verify:
 
 10. **NO IMPORT STATEMENTS**: React hooks (useState, useEffect, etc.) are already available. Use them directly without any import statements.
 
-11. **Platform Adaptation**: Phone needs bigger touch targets, vertical layouts, larger spacing.
+11. **FUNCTION NAME MUST BE "App"**: Always name the function `App`, never use custom names like `MyComponent` or `DashboardScreen`.
 
-12. **Trust the DTM**: It's already filtered and optimized for this task.
+12. **Platform Adaptation**: Phone needs bigger touch targets, vertical layouts, larger spacing.
 
-13. **Output Code Only**: No explanations, no markdown fences, just pure React code.
+13. **Trust the DTM**: It's already filtered and optimized for this task.
+
+14. **Output Code Only**: No explanations, no markdown fences, just pure React code.
 
 ---
 

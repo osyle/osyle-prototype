@@ -54,10 +54,16 @@ export default function DynamicReactRenderer({
 
       // Check if it starts with "function" keyword
       if (executableCode.trim().startsWith('function')) {
-        // Extract function name and wrap it
+        // Extract the actual function name (handles "function App", "function MyComponent", etc.)
+        const functionNameMatch = executableCode.match(
+          /function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/,
+        )
+        const functionName = functionNameMatch ? functionNameMatch[1] : 'App'
+
+        // Wrap it and return the actual function name
         const functionBody = `
           ${executableCode}
-          return App;
+          return ${functionName};
         `
         // eslint-disable-next-line no-new-func
         const ComponentFactory = new Function(

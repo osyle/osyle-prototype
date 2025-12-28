@@ -139,6 +139,10 @@ Return **only** the React component code:
 
 React hooks (`useState`, `useEffect`, etc.) are already available - use them directly without imports.
 
+**CRITICAL: FUNCTION MUST BE NAMED "App"**
+
+Always use `function App` - never use custom names.
+
 ```jsx
 export default function App({ onTransition }) {
   // Use exact values extracted from reference
@@ -167,7 +171,8 @@ export default function App({ onTransition }) {
 4. **Use inline styles** for exact pixel values
 5. **Match everything** - no creative interpretation, no improvements, just accurate copying
 6. **NO IMPORT STATEMENTS** - React hooks (useState, useEffect, etc.) are already available, use them directly
-7. **No markdown** - just pure React code
+7. **FUNCTION NAME MUST BE "App"** - Always use `function App`, never custom names
+8. **No markdown** - just pure React code
 
 ---
 
