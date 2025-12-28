@@ -130,7 +130,7 @@ class ScreenDefinition(BaseModel):
     """Screen definition from user input"""
     name: Optional[str] = ""
     description: Optional[str] = ""
-    mode: str  # "exact" | "inspiration"
+    mode: str  # "exact" | "redesign" | "inspiration"
     has_figma: bool = False
     has_images: bool = False
     image_count: int = 0  # Number of images for this screen

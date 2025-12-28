@@ -378,7 +378,7 @@ export const projectsAPI = {
     screen_definitions?: Array<{
       name?: string
       description?: string
-      mode: 'exact' | 'inspiration'
+      mode: 'exact' | 'redesign' | 'inspiration'
       has_figma: boolean
       has_images: boolean
       image_count: number

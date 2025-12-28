@@ -34,13 +34,16 @@ class GenerationOrchestrator:
         taste_id: str,
         selected_resource_ids: Optional[List[str]] = None,
         max_examples: int = 3,
-        flow_context: Optional[Dict[str, Any]] = None  # NEW: Flow context for multi-screen flows
+        flow_context: Optional[Dict[str, Any]] = None,  # Flow context for multi-screen flows
+        reference_mode: Optional[str] = None,  # NEW: "exact" | "redesign" | "inspiration"
+        screen_description: Optional[str] = None,  # NEW: Screen description
+        reference_files: Optional[Dict[str, Any]] = None  # NEW: Reference files (figma_data, images)
     ) -> str:
         """
-        Generate UI using DTM v2
+        Generate UI using DTM v2 (or exact recreation for exact mode)
         
         Args:
-            dtm: DTM v2 dictionary (potentially filtered)
+            dtm: DTM v2 dictionary (potentially filtered) - not used for exact mode
             task_description: What to build
             device_info: Platform and screen dimensions
             user_id: For loading examples from S3
@@ -48,11 +51,25 @@ class GenerationOrchestrator:
             selected_resource_ids: Optional resource filter
             max_examples: Max visual examples to include
             flow_context: Optional flow context for multi-screen navigation
+            reference_mode: How to use reference files - "exact", "redesign", "inspiration", or None
+            screen_description: Optional screen description from user
+            reference_files: Optional reference files (figma_data, images)
             
         Returns:
             Generated React code
         """
         
+        # NEW: Handle exact recreation mode (no DTM needed)
+        if reference_mode == "exact":
+            return await self._generate_ui_exact_recreation(
+                task_description=task_description,
+                device_info=device_info,
+                flow_context=flow_context,
+                screen_description=screen_description,
+                reference_files=reference_files
+            )
+        
+        # For redesign and inspiration modes, use DTM-based generation
         print(f"\n{'='*60}")
         print(f"GENERATING UI - Visual-First Approach")
         print(f"{'='*60}")
@@ -138,7 +155,7 @@ class GenerationOrchestrator:
         
         # Call LLM
         response = await self.llm.call_claude(
-            prompt_name="generate_ui_v2",
+            prompt_name="generate_ui_with_taste",  # Updated prompt name
             user_message=message_content,
             max_tokens=8000,
             temperature=0.7
@@ -754,6 +771,91 @@ No explanations, no markdown except the code block. Just the component.
 """
         
         return prompt
+    
+    async def _generate_ui_exact_recreation(
+        self,
+        task_description: str,
+        device_info: Dict[str, Any],
+        flow_context: Optional[Dict[str, Any]] = None,
+        screen_description: Optional[str] = None,
+        reference_files: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Generate UI using exact recreation mode (pixel-perfect copying, no DTM)
+        
+        Args:
+            task_description: What to build
+            device_info: Platform and screen dimensions
+            flow_context: Optional flow context for multi-screen navigation
+            screen_description: Optional screen description from user
+            reference_files: Reference files (figma_data, images)
+            
+        Returns:
+            Generated React code
+        """
+        
+        print(f"\n{'='*60}")
+        print(f"GENERATING UI - Exact Recreation Mode (No DTM)")
+        print(f"{'='*60}")
+        
+        platform = device_info.get("platform", "web")
+        width = device_info.get("screen", {}).get("width", 1440)
+        height = device_info.get("screen", {}).get("height", 900)
+        
+        # Build prompt text
+        prompt_text = f"""Task: {task_description}
+
+Device: {platform} ({width}x{height}px)
+"""
+        
+        if screen_description:
+            prompt_text += f"\nScreen Description: {screen_description}\n"
+        
+        if flow_context:
+            import json
+            prompt_text += f"\nFlow Context:\n{json.dumps(flow_context, indent=2)}\n"
+        
+        # Build message content
+        message_content = [
+            {"type": "text", "text": prompt_text}
+        ]
+        
+        # Add reference files if available
+        if reference_files:
+            # Add figma data if available
+            if reference_files.get('figma_data'):
+                from app.unified_dtr_builder import prepare_figma_for_llm
+                compressed_figma = prepare_figma_for_llm(reference_files['figma_data'], max_depth=6)
+                message_content.append({
+                    "type": "text",
+                    "text": f"\nReference Figma Data:\n{compressed_figma}"
+                })
+            
+            # Add images if available
+            if reference_files.get('images'):
+                for img in reference_files['images']:
+                    message_content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": img.get('media_type', 'image/png'),
+                            "data": img['data']
+                        }
+                    })
+        
+        # Call LLM with exact recreation prompt
+        response = await self.llm.call_claude(
+            prompt_name="generate_ui_exact_recreation",
+            user_message=message_content,
+            max_tokens=8000,
+            temperature=0.3  # Lower temperature for more literal copying
+        )
+        
+        ui_code = response.get("text", "")
+        
+        print(f"✓ UI generated successfully (exact recreation, {len(ui_code)} characters)")
+        
+        return ui_code
 
 
 # Export

@@ -24,6 +24,9 @@ from app.generation_orchestrator import GenerationOrchestrator
 # Import helper for Figma compression
 from app.unified_dtr_builder import prepare_figma_for_llm
 
+# Import wireframe processor for redesign mode
+from app.wireframe_processor import process_redesign_references, prepare_wireframe_for_llm
+
 
 async def send_progress(websocket: WebSocket, stage: str, message: str, data: Dict[str, Any] = None):
     """Send progress update to client"""
@@ -554,59 +557,150 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
                             except Exception as e:
                                 print(f"Error loading screen {user_screen_index} reference files: {e}")
                 
-                screen_content = [
-                    {"type": "text", "text": screen_message}
-                ]
-                
-                if dtm_guidance:
-                    screen_content.append({"type": "text", "text": f"\n\n{dtm_guidance}"})
-                
-                # Add reference images if available (for exact mode) or inspiration images (for inspiration mode)
-                if reference_mode == "exact" and user_screen_index is not None:
-                    # Load and add reference images for this specific screen
-                    screen_def = screen_definitions[user_screen_index]
-                    image_count = screen_def.get('image_count', 0)
-                    if image_count > 0:
-                        try:
-                            ref_files = storage.get_screen_reference_files(
-                                user_id, project_id, user_screen_index, False, image_count
-                            )
-                            for img in ref_files['images']:
-                                screen_content.append({
-                                    "type": "image",
-                                    "source": {
-                                        "type": "base64",
-                                        "media_type": img.get('media_type', 'image/png'),
-                                        "data": img['data']
-                                    }
-                                })
-                        except Exception as e:
-                            print(f"Error loading screen {user_screen_index} images: {e}")
-                elif reference_mode == "inspiration":
-                    # Use general inspiration images
-                    for img in inspiration_images:
-                        screen_content.append({
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": img.get('media_type', 'image/png'),
-                                "data": img['data']
-                            }
-                        })
+                # Determine which prompt to use based on reference mode
+                if reference_mode == "exact":
+                    # Exact mode: Use exact recreation prompt (no DTM)
+                    prompt_name = "generate_ui_exact_recreation"
+                    screen_content = [
+                        {"type": "text", "text": screen_message}
+                    ]
+                    
+                    # Add reference files for exact mode
+                    if reference_mode and user_screen_index is not None and screen_definitions:
+                        screen_def = screen_definitions[user_screen_index]
+                        has_figma = screen_def.get('has_figma', False)
+                        image_count = screen_def.get('image_count', 0)
+                        
+                        if has_figma or image_count > 0:
+                            try:
+                                ref_files = storage.get_screen_reference_files(
+                                    user_id, project_id, user_screen_index, has_figma, image_count
+                                )
+                                
+                                # Add figma data
+                                if ref_files.get('figma_data'):
+                                    compressed_figma = prepare_figma_for_llm(ref_files['figma_data'], max_depth=6)
+                                    screen_content.append({
+                                        "type": "text",
+                                        "text": f"\nReference Figma Data:\n{compressed_figma}"
+                                    })
+                                
+                                # Add images
+                                for img in ref_files.get('images', []):
+                                    screen_content.append({
+                                        "type": "image",
+                                        "source": {
+                                            "type": "base64",
+                                            "media_type": img.get('media_type', 'image/png'),
+                                            "data": img['data']
+                                        }
+                                    })
+                            except Exception as e:
+                                print(f"Error loading screen {user_screen_index} reference files: {e}")
                 else:
-                    # No reference mode or null - use general inspiration images
-                    for img in inspiration_images:
-                        screen_content.append({
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": img.get('media_type', 'image/png'),
-                                "data": img['data']
-                            }
-                        })
+                    # Redesign or Inspiration mode: Use taste-based prompt (with DTM)
+                    prompt_name = "generate_ui_with_taste"
+                    screen_content = [
+                        {"type": "text", "text": screen_message}
+                    ]
+                    
+                    if dtm_guidance:
+                        screen_content.append({"type": "text", "text": f"\n\n{dtm_guidance}"})
+                    
+                    # Add reference images based on mode
+                    if reference_mode == "redesign" and user_screen_index is not None:
+                        # REDESIGN MODE: Use wireframe processing to strip all styling
+                        screen_def = screen_definitions[user_screen_index]
+                        image_count = screen_def.get('image_count', 0)
+                        has_figma = screen_def.get('has_figma', False)
+                        
+                        if has_figma or image_count > 0:
+                            try:
+                                print(f"\n  ⚙️  REDESIGN MODE: Processing wireframes for screen {user_screen_index}...")
+                                
+                                # Load reference files
+                                ref_files = storage.get_screen_reference_files(
+                                    user_id, project_id, user_screen_index, has_figma, image_count
+                                )
+                                
+                                # Process into wireframes (strips all styling)
+                                wireframe_data = await process_redesign_references(
+                                    ref_files,
+                                    llm
+                                )
+                                
+                                if wireframe_data.get('has_wireframes'):
+                                    # Add wireframe Figma data if available
+                                    if wireframe_data.get('wireframe_figma'):
+                                        wireframe_json = prepare_wireframe_for_llm(
+                                            wireframe_data['wireframe_figma'],
+                                            max_depth=6
+                                        )
+                                        screen_content.append({
+                                            "type": "text",
+                                            "text": f"\n{wireframe_json}"
+                                        })
+                                    
+                                    # Add wireframe descriptions and images
+                                    for idx, (description, wireframe_img) in enumerate(zip(
+                                        wireframe_data.get('wireframe_descriptions', []),
+                                        wireframe_data.get('wireframe_images', [])
+                                    )):
+                                        # Add text description
+                                        screen_content.append({
+                                            "type": "text",
+                                            "text": f"\n### Wireframe Structure (Image {idx + 1}):\n\n{description}\n"
+                                        })
+                                        
+                                        # Add wireframe image
+                                        screen_content.append({
+                                            "type": "image",
+                                            "source": {
+                                                "type": "base64",
+                                                "media_type": wireframe_img.get('media_type', 'image/png'),
+                                                "data": wireframe_img['data']
+                                            }
+                                        })
+                                    
+                                    # Add explicit redesign mode instruction
+                                    screen_content.append({
+                                        "type": "text",
+                                        "text": "\n\n**REDESIGN MODE ACTIVE**: The above wireframes show ONLY structure and content. All styling has been removed. Your task is to preserve the component types, text labels, and layout arrangement exactly, but apply DTM styling completely. Do not try to recreate any visual styling from the wireframes.\n"
+                                    })
+                                    
+                                    print(f"  ✓ Wireframe processing complete!")
+                                else:
+                                    print(f"  ⚠️  No wireframes extracted, proceeding without reference")
+                                
+                            except Exception as e:
+                                print(f"Error processing wireframes for screen {user_screen_index}: {e}")
+                                import traceback
+                                traceback.print_exc()
+                    elif reference_mode == "inspiration":
+                        # Use general inspiration images
+                        for img in inspiration_images:
+                            screen_content.append({
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": img.get('media_type', 'image/png'),
+                                    "data": img['data']
+                                }
+                            })
+                    else:
+                        # No reference mode or null - use general inspiration images
+                        for img in inspiration_images:
+                            screen_content.append({
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": img.get('media_type', 'image/png'),
+                                    "data": img['data']
+                                }
+                            })
                 
                 screen_response = await llm.call_claude(
-                    prompt_name="generate_ui_v2",
+                    prompt_name=prompt_name,
                     user_message=screen_content
                 )
                 

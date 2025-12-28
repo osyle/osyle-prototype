@@ -108,7 +108,7 @@ export default function Home() {
   const [ideaText, setIdeaText] = useState('')
 
   // Screen-based design inputs
-  type ScreenMode = 'exact' | 'inspiration'
+  type ScreenMode = 'exact' | 'redesign' | 'inspiration'
   interface ScreenInput {
     id: string
     name: string
@@ -122,7 +122,7 @@ export default function Home() {
       id: '1',
       name: '',
       description: '',
-      mode: 'exact',
+      mode: 'redesign',
       figmaFile: null,
       imageFiles: [],
     },
@@ -826,7 +826,7 @@ export default function Home() {
           id: '1',
           name: '',
           description: '',
-          mode: 'exact',
+          mode: 'redesign',
           figmaFile: null,
           imageFiles: [],
         },
@@ -1272,11 +1272,27 @@ export default function Home() {
                       className="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all"
                       style={{
                         backgroundColor:
-                          screen.mode === 'exact' ? '#4A90E2' : '#F4F4F4',
+                          screen.mode === 'exact' ? '#9333EA' : '#F4F4F4',
                         color: screen.mode === 'exact' ? '#FFFFFF' : '#929397',
                       }}
                     >
-                      Exact Recreation
+                      Exact Copy
+                    </button>
+                    <button
+                      onClick={() => {
+                        const newScreens = [...screens]
+                        newScreens[index].mode = 'redesign'
+                        setScreens(newScreens)
+                      }}
+                      className="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all"
+                      style={{
+                        backgroundColor:
+                          screen.mode === 'redesign' ? '#4A90E2' : '#F4F4F4',
+                        color:
+                          screen.mode === 'redesign' ? '#FFFFFF' : '#929397',
+                      }}
+                    >
+                      Redesign
                     </button>
                     <button
                       onClick={() => {
@@ -1293,13 +1309,13 @@ export default function Home() {
                           screen.mode === 'inspiration' ? '#FFFFFF' : '#929397',
                       }}
                     >
-                      Loose Inspiration
+                      Inspiration
                     </button>
                   </div>
 
                   {/* Upload zones based on mode */}
-                  {screen.mode === 'exact' ? (
-                    // Exact mode: Figma + Image side by side
+                  {screen.mode === 'exact' || screen.mode === 'redesign' ? (
+                    // Exact/Redesign mode: Figma + Image side by side
                     <div className="grid grid-cols-2 gap-3">
                       {/* Figma upload */}
                       <div>
@@ -1591,8 +1607,10 @@ export default function Home() {
                   {/* Helper text */}
                   <p className="text-xs mt-2" style={{ color: '#929397' }}>
                     {screen.mode === 'exact'
-                      ? '💡 Upload your design to recreate with improved styling'
-                      : '💡 Upload images for content inspiration'}
+                      ? '💎 Recreate this design pixel-perfect'
+                      : screen.mode === 'redesign'
+                        ? '✨ Preserve content, redesign with your taste model'
+                        : '💡 Use as loose creative inspiration'}
                   </p>
                 </div>
               ))}
@@ -1608,7 +1626,7 @@ export default function Home() {
                     id: newId,
                     name: '',
                     description: '',
-                    mode: 'exact',
+                    mode: 'redesign',
                     figmaFile: null,
                     imageFiles: [],
                   },
