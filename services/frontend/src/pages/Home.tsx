@@ -2130,20 +2130,43 @@ export default function Home() {
 
                       {/* Card footer with project info */}
                       <div
-                        className="p-4"
+                        className="p-4 flex items-center justify-between"
                         style={{ backgroundColor: '#FFFFFF' }}
                       >
-                        <div
-                          className="text-sm font-medium mb-1 truncate"
-                          style={{ color: '#3B3B3B' }}
+                        <div className="flex-1 min-w-0">
+                          <div
+                            className="text-sm font-medium mb-1 truncate"
+                            style={{ color: '#3B3B3B' }}
+                          >
+                            {project.name}
+                          </div>
+                          <div className="text-xs" style={{ color: '#929397' }}>
+                            {project.rendering_mode === 'react'
+                              ? 'React'
+                              : 'Design ML'}
+                          </div>
+                        </div>
+
+                        {/* JSON View Button */}
+                        <button
+                          onClick={e => {
+                            e.stopPropagation()
+                            const jsonString = JSON.stringify(project, null, 2)
+                            const blob = new Blob([jsonString], {
+                              type: 'application/json',
+                            })
+                            const url = URL.createObjectURL(blob)
+                            window.open(url, '_blank')
+                          }}
+                          className="ml-3 p-2 rounded-lg transition-all hover:scale-110"
+                          style={{
+                            backgroundColor: '#F4F4F4',
+                            color: '#4A90E2',
+                          }}
+                          title="View raw JSON"
                         >
-                          {project.name}
-                        </div>
-                        <div className="text-xs" style={{ color: '#929397' }}>
-                          {project.rendering_mode === 'react'
-                            ? 'React'
-                            : 'Design ML'}
-                        </div>
+                          <FileJson size={18} />
+                        </button>
                       </div>
                     </div>
                   )
