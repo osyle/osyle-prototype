@@ -28,6 +28,14 @@ import api from '../services/api'
 import { type FlowGraph } from '../types/home.types'
 
 type GenerationStage = 'idle' | 'generating' | 'complete' | 'error'
+type RethinkStage =
+  | 'analyzing'
+  | 'principles'
+  | 'exploring'
+  | 'synthesizing'
+  | 'flow'
+  | 'screens'
+  | null
 
 // Extended screen type with loading states
 // These fields are added dynamically during progressive generation
@@ -69,6 +77,7 @@ export default function Editor() {
   // Generation state
   const [generationStage, setGenerationStage] =
     useState<GenerationStage>('idle')
+  const [rethinkStage, setRethinkStage] = useState<RethinkStage>(null)
   const [flowGraph, setFlowGraph] = useState<FlowGraph | null>(null)
   const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null)
   const [isFlowNavigatorOpen, setIsFlowNavigatorOpen] = useState(false)
@@ -479,6 +488,37 @@ export default function Editor() {
       await api.llm.generateFlowProgressive(project.project_id, {
         onProgress: (stage, message) => {
           console.log(`[${stage}] ${message}`)
+
+          // Track rethink substages based on progress messages
+          if (stage === 'rethinking') {
+            if (message.includes('Analyzing') || message.includes('intent')) {
+              setRethinkStage('analyzing')
+            } else if (
+              message.includes('Deriving') ||
+              message.includes('principles')
+            ) {
+              setRethinkStage('principles')
+            } else if (
+              message.includes('Generating') ||
+              message.includes('explorations')
+            ) {
+              setRethinkStage('exploring')
+            } else if (
+              message.includes('Synthesizing') ||
+              message.includes('optimal')
+            ) {
+              setRethinkStage('synthesizing')
+            }
+          } else if (stage === 'generating_flow') {
+            setRethinkStage('flow')
+          } else if (stage === 'generating_screen') {
+            setRethinkStage('screens')
+          }
+        },
+        onRethinkComplete: rethinkData => {
+          console.log('✅ Rethink complete!', rethinkData)
+          // Transition to flow generation stage
+          setRethinkStage('flow')
         },
         onFlowArchitecture: flowArch => {
           console.log('✅ Flow architecture ready!')
@@ -1750,7 +1790,7 @@ export default function Editor() {
           </div>
         )}
 
-        {/* Generating Flow Overlay */}
+        {/* Multi-Stage Generation Overlay */}
         {generationStage === 'generating' && (
           <div
             className="fixed inset-0 z-[100] flex items-center justify-center"
@@ -1760,113 +1800,572 @@ export default function Editor() {
               WebkitBackdropFilter: 'blur(12px)',
             }}
           >
-            <div
-              className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-in fade-in duration-500"
-              style={{
-                backgroundColor: '#FFFFFF',
-                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
-                maxWidth: '420px',
-                width: '90%',
-              }}
-            >
-              {/* Animated Loading Icon - Orbiting Dots */}
-              <div className="relative w-32 h-32 flex items-center justify-center">
-                {/* Center Circle */}
-                <div
-                  className="absolute inset-0 flex items-center justify-center"
-                  style={{
-                    animation: 'pulse 2s ease-in-out infinite',
-                  }}
-                >
+            {/* Stage 1: Analyzing Intent */}
+            {rethinkStage === 'analyzing' && (
+              <div
+                key="analyzing"
+                className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+                  maxWidth: '420px',
+                  width: '90%',
+                }}
+              >
+                <div className="relative w-32 h-32 flex items-center justify-center">
+                  {/* Center Magnifying Glass */}
                   <div
-                    className="w-16 h-16 rounded-full flex items-center justify-center"
+                    className="absolute inset-0 flex items-center justify-center"
                     style={{
-                      background:
-                        'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
-                      boxShadow: '0 8px 32px rgba(102, 126, 234, 0.4)',
-                    }}
-                  >
-                    <Sparkles size={28} style={{ color: '#FFFFFF' }} />
-                  </div>
-                </div>
-
-                {/* Orbiting Dots */}
-                {[0, 1, 2, 3].map(i => (
-                  <div
-                    key={i}
-                    className="absolute inset-0"
-                    style={{
-                      animation: `orbit 3s linear infinite`,
-                      animationDelay: `${i * 0.75}s`,
+                      animation: 'pulse-slow 3s ease-in-out infinite',
                     }}
                   >
                     <div
-                      className="absolute w-4 h-4 rounded-full"
+                      className="w-20 h-20 rounded-full flex items-center justify-center"
                       style={{
                         background:
-                          i % 2 === 0
-                            ? 'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)'
-                            : 'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
-                        boxShadow:
-                          i % 2 === 0
-                            ? '0 4px 12px rgba(245, 87, 108, 0.5)'
-                            : '0 4px 12px rgba(0, 242, 254, 0.5)',
-                        top: '0',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
+                          'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
+                        boxShadow: '0 8px 32px rgba(79, 172, 254, 0.4)',
+                      }}
+                    >
+                      <svg
+                        width="40"
+                        height="40"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="white"
+                        strokeWidth="2.5"
+                      >
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* Scanning Rays */}
+                  {[0, 1, 2].map(i => (
+                    <div
+                      key={i}
+                      className="absolute inset-0"
+                      style={{
+                        animation: `scan-ray 2s ease-in-out infinite`,
+                        animationDelay: `${i * 0.6}s`,
+                      }}
+                    >
+                      <div
+                        className="absolute w-full h-0.5"
+                        style={{
+                          background:
+                            'linear-gradient(90deg, transparent, #4FACFE, transparent)',
+                          top: '50%',
+                          left: '0',
+                        }}
+                      />
+                    </div>
+                  ))}
+
+                  {/* Pulsing Rings */}
+                  {[0, 1].map(i => (
+                    <div
+                      key={i}
+                      className="absolute inset-0"
+                      style={{
+                        border: '2px solid #4FACFE',
+                        borderRadius: '50%',
+                        animation: `ping 2s cubic-bezier(0, 0, 0.2, 1) infinite`,
+                        animationDelay: `${i * 1}s`,
                       }}
                     />
-                  </div>
-                ))}
+                  ))}
+                </div>
 
-                {/* Rotating Ring */}
-                <div
-                  className="absolute inset-4"
-                  style={{
-                    border: '2px solid transparent',
-                    borderTopColor: '#667EEA',
-                    borderRightColor: '#667EEA',
-                    borderRadius: '50%',
-                    animation: 'spin 4s linear infinite',
-                    opacity: 0.3,
-                  }}
-                />
+                <div className="text-center">
+                  <h3
+                    className="text-xl font-semibold mb-2"
+                    style={{ color: '#1F1F20' }}
+                  >
+                    Analyzing design intent
+                  </h3>
+                  <p
+                    className="text-sm leading-relaxed"
+                    style={{ color: '#929397' }}
+                  >
+                    Questioning assumptions and understanding user needs...
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {[0, 1, 2].map(i => (
+                    <div
+                      key={i}
+                      className="w-2 h-2 rounded-full"
+                      style={{
+                        background:
+                          'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
+                        animation: 'bounce 1.4s ease-in-out infinite',
+                        animationDelay: `${i * 0.2}s`,
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
+            )}
 
-              {/* Loading Text */}
-              <div className="text-center">
-                <h3
-                  className="text-xl font-semibold mb-2"
-                  style={{ color: '#1F1F20' }}
-                >
-                  Generating your flow
-                </h3>
-                <p
-                  className="text-sm leading-relaxed"
-                  style={{ color: '#929397' }}
-                >
-                  Creating screens and connecting interactions...
-                </p>
-              </div>
-
-              {/* Animated Progress Dots */}
-              <div className="flex items-center gap-2">
-                {[0, 1, 2].map(i => (
+            {/* Stage 2: Deriving Principles */}
+            {rethinkStage === 'principles' && (
+              <div
+                key="principles"
+                className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+                  maxWidth: '420px',
+                  width: '90%',
+                }}
+              >
+                <div className="relative w-32 h-32 flex items-center justify-center">
+                  {/* Center Foundation */}
                   <div
-                    key={i}
-                    className="w-2 h-2 rounded-full"
+                    className="absolute inset-0 flex items-center justify-center"
                     style={{
-                      background:
-                        'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
-                      animation: 'bounce 1.4s ease-in-out infinite',
-                      animationDelay: `${i * 0.2}s`,
+                      animation: 'pulse-slow 3s ease-in-out infinite',
+                    }}
+                  >
+                    <div
+                      className="w-20 h-20 rounded-full flex items-center justify-center"
+                      style={{
+                        background:
+                          'linear-gradient(135deg, #A18AFF 0%, #6E56CF 100%)',
+                        boxShadow: '0 8px 32px rgba(161, 138, 255, 0.4)',
+                      }}
+                    >
+                      <svg
+                        width="40"
+                        height="40"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="white"
+                        strokeWidth="2.5"
+                      >
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                        <path d="M2 17l10 5 10-5"></path>
+                        <path d="M2 12l10 5 10-5"></path>
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* Stacking Blocks */}
+                  {[0, 1, 2, 3].map(i => (
+                    <div
+                      key={i}
+                      className="absolute"
+                      style={{
+                        animation: `stack-up 2.5s ease-out infinite`,
+                        animationDelay: `${i * 0.3}s`,
+                        top: `${60 - i * 12}px`,
+                        left: '50%',
+                      }}
+                    >
+                      <div
+                        className="w-8 h-8 rounded-lg"
+                        style={{
+                          background:
+                            i % 2 === 0
+                              ? 'linear-gradient(135deg, #FFD6A5 0%, #FFAB73 100%)'
+                              : 'linear-gradient(135deg, #A18AFF 0%, #6E56CF 100%)',
+                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                          transform: 'translateX(-50%)',
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="text-center">
+                  <h3
+                    className="text-xl font-semibold mb-2"
+                    style={{ color: '#1F1F20' }}
+                  >
+                    Deriving core principles
+                  </h3>
+                  <p
+                    className="text-sm leading-relaxed"
+                    style={{ color: '#929397' }}
+                  >
+                    Building UX foundations from first principles...
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {[0, 1, 2].map(i => (
+                    <div
+                      key={i}
+                      className="w-2 h-2 rounded-full"
+                      style={{
+                        background:
+                          'linear-gradient(135deg, #A18AFF 0%, #6E56CF 100%)',
+                        animation: 'bounce 1.4s ease-in-out infinite',
+                        animationDelay: `${i * 0.2}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Stage 3: Exploring Directions */}
+            {rethinkStage === 'exploring' && (
+              <div
+                key="exploring"
+                className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+                  maxWidth: '420px',
+                  width: '90%',
+                }}
+              >
+                <div className="relative w-32 h-32 flex items-center justify-center">
+                  {/* Center Node */}
+                  <div
+                    className="absolute inset-0 flex items-center justify-center"
+                    style={{
+                      animation: 'pulse-slow 3s ease-in-out infinite',
+                    }}
+                  >
+                    <div
+                      className="w-16 h-16 rounded-full flex items-center justify-center"
+                      style={{
+                        background:
+                          'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)',
+                        boxShadow: '0 8px 32px rgba(240, 147, 251, 0.4)',
+                      }}
+                    >
+                      <svg
+                        width="32"
+                        height="32"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="white"
+                        strokeWidth="2.5"
+                      >
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="16"></line>
+                        <line x1="8" y1="12" x2="16" y2="12"></line>
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* Branching Lines & Nodes */}
+                  {[0, 1, 2, 3, 4, 5].map(i => {
+                    const angle = i * 60 * (Math.PI / 180)
+                    const x = Math.cos(angle) * 56
+                    const y = Math.sin(angle) * 56
+                    return (
+                      <div key={i}>
+                        {/* Line */}
+                        <div
+                          className="absolute"
+                          style={{
+                            width: '60px',
+                            height: '2px',
+                            background: `linear-gradient(90deg, #F093FB, ${
+                              i % 3 === 0
+                                ? '#4FACFE'
+                                : i % 3 === 1
+                                  ? '#10B981'
+                                  : '#F59E0B'
+                            })`,
+                            top: '50%',
+                            left: '50%',
+                            transform: `translate(-50%, -50%) rotate(${i * 60}deg)`,
+                            transformOrigin: 'left center',
+                            animation: `branch-grow 2s ease-out infinite`,
+                            animationDelay: `${i * 0.15}s`,
+                          }}
+                        />
+                        {/* End Node */}
+                        <div
+                          className="absolute w-3 h-3 rounded-full"
+                          style={{
+                            background:
+                              i % 3 === 0
+                                ? '#4FACFE'
+                                : i % 3 === 1
+                                  ? '#10B981'
+                                  : '#F59E0B',
+                            top: `calc(50% + ${y}px)`,
+                            left: `calc(50% + ${x}px)`,
+                            transform: 'translate(-50%, -50%)',
+                            animation: `pop-in 2s ease-out infinite`,
+                            animationDelay: `${i * 0.15 + 0.5}s`,
+                          }}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="text-center">
+                  <h3
+                    className="text-xl font-semibold mb-2"
+                    style={{ color: '#1F1F20' }}
+                  >
+                    Exploring strategic directions
+                  </h3>
+                  <p
+                    className="text-sm leading-relaxed"
+                    style={{ color: '#929397' }}
+                  >
+                    Generating multiple design approaches...
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {[0, 1, 2].map(i => (
+                    <div
+                      key={i}
+                      className="w-2 h-2 rounded-full"
+                      style={{
+                        background:
+                          'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)',
+                        animation: 'bounce 1.4s ease-in-out infinite',
+                        animationDelay: `${i * 0.2}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Stage 4: Synthesizing Design */}
+            {rethinkStage === 'synthesizing' && (
+              <div
+                key="synthesizing"
+                className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+                  maxWidth: '420px',
+                  width: '90%',
+                }}
+              >
+                <div className="relative w-32 h-32 flex items-center justify-center">
+                  {/* Center Merged Icon */}
+                  <div
+                    className="absolute inset-0 flex items-center justify-center"
+                    style={{
+                      animation: 'pulse-slow 3s ease-in-out infinite',
+                    }}
+                  >
+                    <div
+                      className="w-20 h-20 rounded-full flex items-center justify-center"
+                      style={{
+                        background:
+                          'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                        boxShadow: '0 8px 32px rgba(16, 185, 129, 0.4)',
+                      }}
+                    >
+                      <Sparkles size={36} style={{ color: '#FFFFFF' }} />
+                    </div>
+                  </div>
+
+                  {/* Converging Particles */}
+                  {[0, 1, 2, 3, 4, 5, 6, 7].map(i => {
+                    const angle = i * 45 * (Math.PI / 180)
+                    const startX = Math.cos(angle) * 60
+                    const startY = Math.sin(angle) * 60
+                    return (
+                      <div
+                        key={i}
+                        className="absolute w-3 h-3 rounded-full"
+                        style={{
+                          background:
+                            i % 2 === 0
+                              ? 'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)'
+                              : 'linear-gradient(135deg, #FFD6A5 0%, #FFAB73 100%)',
+                          animation: `converge-${i} 2s ease-in-out infinite`,
+                        }}
+                      >
+                        <style>{`
+                          @keyframes converge-${i} {
+                            0% {
+                              transform: translate(${startX}px, ${startY}px) scale(1);
+                              opacity: 1;
+                            }
+                            50% {
+                              transform: translate(0, 0) scale(0.5);
+                              opacity: 0.8;
+                            }
+                            100% {
+                              transform: translate(${startX}px, ${startY}px) scale(1);
+                              opacity: 1;
+                            }
+                          }
+                        `}</style>
+                      </div>
+                    )
+                  })}
+
+                  {/* Merging Rings */}
+                  {[0, 1, 2].map(i => (
+                    <div
+                      key={`ring-${i}`}
+                      className="absolute inset-0"
+                      style={{
+                        border: '2px solid #10B981',
+                        borderRadius: '50%',
+                        animation: `merge-ring 2s ease-in-out infinite`,
+                        animationDelay: `${i * 0.3}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+
+                <div className="text-center">
+                  <h3
+                    className="text-xl font-semibold mb-2"
+                    style={{ color: '#1F1F20' }}
+                  >
+                    Synthesizing optimal design
+                  </h3>
+                  <p
+                    className="text-sm leading-relaxed"
+                    style={{ color: '#929397' }}
+                  >
+                    Combining the best elements into a cohesive solution...
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {[0, 1, 2].map(i => (
+                    <div
+                      key={i}
+                      className="w-2 h-2 rounded-full"
+                      style={{
+                        background:
+                          'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                        animation: 'bounce 1.4s ease-in-out infinite',
+                        animationDelay: `${i * 0.2}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Stage 5: Flow & Screens (Combined) */}
+            {(rethinkStage === 'flow' ||
+              rethinkStage === 'screens' ||
+              rethinkStage === null) && (
+              <div
+                key="flow"
+                className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+                  maxWidth: '420px',
+                  width: '90%',
+                }}
+              >
+                <div className="relative w-32 h-32 flex items-center justify-center">
+                  <div
+                    className="absolute inset-0 flex items-center justify-center"
+                    style={{
+                      animation: 'pulse 2s ease-in-out infinite',
+                    }}
+                  >
+                    <div
+                      className="w-16 h-16 rounded-full flex items-center justify-center"
+                      style={{
+                        background:
+                          'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+                        boxShadow: '0 8px 32px rgba(102, 126, 234, 0.4)',
+                      }}
+                    >
+                      <Sparkles size={28} style={{ color: '#FFFFFF' }} />
+                    </div>
+                  </div>
+
+                  {[0, 1, 2, 3].map(i => (
+                    <div
+                      key={i}
+                      className="absolute inset-0"
+                      style={{
+                        animation: `orbit 3s linear infinite`,
+                        animationDelay: `${i * 0.75}s`,
+                      }}
+                    >
+                      <div
+                        className="absolute w-4 h-4 rounded-full"
+                        style={{
+                          background:
+                            i % 2 === 0
+                              ? 'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)'
+                              : 'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
+                          boxShadow:
+                            i % 2 === 0
+                              ? '0 4px 12px rgba(245, 87, 108, 0.5)'
+                              : '0 4px 12px rgba(0, 242, 254, 0.5)',
+                          top: '0',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                        }}
+                      />
+                    </div>
+                  ))}
+
+                  <div
+                    className="absolute inset-4"
+                    style={{
+                      border: '2px solid transparent',
+                      borderTopColor: '#667EEA',
+                      borderRightColor: '#667EEA',
+                      borderRadius: '50%',
+                      animation: 'spin 4s linear infinite',
+                      opacity: 0.3,
                     }}
                   />
-                ))}
-              </div>
+                </div>
 
-              {/* Animation Styles */}
-              <style>{`
+                <div className="text-center">
+                  <h3
+                    className="text-xl font-semibold mb-2"
+                    style={{ color: '#1F1F20' }}
+                  >
+                    {rethinkStage === 'flow'
+                      ? 'Architecting flow'
+                      : 'Generating screens'}
+                  </h3>
+                  <p
+                    className="text-sm leading-relaxed"
+                    style={{ color: '#929397' }}
+                  >
+                    {rethinkStage === 'flow'
+                      ? 'Creating flow structure and screen transitions...'
+                      : 'Bringing your design to life with beautiful UI...'}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {[0, 1, 2].map(i => (
+                    <div
+                      key={i}
+                      className="w-2 h-2 rounded-full"
+                      style={{
+                        background:
+                          'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+                        animation: 'bounce 1.4s ease-in-out infinite',
+                        animationDelay: `${i * 0.2}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Animation Styles */}
+            <style>{`
               @keyframes orbit {
                 0% { transform: rotate(0deg); }
                 100% { transform: rotate(360deg); }
@@ -1879,6 +2378,10 @@ export default function Editor() {
                 0%, 100% { transform: scale(1); }
                 50% { transform: scale(1.05); }
               }
+              @keyframes pulse-slow {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.08); }
+              }
               @keyframes bounce {
                 0%, 80%, 100% { 
                   transform: scale(0.8);
@@ -1889,7 +2392,7 @@ export default function Editor() {
                   opacity: 1;
                 }
               }
-              @keyframes fade-in {
+              @keyframes modal-in {
                 from { 
                   opacity: 0;
                   transform: scale(0.95);
@@ -1899,11 +2402,97 @@ export default function Editor() {
                   transform: scale(1);
                 }
               }
-              .animate-in {
-                animation: fade-in 0.5s ease-out;
+              @keyframes scan-ray {
+                0% {
+                  opacity: 0;
+                  transform: scaleX(0);
+                }
+                50% {
+                  opacity: 1;
+                  transform: scaleX(1);
+                }
+                100% {
+                  opacity: 0;
+                  transform: scaleX(0);
+                }
+              }
+              @keyframes ping {
+                75%, 100% {
+                  transform: scale(2);
+                  opacity: 0;
+                }
+              }
+              @keyframes stack-up {
+                0% {
+                  opacity: 0;
+                  transform: translateY(60px) scale(0.5);
+                }
+                20% {
+                  opacity: 1;
+                }
+                40% {
+                  transform: translateY(0) scale(1);
+                }
+                80% {
+                  opacity: 1;
+                }
+                100% {
+                  opacity: 0;
+                  transform: translateY(-20px) scale(0.8);
+                }
+              }
+              @keyframes branch-grow {
+                0% {
+                  opacity: 0;
+                  transform: scaleX(0);
+                }
+                50% {
+                  opacity: 1;
+                  transform: scaleX(1);
+                }
+                100% {
+                  opacity: 0;
+                  transform: scaleX(0);
+                }
+              }
+              @keyframes pop-in {
+                0%, 30% {
+                  opacity: 0;
+                  transform: scale(0);
+                }
+                50% {
+                  opacity: 1;
+                  transform: scale(1.2);
+                }
+                70% {
+                  transform: scale(0.9);
+                }
+                85% {
+                  transform: scale(1);
+                }
+                100% {
+                  opacity: 0;
+                  transform: scale(0);
+                }
+              }
+              @keyframes merge-ring {
+                0% {
+                  opacity: 0;
+                  transform: scale(1.5);
+                }
+                50% {
+                  opacity: 0.6;
+                  transform: scale(0.8);
+                }
+                100% {
+                  opacity: 0;
+                  transform: scale(0.3);
+                }
+              }
+              .animate-modal-in {
+                animation: modal-in 0.5s ease-out;
               }
             `}</style>
-            </div>
           </div>
         )}
 

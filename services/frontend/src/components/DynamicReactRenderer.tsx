@@ -30,6 +30,13 @@ export default function DynamicReactRenderer({
       cleanCode = cleanCode.replace(/```\s*$/m, '')
       cleanCode = cleanCode.trim()
 
+      // Remove standalone language identifiers (typescript, javascript, jsx, etc)
+      cleanCode = cleanCode.replace(
+        /^(typescript|javascript|jsx|tsx|ts|js)\s*$/m,
+        '',
+      )
+      cleanCode = cleanCode.trim()
+
       // 🛡️ SAFETY: Remove any import statements
       // React hooks are provided as function parameters, imports will break execution
       // This catches cases where LLM ignores prompt instructions
@@ -40,10 +47,22 @@ export default function DynamicReactRenderer({
       cleanCode = cleanCode.replace(/^import\s+['"][^'"]+['"]\s*;?\s*$/gm, '')
       cleanCode = cleanCode.trim()
 
-      // Transform JSX to JS using Babel
+      // 🛡️ SAFETY: Remove TypeScript type annotations that could reference 'typescript'
+      // Remove type annotations like ": string", ": number", etc.
+      cleanCode = cleanCode.replace(
+        /:\s*[A-Z][a-zA-Z0-9<>[\]|\s,{}]+(?=[,)\s=}])/g,
+        '',
+      )
+      // Remove interface/type definitions
+      cleanCode = cleanCode.replace(/^(interface|type)\s+\w+.*$/gm, '')
+      // Remove "as" type assertions
+      cleanCode = cleanCode.replace(/\s+as\s+\w+/g, '')
+      cleanCode = cleanCode.trim()
+
+      // Transform JSX to JS using Babel (with typescript preset to handle any remaining TS)
       const transformedCode = Babel.transform(cleanCode, {
-        presets: ['react'],
-        filename: 'dynamic-component.jsx',
+        presets: ['react', 'typescript'],
+        filename: 'dynamic-component.tsx',
       }).code
 
       // Remove "export default" and extract the function

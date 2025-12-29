@@ -27,6 +27,9 @@ from app.unified_dtr_builder import prepare_figma_for_llm
 # Import wireframe processor for redesign mode
 from app.wireframe_processor import process_redesign_references, prepare_wireframe_for_llm
 
+# Import rethink processor for rethink mode
+from app.rethink_processor import RethinkProcessor
+
 
 async def send_progress(websocket: WebSocket, stage: str, message: str, data: Dict[str, Any] = None):
     """Send progress update to client"""
@@ -434,18 +437,38 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
             await send_error(websocket, "Device info required")
             return
         
-        # Load DTM if available
+        # Load DTM if available (with filtering for rethink mode)
         await send_progress(websocket, "loading_dtm", "Loading designer taste model...")
         dtm_guidance = None
+        dtm = None  # Full DTM object for rethink mode
         selected_taste_id = project.get("selected_taste_id")
+        selected_resource_ids = project.get("selected_resource_ids", [])
         
         if selected_taste_id:
             try:
-                dtm_data = storage.get_taste_dtm(user_id, selected_taste_id)
-                if dtm_data:
-                    dtm_guidance = f"DTM (Designer Taste Model):\n{json.dumps(dtm_data, indent=2)}"
-            except:
-                pass
+                # Load raw DTM
+                raw_dtm = storage.get_taste_dtm(user_id, selected_taste_id)
+                
+                if raw_dtm:
+                    # Filter if specific resources selected
+                    if selected_resource_ids and len(selected_resource_ids) > 0:
+                        from app.dtm_context_filter_v2 import DTMContextFilterV2
+                        
+                        filter = DTMContextFilterV2()
+                        dtm = filter.filter_by_resources(
+                            dtm=raw_dtm,
+                            selected_resource_ids=selected_resource_ids
+                        )
+                        print(f"  DTM filtered to {len(selected_resource_ids)} selected resources")
+                    else:
+                        dtm = raw_dtm
+                        total_resources = dtm.get('meta', {}).get('total_resources', 0)
+                        print(f"  DTM loaded ({total_resources} total resources)")
+                    
+                    # Create DTM guidance string for flow architecture (legacy)
+                    dtm_guidance = f"DTM (Designer Taste Model):\n{json.dumps(dtm, indent=2)}"
+            except Exception as e:
+                print(f"  Warning: Could not load DTM: {e}")
         
         # Load inspiration images
         await send_progress(websocket, "loading_images", "Loading inspiration images...")
@@ -457,6 +480,75 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
             limited_keys = image_keys[-MAX_INSPIRATION_IMAGES_FOR_LLM:]
             inspiration_images = storage.get_inspiration_images(user_id, project_id, limited_keys)
         
+        # Rethink mode processing
+        has_rethink_screens = any(
+            screen_def.get('mode') == 'rethink'
+            for screen_def in screen_definitions
+        )
+        
+        rethink_data = None
+        
+        if has_rethink_screens:
+            # Get reference files for first rethink screen
+            rethink_screen_index = next(
+                i for i, sd in enumerate(screen_definitions)
+                if sd.get('mode') == 'rethink'
+            )
+            
+            screen_def = screen_definitions[rethink_screen_index]
+            has_figma = screen_def.get('has_figma', False)
+            image_count = screen_def.get('image_count', 0)
+            
+            reference_files = {}
+            
+            if has_figma or image_count > 0:
+                try:
+                    ref_files = storage.get_screen_reference_files(
+                        user_id, project_id, rethink_screen_index, has_figma, image_count
+                    )
+                    reference_files = ref_files
+                except Exception as e:
+                    print(f"Warning: Could not load rethink reference files: {e}")
+            
+            # Run rethink pipeline with DTM
+            try:
+                llm = get_llm_service()
+                
+                # Create progress callback for rethink steps
+                async def rethink_progress(stage: str, message: str):
+                    await send_progress(websocket, stage, message)
+                
+                rethink_processor = RethinkProcessor(llm, progress_callback=rethink_progress)
+                
+                rethink_data = await rethink_processor.process_rethink_complete(
+                    reference_files=reference_files,
+                    task_description=task_description,
+                    device_info=device_info,
+                    domain=None,  # Will be inferred
+                    dtm=dtm  # Pass DTM for quirk-informed rethinking
+                )
+                
+                # Send rethink results to client
+                await websocket.send_json({
+                    "type": "rethink_complete",
+                    "data": {
+                        "intent_analysis": rethink_data.get('intent_analysis'),
+                        "first_principles": rethink_data.get('first_principles'),
+                        "explorations": rethink_data.get('explorations'),
+                        "optimal_design": rethink_data.get('optimal_design'),
+                        "has_designer_philosophy": rethink_data.get('designer_philosophy') is not None
+                    }
+                })
+                
+                print(f"  ✓ Strategic rethinking complete")
+                
+            except Exception as e:
+                print(f"Error in rethink pipeline: {e}")
+                import traceback
+                traceback.print_exc()
+                await send_error(websocket, f"Rethink pipeline failed: {str(e)}")
+                return
+        
         # Generate flow architecture
         await send_progress(websocket, "generating_flow", "Generating flow architecture...")
         flow_arch_message = f"TASK: {task_description}\n\nDEVICE CONTEXT:\n{json.dumps(device_info, indent=2)}\n\nMAX SCREENS: {max_screens}"
@@ -466,6 +558,13 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
             flow_arch_message += f"\n\nSCREEN DEFINITIONS:\n{json.dumps(screen_definitions, indent=2)}"
         else:
             flow_arch_message += f"\n\nSCREEN DEFINITIONS: None provided - design the optimal flow from scratch based on the task."
+        
+        # Add rethink context if available
+        if rethink_data:
+            rethink_flow_context = rethink_processor.prepare_rethink_for_flow_architecture(
+                rethink_data, task_description, device_info
+            )
+            flow_arch_message += f"\n\n{rethink_flow_context}"
             
         flow_arch_content = [
             {"type": "text", "text": flow_arch_message}
@@ -484,9 +583,15 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
                 }
             })
         
+        # Determine which flow architecture prompt to use
+        if has_rethink_screens:
+            flow_arch_prompt = "generate_flow_architecture_rethink"
+        else:
+            flow_arch_prompt = "generate_flow_architecture_v2"
+        
         llm = get_llm_service()
         flow_arch_response = await llm.call_claude(
-            prompt_name="generate_flow_architecture_v2",
+            prompt_name=flow_arch_prompt,
             user_message=flow_arch_content,
             parse_json=True
         )
@@ -597,6 +702,26 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
                                     })
                             except Exception as e:
                                 print(f"Error loading screen {user_screen_index} reference files: {e}")
+                
+                elif reference_mode == "rethink":
+                    # RETHINK MODE: Use rethink-specific prompt with strategic context
+                    prompt_name = "generate_ui_rethink"
+                    screen_content = [
+                        {"type": "text", "text": screen_message}
+                    ]
+                    
+                    # Add rethink context (strategic structure + DTM)
+                    if rethink_data:
+                        rethink_ui_context = rethink_processor.prepare_rethink_for_ui_generation(
+                            rethink_data, screen['task_description'], device_info
+                        )
+                        screen_content.append({
+                            "type": "text",
+                            "text": f"\n\n{rethink_ui_context}"
+                        })
+                    
+                    # Note: DTM is included in rethink context, no need to add separately
+                
                 else:
                     # Redesign or Inspiration mode: Use taste-based prompt (with DTM)
                     prompt_name = "generate_ui_with_taste"

@@ -378,7 +378,7 @@ export const projectsAPI = {
     screen_definitions?: Array<{
       name?: string
       description?: string
-      mode: 'exact' | 'redesign' | 'inspiration'
+      mode: 'exact' | 'redesign' | 'inspiration' | 'rethink'
       has_figma: boolean
       has_images: boolean
       image_count: number
@@ -729,30 +729,7 @@ export const llmAPI = {
    */
   generateFlowProgressive: async (
     projectId: string,
-    callbacks: {
-      onProgress?: (
-        // eslint-disable-next-line no-unused-vars
-        stage: string,
-        // eslint-disable-next-line no-unused-vars
-        message: string,
-        // eslint-disable-next-line no-unused-vars
-        data?: Record<string, unknown>,
-      ) => void
-      onFlowArchitecture?: (
-        // eslint-disable-next-line no-unused-vars
-        flowArchitecture: import('./websocketClient').FlowArchitectureResult,
-      ) => void
-      // eslint-disable-next-line no-unused-vars
-      onScreenReady?: (screenId: string, uiCode: string) => void
-      // eslint-disable-next-line no-unused-vars
-      onScreenError?: (screenId: string, error: string) => void
-      onComplete?: (
-        // eslint-disable-next-line no-unused-vars
-        result: import('./websocketClient').FlowCompleteResult,
-      ) => void
-      // eslint-disable-next-line no-unused-vars
-      onError?: (error: string) => void
-    },
+    callbacks: import('./websocketClient').FlowGenerationCallbacks,
   ): Promise<import('./websocketClient').FlowCompleteResult> => {
     const { generateFlowWebSocket } = await import('./websocketClient')
     return await generateFlowWebSocket(projectId, callbacks)

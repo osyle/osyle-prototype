@@ -108,7 +108,7 @@ export default function Home() {
   const [ideaText, setIdeaText] = useState('')
 
   // Screen-based design inputs
-  type ScreenMode = 'exact' | 'redesign' | 'inspiration'
+  type ScreenMode = 'exact' | 'redesign' | 'inspiration' | 'rethink'
   interface ScreenInput {
     id: string
     name: string
@@ -1320,6 +1320,26 @@ export default function Home() {
                         <button
                           onClick={() => {
                             const newScreens = [...screens]
+                            newScreens[index].mode = 'rethink'
+                            setScreens(newScreens)
+                          }}
+                          className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
+                          style={{
+                            backgroundColor:
+                              screen.mode === 'rethink' ? '#F59E0B' : '#F7F5F3',
+                            color:
+                              screen.mode === 'rethink' ? '#FFFFFF' : '#929397',
+                            boxShadow:
+                              screen.mode === 'rethink'
+                                ? '0 4px 12px rgba(245,158,11,0.2)'
+                                : 'none',
+                          }}
+                        >
+                          Rethink
+                        </button>
+                        <button
+                          onClick={() => {
+                            const newScreens = [...screens]
                             newScreens[index].mode = 'inspiration'
                             newScreens[index].figmaFile = null
                             setScreens(newScreens)
@@ -1346,7 +1366,9 @@ export default function Home() {
                     </div>
 
                     {/* Upload zones - elegant design */}
-                    {screen.mode === 'exact' || screen.mode === 'redesign' ? (
+                    {screen.mode === 'exact' ||
+                    screen.mode === 'redesign' ||
+                    screen.mode === 'rethink' ? (
                       <div className="grid grid-cols-2 gap-3">
                         {/* Figma upload - elegant */}
                         <div>
@@ -1675,7 +1697,7 @@ export default function Home() {
                     id: Math.random().toString(36).substr(2, 9),
                     name: '',
                     description: '',
-                    mode: 'exact' as const,
+                    mode: 'rethink' as const,
                     figmaFile: null,
                     imageFiles: [],
                   },

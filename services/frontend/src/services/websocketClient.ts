@@ -232,6 +232,8 @@ export interface FlowGenerationCallbacks {
     data?: Record<string, unknown>,
   ) => void
   // eslint-disable-next-line no-unused-vars
+  onRethinkComplete?: (rethinkData: Record<string, unknown>) => void
+  // eslint-disable-next-line no-unused-vars
   onFlowArchitecture?: (flowArchitecture: FlowArchitectureResult) => void
   onScreenReady?: (
     // eslint-disable-next-line no-unused-vars
@@ -295,6 +297,10 @@ export function generateFlowWebSocket(
               | CompleteUpdate
               | ErrorUpdate
               | {
+                  type: 'rethink_complete'
+                  data: Record<string, unknown>
+                }
+              | {
                   type: 'flow_architecture'
                   data: FlowArchitectureResult
                 }
@@ -313,6 +319,8 @@ export function generateFlowWebSocket(
                 message.message,
                 message.data,
               )
+            } else if (message.type === 'rethink_complete') {
+              callbacks.onRethinkComplete?.(message.data)
             } else if (message.type === 'flow_architecture') {
               callbacks.onFlowArchitecture?.(message.data)
             } else if (message.type === 'screen_ready') {
