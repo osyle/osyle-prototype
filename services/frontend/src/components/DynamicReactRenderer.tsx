@@ -41,18 +41,178 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: '#F5F5F5',
-            borderRadius: '8px',
-            padding: '20px',
-            textAlign: 'center',
+            backgroundColor: '#0A0A0F',
+            backgroundImage: `
+              radial-gradient(circle at 20% 30%, rgba(88, 86, 214, 0.15) 0%, transparent 50%),
+              radial-gradient(circle at 80% 70%, rgba(249, 115, 22, 0.12) 0%, transparent 50%),
+              repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(255, 255, 255, 0.03) 2px,
+                rgba(255, 255, 255, 0.03) 4px
+              )
+            `,
+            position: 'relative',
+            overflow: 'hidden',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
           }}
         >
-          <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎨</div>
+          {/* Animated gradient orbs */}
           <div
-            style={{ fontSize: '14px', color: '#666666', fontWeight: '500' }}
+            style={{
+              position: 'absolute',
+              top: '10%',
+              left: '15%',
+              width: '200px',
+              height: '200px',
+              borderRadius: '50%',
+              background:
+                'radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, transparent 70%)',
+              filter: 'blur(40px)',
+              animation: 'float 8s ease-in-out infinite',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '15%',
+              right: '20%',
+              width: '250px',
+              height: '250px',
+              borderRadius: '50%',
+              background:
+                'radial-gradient(circle, rgba(249, 115, 22, 0.3) 0%, transparent 70%)',
+              filter: 'blur(50px)',
+              animation: 'float 10s ease-in-out infinite reverse',
+            }}
+          />
+
+          {/* Main content */}
+          <div
+            style={{
+              position: 'relative',
+              zIndex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              maxWidth: '500px',
+              padding: '40px',
+              textAlign: 'center',
+            }}
           >
-            Preview Unavailable
+            {/* Icon container with glow */}
+            <div
+              style={{
+                position: 'relative',
+                marginBottom: '32px',
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '120px',
+                  height: '120px',
+                  borderRadius: '50%',
+                  background:
+                    'radial-gradient(circle, rgba(239, 68, 68, 0.3) 0%, transparent 70%)',
+                  filter: 'blur(20px)',
+                  animation: 'pulse 2s ease-in-out infinite',
+                }}
+              />
+              <div
+                style={{
+                  position: 'relative',
+                  fontSize: '72px',
+                  filter: 'drop-shadow(0 0 20px rgba(239, 68, 68, 0.5))',
+                }}
+              >
+                ⚠️
+              </div>
+            </div>
+
+            {/* Title */}
+            <div
+              style={{
+                fontSize: '28px',
+                fontWeight: '700',
+                color: '#FFFFFF',
+                marginBottom: '12px',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              Preview Unavailable
+            </div>
+
+            {/* Description */}
+            <div
+              style={{
+                fontSize: '15px',
+                color: 'rgba(255, 255, 255, 0.6)',
+                lineHeight: '1.6',
+                marginBottom: '24px',
+              }}
+            >
+              The component encountered an error during rendering. This usually
+              happens due to syntax errors or runtime issues in the generated
+              code.
+            </div>
+
+            {/* Decorative element */}
+            <div
+              style={{
+                display: 'flex',
+                gap: '8px',
+                alignItems: 'center',
+                padding: '12px 24px',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: '12px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                backdropFilter: 'blur(10px)',
+              }}
+            >
+              <div
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: '#EF4444',
+                  animation: 'blink 1.5s ease-in-out infinite',
+                }}
+              />
+              <span
+                style={{
+                  fontSize: '13px',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  fontWeight: '500',
+                  fontFamily: 'ui-monospace, monospace',
+                }}
+              >
+                Check console for details
+              </span>
+            </div>
           </div>
+
+          {/* Keyframes animation styles */}
+          <style>{`
+            @keyframes float {
+              0%, 100% { transform: translate(0, 0); }
+              50% { transform: translate(20px, -20px); }
+            }
+            
+            @keyframes pulse {
+              0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+              50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+            }
+            
+            @keyframes blink {
+              0%, 100% { opacity: 1; }
+              50% { opacity: 0.3; }
+            }
+          `}</style>
         </div>
       )
     }
