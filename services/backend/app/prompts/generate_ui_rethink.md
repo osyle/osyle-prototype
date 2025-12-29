@@ -247,11 +247,15 @@ Use the strategic framing from the intent analysis. Content should communicate:
 
 **CRITICAL: NO IMPORT STATEMENTS**
 
-React hooks (useState, useEffect, etc.) are already available - use them directly.
+React hooks (`useState`, `useEffect`, `useCallback`, `useMemo`, `useRef`) are already available in scope - use them directly without any import statements. Imports will break execution.
 
 **CRITICAL: FUNCTION NAME MUST BE "App"**
 
-Always use `function App` - never custom names.
+Always use `export default function App` - never use custom names like `MyComponent` or `DashboardScreen`.
+
+**CRITICAL: NO MARKDOWN CODE BLOCKS**
+
+Output pure React code only - no markdown fences (no \`\`\`jsx, \`\`\`javascript, \`\`\`tsx, or \`\`\`typescript), no explanations, no preamble.
 
 **Structure**:
 
@@ -597,11 +601,15 @@ export default function App({ onTransition }) {
 
 5. **Flow Integration**: Implement all transitions with correct IDs
 
-6. **No Imports**: React hooks available without imports
+6. **NO IMPORT STATEMENTS**: React hooks (`useState`, `useEffect`, `useCallback`, `useMemo`, `useRef`) are already available, use them directly - imports will break execution
 
-7. **Function Name**: Always `function App`
+7. **FUNCTION NAME MUST BE "App"**: Always use `export default function App`, never custom names
 
-8. **Production Quality**: This is a real design, not a prototype - polish matters
+8. **NO MARKDOWN CODE BLOCKS**: Output pure React code only, no \`\`\`jsx, \`\`\`javascript, \`\`\`tsx, or \`\`\`typescript fences, no explanations, no preamble
+
+9. **Root div dimensions**: Must match device width and height exactly
+
+10. **Production Quality**: This is a real design, not a prototype - polish matters
 
 ---
 

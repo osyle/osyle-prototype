@@ -1290,26 +1290,22 @@ Before outputting, verify:
 
 9. **Flow Integration**: Implement ALL outgoing_transitions with correct onTransition calls.
 
-10. **NO IMPORT STATEMENTS**: React hooks (useState, useEffect, etc.) are already available. Use them directly without any import statements.
+10. **NO IMPORT STATEMENTS**: React hooks (`useState`, `useEffect`, `useCallback`, `useMemo`, `useRef`) are already available in scope - use them directly without any import statements. Imports will break execution.
 
-11. **FUNCTION NAME MUST BE "App"**: Always name the function `App`, never use custom names like `MyComponent` or `DashboardScreen`.
+11. **FUNCTION NAME MUST BE "App"**: Always use `export default function App` - never use custom names like `MyComponent` or `DashboardScreen`.
 
-12. **Platform Adaptation**: Phone needs bigger touch targets, vertical layouts, larger spacing.
+12. **NO MARKDOWN CODE BLOCKS**: Output pure React code only - no markdown fences (no \`\`\`jsx, \`\`\`javascript, \`\`\`tsx, or \`\`\`typescript), no explanations, no preamble.
 
-13. **Trust the DTM**: It's already filtered and optimized for this task.
+13. **Platform Adaptation**: Phone needs bigger touch targets, vertical layouts, larger spacing.
 
-14. **Output Code Only**: No explanations, no markdown fences, just pure React code.
+14. **Root div dimensions**: Must match device width and height exactly.
+
+15. **Trust the DTM**: It's already filtered and optimized for this task.
 
 ---
 
 ## Output Format
 
-Return **only** the React component code as a string:
-
-```jsx
-export default function App({ onTransition }) {
-  // Component implementation
-}
-```
+Return **only** the React component code - pure JSX starting with `export default function App({ onTransition })`.
 
 No markdown code blocks, no explanations, no preamble—just pure React code ready to render.

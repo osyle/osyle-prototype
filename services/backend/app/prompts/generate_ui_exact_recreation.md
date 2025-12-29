@@ -135,13 +135,17 @@ Analyze the reference files and recreate the design **exactly**:
 
 Return **only** the React component code:
 
-**CRITICAL: DO NOT USE IMPORT STATEMENTS**
+**CRITICAL: NO IMPORT STATEMENTS**
 
-React hooks (`useState`, `useEffect`, etc.) are already available - use them directly without imports.
+React hooks (`useState`, `useEffect`, `useCallback`, `useMemo`, `useRef`) are already available in scope - use them directly without any import statements. Imports will break execution.
 
-**CRITICAL: FUNCTION MUST BE NAMED "App"**
+**CRITICAL: FUNCTION NAME MUST BE "App"**
 
-Always use `function App` - never use custom names.
+Always use `export default function App` - never use custom names like `MyComponent` or `LoginScreen`.
+
+**CRITICAL: NO MARKDOWN CODE BLOCKS**
+
+Output pure React code only - no markdown fences (no \`\`\`jsx, \`\`\`javascript, \`\`\`tsx, or \`\`\`typescript), no explanations, no preamble.
 
 ```jsx
 export default function App({ onTransition }) {
@@ -165,14 +169,14 @@ export default function App({ onTransition }) {
 
 ### Critical Rules:
 
-1. **Root div** must match device dimensions exactly
+1. **Root div** must match device dimensions exactly: `width: "{device_width}px", height: "{device_height}px"`
 2. **Accept onTransition prop** for flow navigation
 3. **Implement all transitions** (one UI element per outgoing_transition from flow context)
 4. **Use inline styles** for exact pixel values
 5. **Match everything** - no creative interpretation, no improvements, just accurate copying
-6. **NO IMPORT STATEMENTS** - React hooks (useState, useEffect, etc.) are already available, use them directly
-7. **FUNCTION NAME MUST BE "App"** - Always use `function App`, never custom names
-8. **No markdown** - just pure React code
+6. **NO IMPORT STATEMENTS** - React hooks (`useState`, `useEffect`, `useCallback`, `useMemo`, `useRef`) are already available, use them directly
+7. **FUNCTION NAME MUST BE "App"** - Always use `export default function App`, never custom names
+8. **NO MARKDOWN CODE BLOCKS** - Output pure React code only, no \`\`\`jsx, \`\`\`javascript, \`\`\`tsx, or \`\`\`typescript fences, no explanations
 
 ---
 
