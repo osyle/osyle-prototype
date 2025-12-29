@@ -611,6 +611,8 @@ export default function App({ onTransition }) {
 
 10. **Production Quality**: This is a real design, not a prototype - polish matters
 
+11. **ALL HELPER COMPONENTS INSIDE APP**: If you need helper components or sub-components, define them INSIDE the main App function, not at the file level outside App. This avoids Babel transpilation errors.
+
 ---
 
 Output only the React code, no markdown, no explanations.

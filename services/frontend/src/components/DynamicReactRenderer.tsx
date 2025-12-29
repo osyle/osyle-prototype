@@ -352,6 +352,22 @@ export default function DynamicReactRenderer({
       executableCode = executableCode.replace(/export\s+default\s+/, '')
       executableCode = executableCode.trim()
 
+      // 🛡️ SAFETY: Detect components defined outside App function
+      // Pattern: const ComponentName = ({ ... }) => { ... } before the main export
+      // This causes Babel transpilation issues with _extends helper
+      const outsideComponentPattern =
+        /const\s+([A-Z]\w+)\s*=\s*\(\{[^}]*\}\)\s*=>/g
+      const hasOutsideComponents = outsideComponentPattern.test(executableCode)
+
+      if (hasOutsideComponents) {
+        console.warn(
+          '⚠️ Warning: Detected components defined outside main App function. This may cause render errors.',
+        )
+        console.warn(
+          'Helper components should be defined INSIDE the main App function to avoid Babel transpilation issues.',
+        )
+      }
+
       // 🛡️ SAFETY: Validate that we have something that looks like a component
       if (
         !executableCode.includes('function') &&

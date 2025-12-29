@@ -1302,6 +1302,8 @@ Before outputting, verify:
 
 15. **Trust the DTM**: It's already filtered and optimized for this task.
 
+16. **ALL HELPER COMPONENTS INSIDE APP**: If you need helper components or sub-components, define them INSIDE the main App function, not at the file level outside App. This avoids Babel transpilation errors that cause "Objects are not valid as a React child" errors.
+
 ---
 
 ## Output Format

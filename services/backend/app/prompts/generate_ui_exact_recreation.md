@@ -153,6 +153,23 @@ export default function App({ onTransition }) {
   // ✅ Use hooks directly - NO imports needed
   const [email, setEmail] = useState("");
 
+  // ✅ CORRECT: Helper components defined INSIDE App
+  function InputField({ value, onChange, placeholder, type = "text" }) {
+    return (
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        style={{
+          width: "100%",
+          padding: "16px",
+          // ... exact styles from reference
+        }}
+      />
+    );
+  }
+
   return (
     <div
       style={{
@@ -161,7 +178,13 @@ export default function App({ onTransition }) {
         // ... exact styles from reference
       }}
     >
-      {/* Recreate each element exactly */}
+      <InputField
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+        type="email"
+      />
+      {/* Recreate other elements exactly */}
     </div>
   );
 }
@@ -177,6 +200,7 @@ export default function App({ onTransition }) {
 6. **NO IMPORT STATEMENTS** - React hooks (`useState`, `useEffect`, `useCallback`, `useMemo`, `useRef`) are already available, use them directly
 7. **FUNCTION NAME MUST BE "App"** - Always use `export default function App`, never custom names
 8. **NO MARKDOWN CODE BLOCKS** - Output pure React code only, no \`\`\`jsx, \`\`\`javascript, \`\`\`tsx, or \`\`\`typescript fences, no explanations
+9. **ALL HELPER COMPONENTS INSIDE APP** - If you need helper components or sub-components, define them INSIDE the main App function, not at the file level outside App. This avoids Babel transpilation errors.
 
 ---
 
