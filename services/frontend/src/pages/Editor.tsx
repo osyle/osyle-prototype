@@ -86,6 +86,9 @@ export default function Editor() {
   // Right panel collapsed state
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false)
 
+  // Fullscreen prototype state
+  const [isFullscreenPrototype, setIsFullscreenPrototype] = useState(false)
+
   // Inspiration images state
   const [inspirationImages, setInspirationImages] = useState<
     Array<{ key: string; url: string; filename: string }>
@@ -159,6 +162,18 @@ export default function Editor() {
     checkAndStartGeneration()
     loadInspirationImages()
   }, [])
+
+  // Handle ESC key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreenPrototype) {
+        setIsFullscreenPrototype(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isFullscreenPrototype])
 
   // Load version info when flow is loaded
   const loadVersionInfo = async () => {
@@ -1116,6 +1131,19 @@ export default function Editor() {
               justifyContent: 'center',
             }}
           >
+            {/* Fullscreen button */}
+            <button
+              onClick={() => setIsFullscreenPrototype(true)}
+              className="absolute top-6 right-6 z-10 w-12 h-12 rounded-xl flex items-center justify-center transition-all hover:scale-105"
+              style={{
+                backgroundColor: '#FFFFFF',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+              }}
+              title="Enter fullscreen mode"
+            >
+              <Maximize2 size={20} style={{ color: '#3B3B3B' }} />
+            </button>
+
             {/* Wrapper to make box 20% narrower */}
             <div
               style={{
@@ -2504,6 +2532,138 @@ export default function Editor() {
           maxImages={5}
           currentCount={inspirationImages.length}
         />
+
+        {/* Fullscreen Prototype Mode */}
+        {isFullscreenPrototype && activeTab === 'Prototype' && flowGraph && (
+          <div
+            className="fixed inset-0 z-[200]"
+            style={{
+              backgroundColor: 'rgba(0, 0, 0, 0.95)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+            }}
+          >
+            {/* Exit Fullscreen Button */}
+            <button
+              onClick={() => setIsFullscreenPrototype(false)}
+              className="absolute top-8 right-8 z-10 w-14 h-14 rounded-full flex items-center justify-center transition-all hover:scale-110 group"
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+              }}
+              title="Exit fullscreen"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="transition-transform group-hover:rotate-90"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+
+            {/* Scaled Device Container */}
+            <div className="w-full h-full flex items-center justify-center p-12">
+              <div
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  aspectRatio:
+                    device_info.platform === 'phone'
+                      ? `${device_info.screen.width + 24} / ${device_info.screen.height + 48}`
+                      : `${device_info.screen.width} / ${device_info.screen.height + 40}`,
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    maxWidth:
+                      device_info.platform === 'phone'
+                        ? `${device_info.screen.width + 24}px`
+                        : `${device_info.screen.width}px`,
+                    maxHeight:
+                      device_info.platform === 'phone'
+                        ? `${device_info.screen.height + 48}px`
+                        : `${device_info.screen.height + 40}px`,
+                    transform: 'scale(var(--scale))',
+                    transformOrigin: 'center center',
+                  }}
+                  ref={el => {
+                    if (!el) return
+
+                    // Calculate scale to fit within viewport
+                    const container = el.parentElement
+                    if (!container) return
+
+                    const deviceWidth =
+                      device_info.platform === 'phone'
+                        ? device_info.screen.width + 24
+                        : device_info.screen.width
+                    const deviceHeight =
+                      device_info.platform === 'phone'
+                        ? device_info.screen.height + 48
+                        : device_info.screen.height + 40
+
+                    const scaleX = container.clientWidth / deviceWidth
+                    const scaleY = container.clientHeight / deviceHeight
+                    const scale = Math.min(scaleX, scaleY, 1.5) // Cap at 1.5x for very large screens
+
+                    el.style.setProperty('--scale', scale.toString())
+                  }}
+                >
+                  <DeviceFrame>
+                    <div
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        paddingTop:
+                          device_info.platform === 'phone' ? '28px' : '0',
+                        paddingBottom:
+                          device_info.platform === 'phone' ? '16px' : '0',
+                        boxSizing: 'border-box',
+                        overflow: 'auto',
+                      }}
+                    >
+                      <PrototypeRunner
+                        flow={flowGraph}
+                        deviceInfo={device_info}
+                      />
+                    </div>
+                  </DeviceFrame>
+                </div>
+              </div>
+            </div>
+
+            {/* Fullscreen Mode Indicator */}
+            <div
+              className="absolute bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-xs font-medium"
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                color: 'rgba(255, 255, 255, 0.7)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+              }}
+            >
+              Press ESC or click ✕ to exit fullscreen
+            </div>
+          </div>
+        )}
       </div>
     </>
   )
