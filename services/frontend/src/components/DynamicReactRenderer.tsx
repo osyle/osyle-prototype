@@ -1,5 +1,65 @@
 import * as Babel from '@babel/standalone'
-import React, { useEffect, useState } from 'react'
+import React, {
+  useEffect,
+  useState,
+  Component,
+  type ErrorInfo,
+  type ReactNode,
+} from 'react'
+
+interface ErrorBoundaryProps {
+  children: ReactNode
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+  static getDerivedStateFromError(_error: Error): ErrorBoundaryState {
+    return { hasError: true }
+  }
+
+  override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Component render error:', error, errorInfo)
+  }
+
+  override render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#F5F5F5',
+            borderRadius: '8px',
+            padding: '20px',
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎨</div>
+          <div
+            style={{ fontSize: '14px', color: '#666666', fontWeight: '500' }}
+          >
+            Preview Unavailable
+          </div>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
+}
 
 interface DynamicReactRendererProps {
   jsxCode: string
@@ -182,5 +242,9 @@ export default function DynamicReactRenderer({
     )
   }
 
-  return <Component />
+  return (
+    <ErrorBoundary>
+      <Component />
+    </ErrorBoundary>
+  )
 }
