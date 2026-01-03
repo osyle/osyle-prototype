@@ -2,6 +2,7 @@ import * as Babel from '@babel/standalone'
 import React, {
   useEffect,
   useState,
+  useRef,
   Component,
   type ErrorInfo,
   type ReactNode,
@@ -221,6 +222,124 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 }
 
+// Auto-fix helper functions
+function stripPostCodeCommentary(code: string): {
+  code: string
+  wasFixed: boolean
+} {
+  const exportMatch = code.match(
+    /export\s+default\s+function\s+App\s*\([^)]*\)\s*\{/,
+  )
+  if (!exportMatch || exportMatch.index === undefined)
+    return { code, wasFixed: false }
+
+  const startIndex = exportMatch.index
+  const functionStart = startIndex + exportMatch[0].length
+  let braceCount = 1
+  let endIndex = functionStart
+
+  for (let i = functionStart; i < code.length; i++) {
+    if (code[i] === '{') braceCount++
+    if (code[i] === '}') {
+      braceCount--
+      if (braceCount === 0) {
+        endIndex = i + 1
+        break
+      }
+    }
+  }
+
+  const afterCode = code.substring(endIndex).trim()
+  if (
+    afterCode.length > 10 &&
+    /^([A-Z]|✅|❌|🎨|\*\*|##|This |The )/.test(afterCode)
+  ) {
+    console.log('🔧 [AUTO-FIX] Removed LLM commentary after code')
+    return { code: code.substring(0, endIndex), wasFixed: true }
+  }
+
+  return { code, wasFixed: false }
+}
+
+function moveComponentsInsideApp(code: string): {
+  code: string
+  wasFixed: boolean
+  count: number
+} {
+  const exportMatch = code.match(
+    /([\s\S]*?)(export\s+default\s+function\s+App\s*\([^)]*\)\s*\{)/,
+  )
+  if (!exportMatch) return { code, wasFixed: false, count: 0 }
+
+  const beforeApp = exportMatch[1]
+  const exportDeclaration = exportMatch[2]
+  const afterExport = code.substring(exportMatch[0].length)
+  const componentMatches = [
+    ...beforeApp.matchAll(
+      /const\s+([A-Z]\w+)\s*=\s*\(\s*\{[^}]*\}\s*\)\s*=>\s*\{/g,
+    ),
+  ]
+
+  if (componentMatches.length === 0) return { code, wasFixed: false, count: 0 }
+
+  const components: Array<{ name: string; code: string; startIndex: number }> =
+    []
+
+  for (const match of componentMatches) {
+    if (match.index === undefined) continue
+    const componentName = match[1]
+    const startIndex = match.index
+    const componentStart = startIndex + match[0].length
+    let braceCount = 1
+    let endIndex = componentStart
+
+    for (let i = componentStart; i < beforeApp.length; i++) {
+      if (beforeApp[i] === '{') braceCount++
+      if (beforeApp[i] === '}') {
+        braceCount--
+        if (braceCount === 0) {
+          endIndex = i + 1
+          while (
+            endIndex < beforeApp.length &&
+            /[\s;]/.test(beforeApp[endIndex])
+          )
+            endIndex++
+          break
+        }
+      }
+    }
+
+    components.push({
+      name: componentName,
+      code: beforeApp.substring(startIndex, endIndex).trim(),
+      startIndex,
+    })
+  }
+
+  if (components.length === 0) return { code, wasFixed: false, count: 0 }
+
+  let cleanedBefore = beforeApp
+  for (let i = components.length - 1; i >= 0; i--) {
+    const comp = components[i]
+    cleanedBefore =
+      cleanedBefore.substring(0, comp.startIndex) +
+      cleanedBefore.substring(comp.startIndex + comp.code.length)
+  }
+
+  const componentsCode =
+    components.map(c => `  // Auto-moved\n  ${c.code}`).join('\n\n') + '\n'
+  console.log(
+    `🔧 [AUTO-FIX] Moved ${components.length} component(s) inside App`,
+  )
+
+  return {
+    code:
+      cleanedBefore + exportDeclaration + '\n' + componentsCode + afterExport,
+    wasFixed: true,
+    count: components.length,
+  }
+}
+
 interface DynamicReactRendererProps {
   jsxCode: string
   propsToInject?: Record<string, unknown>
@@ -239,6 +358,7 @@ export default function DynamicReactRenderer({
 }: DynamicReactRendererProps) {
   const [Component, setComponent] = useState<React.ComponentType | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const hasWarned = useRef(false)
 
   useEffect(() => {
     try {
@@ -335,6 +455,19 @@ export default function DynamicReactRenderer({
         console.warn('This may cause "X is not defined" errors')
       }
 
+      // Auto-fix LLM code issues
+      const fix1 = stripPostCodeCommentary(cleanCode)
+      if (fix1.wasFixed) cleanCode = fix1.code
+
+      if (/const\s+[A-Z]\w+\s*=/.test(cleanCode)) {
+        if (!hasWarned.current) {
+          console.log('⚠️ Components outside App detected - auto-fixing...')
+          hasWarned.current = true
+        }
+        const fix2 = moveComponentsInsideApp(cleanCode)
+        if (fix2.wasFixed) cleanCode = fix2.code
+      }
+
       // Transform JSX to JS using Babel (with typescript preset to handle any remaining TS)
       const transformedCode = Babel.transform(cleanCode, {
         presets: ['react', 'typescript'],
@@ -351,22 +484,6 @@ export default function DynamicReactRenderer({
       // Remove export default and get just the function
       executableCode = executableCode.replace(/export\s+default\s+/, '')
       executableCode = executableCode.trim()
-
-      // 🛡️ SAFETY: Detect components defined outside App function
-      // Pattern: const ComponentName = ({ ... }) => { ... } before the main export
-      // This causes Babel transpilation issues with _extends helper
-      const outsideComponentPattern =
-        /const\s+([A-Z]\w+)\s*=\s*\(\{[^}]*\}\)\s*=>/g
-      const hasOutsideComponents = outsideComponentPattern.test(executableCode)
-
-      if (hasOutsideComponents) {
-        console.warn(
-          '⚠️ Warning: Detected components defined outside main App function. This may cause render errors.',
-        )
-        console.warn(
-          'Helper components should be defined INSIDE the main App function to avoid Babel transpilation issues.',
-        )
-      }
 
       // 🛡️ SAFETY: Validate that we have something that looks like a component
       if (

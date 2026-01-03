@@ -146,25 +146,8 @@ Screen: {device_info['screen']['width']}px × {device_info['screen']['height']}p
         Handles multiple format variations including extra backticks, case differences, etc.
         """
         
-        # LOG THE FULL RESPONSE FOR DEBUGGING
-        import os
-        import datetime
-        log_dir = "/app/logs"
-        os.makedirs(log_dir, exist_ok=True)
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_file = f"{log_dir}/parametric_response_{timestamp}.txt"
-        
-        with open(log_file, 'w') as f:
-            f.write("="*80 + "\n")
-            f.write("PARAMETRIC LLM RESPONSE - FULL OUTPUT\n")
-            f.write("="*80 + "\n\n")
-            f.write(response_text)
-            f.write("\n\n" + "="*80 + "\n")
-            f.write("END OF RESPONSE\n")
-            f.write("="*80 + "\n")
-        
+        # Console logging only
         print(f"\n{'='*80}")
-        print(f"[PARAMETRIC PARSER] Response logged to: {log_file}")
         print(f"[PARAMETRIC PARSER] Response length: {len(response_text)} chars")
         print(f"{'='*80}\n")
         
@@ -234,7 +217,6 @@ Screen: {device_info['screen']['width']}px × {device_info['screen']['height']}p
         
         if not variation_space:
             print(f"[ERROR] Could not extract VARIATION_SPACE from response")
-            print(f"[ERROR] Full response saved to: {log_file}")
             raise ValueError("Could not extract VARIATION_SPACE from response")
         
         # ========================================
@@ -272,7 +254,6 @@ Screen: {device_info['screen']['width']}px × {device_info['screen']['height']}p
         
         if not ui_code:
             print(f"[ERROR] Could not extract UI_CODE from response")
-            print(f"[ERROR] Full response saved to: {log_file}")
             raise ValueError("Could not extract UI_CODE from response")
         
         # ========================================
