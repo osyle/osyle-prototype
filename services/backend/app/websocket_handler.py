@@ -20,6 +20,7 @@ from app.dtr_builder_v6 import DTRBuilderV6
 from app.dtm_builder_v2 import DTMBuilderV2
 from app.dtm_updater_v3 import DTMUpdaterV3
 from app.generation_orchestrator import GenerationOrchestrator
+from app.parametric import ParametricGenerator
 
 # Import helper for Figma compression
 from app.unified_dtr_builder import prepare_figma_for_llm
@@ -629,6 +630,78 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
                 # Build base message
                 screen_message = f"TASK: {screen['task_description']}\n\nDEVICE CONTEXT:\n{json.dumps(device_info, indent=2)}\n\nFLOW CONTEXT:\n{json.dumps(flow_context, indent=2)}"
                 
+                # PARAMETRIC MODE ROUTING
+                rendering_mode = project.get('rendering_mode', 'react')
+                
+                if rendering_mode == 'parametric':
+                    # Use ParametricGenerator for parametric mode
+                    print(f"  🎛️  PARAMETRIC MODE: Generating screen with variation dimensions...")
+                    
+                    parametric_generator = ParametricGenerator(llm)
+                    
+                    try:
+                        parametric_result = await parametric_generator.generate(
+                            task_description=screen['task_description'],
+                            dtm=dtm or {},
+                            device_info=device_info,
+                            screen_context=screen
+                        )
+                        
+                        ui_code = parametric_result['ui_code']
+                        variation_space = parametric_result['variation_space']
+                        
+                        print(f"  ✓ Parametric generation complete with {len(variation_space['dimensions'])} dimensions")
+                        
+                        # Send screen completion with variation_space
+                        await websocket.send_json({
+                            "type": "screen_ready",
+                            "data": {
+                                "screen_id": screen['screen_id'],
+                                "ui_code": ui_code,
+                                "variation_space": variation_space
+                            }
+                        })
+                        
+                        # Update flow architecture
+                        for s in flow_architecture['screens']:
+                            if s['screen_id'] == screen['screen_id']:
+                                s['ui_code'] = ui_code
+                                s['variation_space'] = variation_space
+                                s['ui_loading'] = False
+                                break
+                        
+                        return {
+                            "screen_id": screen['screen_id'],
+                            "ui_code": ui_code,
+                            "variation_space": variation_space
+                        }
+                        
+                    except Exception as e:
+                        print(f"Error in parametric generation: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        
+                        await websocket.send_json({
+                            "type": "screen_error",
+                            "data": {
+                                "screen_id": screen['screen_id'],
+                                "error": str(e)
+                            }
+                        })
+                        
+                        for s in flow_architecture['screens']:
+                            if s['screen_id'] == screen['screen_id']:
+                                s['ui_error'] = True
+                                s['ui_loading'] = False
+                                break
+                        
+                        return {
+                            "screen_id": screen['screen_id'],
+                            "ui_code": None,
+                            "error": str(e)
+                        }
+                
+                # REACT MODE (existing code continues below)
                 # Add reference mode and screen description if from user-provided screen
                 user_provided = screen.get('user_provided', False)
                 reference_mode = screen.get('reference_mode')
@@ -875,6 +948,8 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
             for screen in flow_architecture['screens']:
                 if screen['screen_id'] == result['screen_id']:
                     screen['ui_code'] = result['ui_code']
+                    if result.get('variation_space'):
+                        screen['variation_space'] = result['variation_space']
                     if result.get('error'):
                         screen['ui_error'] = True
                     break

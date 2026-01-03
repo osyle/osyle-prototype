@@ -794,10 +794,16 @@ export default function Home() {
         selected_resource_ids: selectedResourceIds,
         device_info: device_info, // Save current device settings
         rendering_mode: rendering_mode, // Save current rendering mode
-        flow_mode: true, // NEW: Enable flow mode by default
+        // PARAMETRIC MODE RESTRICTIONS: Force single screen, no flow mode, no screen definitions
+        flow_mode: rendering_mode === 'parametric' ? false : true,
         max_screens:
-          screenDefsMetadata.length > 0 ? screenDefsMetadata.length : 5, // Default to 5 when no screens defined - lets LLM decide optimal count
-        screen_definitions: screenDefsMetadata, // NEW: Screen definitions metadata (empty array if none)
+          rendering_mode === 'parametric'
+            ? 1
+            : screenDefsMetadata.length > 0
+              ? screenDefsMetadata.length
+              : 5,
+        screen_definitions:
+          rendering_mode === 'parametric' ? [] : screenDefsMetadata,
         screen_files: screenFiles, // NEW: Screen reference files
         metadata: {},
       })
@@ -1158,326 +1164,470 @@ export default function Home() {
             />
           </div>
 
-          {/* Screens section */}
-          <div className="mb-6">
-            <label
-              className="block text-sm font-medium mb-4"
-              style={{ color: '#3B3B3B' }}
+          {/* Parametric Mode Notice */}
+          {rendering_mode === 'parametric' && (
+            <div
+              className="mb-6 rounded-2xl p-4"
+              style={{
+                backgroundColor: 'rgba(147, 51, 234, 0.08)',
+                border: '2px solid rgba(147, 51, 234, 0.2)',
+              }}
             >
-              Screen Definitions{' '}
-              <span style={{ color: '#929397' }}>(optional)</span>
-            </label>
-
-            {/* Screen cards - elegant design */}
-            <div className="space-y-4">
-              {screens.map((screen, index) => (
+              <div className="flex items-start gap-3">
                 <div
-                  key={screen.id}
-                  className="rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-lg"
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-                  }}
+                  className="mt-0.5 flex-shrink-0"
+                  style={{ fontSize: '24px' }}
                 >
-                  {/* Header */}
+                  ✨
+                </div>
+                <div>
                   <div
-                    className="px-5 py-4 flex items-center justify-between"
-                    style={{ backgroundColor: '#F7F5F3' }}
+                    className="text-sm font-semibold mb-1"
+                    style={{ color: '#3B3B3B' }}
                   >
-                    <div className="flex items-center gap-3 flex-1">
-                      <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-semibold"
-                        style={{
-                          backgroundColor: '#F5C563',
-                          color: '#1F1F20',
-                        }}
-                      >
-                        {index + 1}
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="Screen name (e.g., Login, Dashboard)"
-                        value={screen.name}
-                        onChange={e => {
-                          const newScreens = [...screens]
-                          newScreens[index].name = e.target.value
-                          setScreens(newScreens)
-                        }}
-                        className="flex-1 px-3 py-2 rounded-lg text-sm focus:outline-none transition-all"
-                        style={{
-                          backgroundColor: '#FFFFFF',
-                          color: '#3B3B3B',
-                          border: '1px solid transparent',
-                        }}
-                        onFocus={e => {
-                          e.target.style.borderColor = '#F5C563'
-                          e.target.style.boxShadow =
-                            '0 0 0 3px rgba(245,197,99,0.1)'
-                        }}
-                        onBlur={e => {
-                          e.target.style.borderColor = 'transparent'
-                          e.target.style.boxShadow = 'none'
-                        }}
-                      />
-                    </div>
-                    <button
-                      onClick={() => {
-                        setScreens(screens.filter((_, i) => i !== index))
-                      }}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:scale-110"
-                      style={{
-                        backgroundColor: '#FEE2E2',
-                        color: '#DC2626',
-                        marginLeft: '12px',
-                      }}
-                    >
-                      <X size={16} />
-                    </button>
+                    Parametric Mode Active
                   </div>
+                  <div className="text-xs" style={{ color: '#6B7280' }}>
+                    Single screen generation with real-time adjustable
+                    parameters. Switch to React mode in Config for multi-screen
+                    flows.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
-                  {/* Content */}
-                  <div className="p-5 space-y-4">
-                    {/* Description */}
-                    <div>
-                      <textarea
-                        placeholder="What should this screen do? (optional)"
-                        value={screen.description || ''}
-                        onChange={e => {
-                          const newScreens = [...screens]
-                          newScreens[index].description = e.target.value
-                          setScreens(newScreens)
-                        }}
-                        className="w-full px-4 py-3 rounded-xl text-sm resize-none focus:outline-none transition-all"
-                        style={{
-                          backgroundColor: '#F7F5F3',
-                          color: '#3B3B3B',
-                          border: '2px solid transparent',
-                          minHeight: '70px',
-                        }}
-                        onFocus={e => {
-                          e.target.style.borderColor = '#F5C563'
-                        }}
-                        onBlur={e => {
-                          e.target.style.borderColor = 'transparent'
-                        }}
-                        rows={2}
-                      />
-                    </div>
+          {/* Screens section - HIDDEN IN PARAMETRIC MODE */}
+          {rendering_mode !== 'parametric' && (
+            <div className="mb-6">
+              <label
+                className="block text-sm font-medium mb-4"
+                style={{ color: '#3B3B3B' }}
+              >
+                Screen Definitions{' '}
+                <span style={{ color: '#929397' }}>(optional)</span>
+              </label>
 
-                    {/* Mode selection - elegant pill buttons */}
-                    <div>
-                      <p
-                        className="text-xs font-medium mb-2"
-                        style={{ color: '#929397' }}
-                      >
-                        Mode
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            const newScreens = [...screens]
-                            newScreens[index].mode = 'exact'
-                            setScreens(newScreens)
-                          }}
-                          className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
+              {/* Screen cards - elegant design */}
+              <div className="space-y-4">
+                {screens.map((screen, index) => (
+                  <div
+                    key={screen.id}
+                    className="rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-lg"
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+                    }}
+                  >
+                    {/* Header */}
+                    <div
+                      className="px-5 py-4 flex items-center justify-between"
+                      style={{ backgroundColor: '#F7F5F3' }}
+                    >
+                      <div className="flex items-center gap-3 flex-1">
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-semibold"
                           style={{
-                            backgroundColor:
-                              screen.mode === 'exact' ? '#9333EA' : '#F7F5F3',
-                            color:
-                              screen.mode === 'exact' ? '#FFFFFF' : '#929397',
-                            boxShadow:
-                              screen.mode === 'exact'
-                                ? '0 4px 12px rgba(147,51,234,0.2)'
-                                : 'none',
+                            backgroundColor: '#F5C563',
+                            color: '#1F1F20',
                           }}
                         >
-                          Exact Recreation
-                        </button>
-                        <button
-                          onClick={() => {
+                          {index + 1}
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Screen name (e.g., Login, Dashboard)"
+                          value={screen.name}
+                          onChange={e => {
                             const newScreens = [...screens]
-                            newScreens[index].mode = 'redesign'
+                            newScreens[index].name = e.target.value
                             setScreens(newScreens)
                           }}
-                          className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
+                          className="flex-1 px-3 py-2 rounded-lg text-sm focus:outline-none transition-all"
                           style={{
-                            backgroundColor:
-                              screen.mode === 'redesign'
-                                ? '#4A90E2'
-                                : '#F7F5F3',
-                            color:
-                              screen.mode === 'redesign'
-                                ? '#FFFFFF'
-                                : '#929397',
-                            boxShadow:
-                              screen.mode === 'redesign'
-                                ? '0 4px 12px rgba(74,144,226,0.2)'
-                                : 'none',
+                            backgroundColor: '#FFFFFF',
+                            color: '#3B3B3B',
+                            border: '1px solid transparent',
                           }}
-                        >
-                          Redesign
-                        </button>
-                        <button
-                          onClick={() => {
-                            const newScreens = [...screens]
-                            newScreens[index].mode = 'rethink'
-                            setScreens(newScreens)
+                          onFocus={e => {
+                            e.target.style.borderColor = '#F5C563'
+                            e.target.style.boxShadow =
+                              '0 0 0 3px rgba(245,197,99,0.1)'
                           }}
-                          className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
-                          style={{
-                            backgroundColor:
-                              screen.mode === 'rethink' ? '#F59E0B' : '#F7F5F3',
-                            color:
-                              screen.mode === 'rethink' ? '#FFFFFF' : '#929397',
-                            boxShadow:
-                              screen.mode === 'rethink'
-                                ? '0 4px 12px rgba(245,158,11,0.2)'
-                                : 'none',
+                          onBlur={e => {
+                            e.target.style.borderColor = 'transparent'
+                            e.target.style.boxShadow = 'none'
                           }}
-                        >
-                          Rethink
-                        </button>
-                        <button
-                          onClick={() => {
-                            const newScreens = [...screens]
-                            newScreens[index].mode = 'inspiration'
-                            newScreens[index].figmaFile = null
-                            setScreens(newScreens)
-                          }}
-                          className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
-                          style={{
-                            backgroundColor:
-                              screen.mode === 'inspiration'
-                                ? '#10B981'
-                                : '#F7F5F3',
-                            color:
-                              screen.mode === 'inspiration'
-                                ? '#FFFFFF'
-                                : '#929397',
-                            boxShadow:
-                              screen.mode === 'inspiration'
-                                ? '0 4px 12px rgba(16,185,129,0.2)'
-                                : 'none',
-                          }}
-                        >
-                          Loose Inspiration
-                        </button>
+                        />
                       </div>
+                      <button
+                        onClick={() => {
+                          setScreens(screens.filter((_, i) => i !== index))
+                        }}
+                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:scale-110"
+                        style={{
+                          backgroundColor: '#FEE2E2',
+                          color: '#DC2626',
+                          marginLeft: '12px',
+                        }}
+                      >
+                        <X size={16} />
+                      </button>
                     </div>
 
-                    {/* Upload zones - elegant design */}
-                    {screen.mode === 'exact' ||
-                    screen.mode === 'redesign' ||
-                    screen.mode === 'rethink' ? (
-                      <div className="grid grid-cols-2 gap-3">
-                        {/* Figma upload - elegant */}
-                        <div>
-                          <input
-                            id={`figma-${screen.id}`}
-                            type="file"
-                            accept=".json"
-                            onChange={e => {
-                              const file = e.target.files?.[0]
-                              if (file && file.name.endsWith('.json')) {
-                                const newScreens = [...screens]
-                                newScreens[index].figmaFile = file
-                                setScreens(newScreens)
-                              }
+                    {/* Content */}
+                    <div className="p-5 space-y-4">
+                      {/* Description */}
+                      <div>
+                        <textarea
+                          placeholder="What should this screen do? (optional)"
+                          value={screen.description || ''}
+                          onChange={e => {
+                            const newScreens = [...screens]
+                            newScreens[index].description = e.target.value
+                            setScreens(newScreens)
+                          }}
+                          className="w-full px-4 py-3 rounded-xl text-sm resize-none focus:outline-none transition-all"
+                          style={{
+                            backgroundColor: '#F7F5F3',
+                            color: '#3B3B3B',
+                            border: '2px solid transparent',
+                            minHeight: '70px',
+                          }}
+                          onFocus={e => {
+                            e.target.style.borderColor = '#F5C563'
+                          }}
+                          onBlur={e => {
+                            e.target.style.borderColor = 'transparent'
+                          }}
+                          rows={2}
+                        />
+                      </div>
+
+                      {/* Mode selection - elegant pill buttons */}
+                      <div>
+                        <p
+                          className="text-xs font-medium mb-2"
+                          style={{ color: '#929397' }}
+                        >
+                          Mode
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              const newScreens = [...screens]
+                              newScreens[index].mode = 'exact'
+                              setScreens(newScreens)
                             }}
-                            className="hidden"
-                          />
-                          <div
-                            onClick={() =>
-                              document
-                                .getElementById(`figma-${screen.id}`)
-                                ?.click()
-                            }
-                            className="rounded-xl p-4 cursor-pointer transition-all hover:scale-[1.02]"
+                            className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
                             style={{
-                              backgroundColor: screen.figmaFile
-                                ? '#EFF6FF'
-                                : '#F7F5F3',
-                              border: screen.figmaFile
-                                ? '2px dashed #4A90E2'
-                                : '2px dashed #E8E1DD',
-                              minHeight: '120px',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              justifyContent: 'center',
+                              backgroundColor:
+                                screen.mode === 'exact' ? '#9333EA' : '#F7F5F3',
+                              color:
+                                screen.mode === 'exact' ? '#FFFFFF' : '#929397',
+                              boxShadow:
+                                screen.mode === 'exact'
+                                  ? '0 4px 12px rgba(147,51,234,0.2)'
+                                  : 'none',
                             }}
                           >
-                            {screen.figmaFile ? (
-                              <>
-                                <FileJson
-                                  size={32}
-                                  style={{
-                                    color: '#4A90E2',
-                                    marginBottom: '8px',
-                                  }}
-                                />
-                                <p
-                                  className="text-xs text-center font-medium mb-1"
-                                  style={{ color: '#3B3B3B' }}
-                                >
-                                  {screen.figmaFile.name.length > 20
-                                    ? screen.figmaFile.name.substring(0, 17) +
-                                      '...'
-                                    : screen.figmaFile.name}
-                                </p>
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation()
-                                    const newScreens = [...screens]
-                                    newScreens[index].figmaFile = null
-                                    setScreens(newScreens)
-                                  }}
-                                  className="mt-2 px-3 py-1 rounded-lg text-xs font-medium transition-all hover:scale-105"
-                                  style={{
-                                    backgroundColor: '#FEE2E2',
-                                    color: '#DC2626',
-                                  }}
-                                >
-                                  Remove
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <FileJson
-                                  size={32}
-                                  style={{
-                                    color: '#929397',
-                                    marginBottom: '8px',
-                                  }}
-                                />
-                                <p
-                                  className="text-xs text-center font-medium"
-                                  style={{ color: '#3B3B3B' }}
-                                >
-                                  Figma JSON
-                                </p>
-                                <p
-                                  className="text-xs text-center mt-1"
-                                  style={{ color: '#929397' }}
-                                >
-                                  Click to upload
-                                </p>
-                              </>
-                            )}
+                            Exact Recreation
+                          </button>
+                          <button
+                            onClick={() => {
+                              const newScreens = [...screens]
+                              newScreens[index].mode = 'redesign'
+                              setScreens(newScreens)
+                            }}
+                            className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
+                            style={{
+                              backgroundColor:
+                                screen.mode === 'redesign'
+                                  ? '#4A90E2'
+                                  : '#F7F5F3',
+                              color:
+                                screen.mode === 'redesign'
+                                  ? '#FFFFFF'
+                                  : '#929397',
+                              boxShadow:
+                                screen.mode === 'redesign'
+                                  ? '0 4px 12px rgba(74,144,226,0.2)'
+                                  : 'none',
+                            }}
+                          >
+                            Redesign
+                          </button>
+                          <button
+                            onClick={() => {
+                              const newScreens = [...screens]
+                              newScreens[index].mode = 'rethink'
+                              setScreens(newScreens)
+                            }}
+                            className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
+                            style={{
+                              backgroundColor:
+                                screen.mode === 'rethink'
+                                  ? '#F59E0B'
+                                  : '#F7F5F3',
+                              color:
+                                screen.mode === 'rethink'
+                                  ? '#FFFFFF'
+                                  : '#929397',
+                              boxShadow:
+                                screen.mode === 'rethink'
+                                  ? '0 4px 12px rgba(245,158,11,0.2)'
+                                  : 'none',
+                            }}
+                          >
+                            Rethink
+                          </button>
+                          <button
+                            onClick={() => {
+                              const newScreens = [...screens]
+                              newScreens[index].mode = 'inspiration'
+                              newScreens[index].figmaFile = null
+                              setScreens(newScreens)
+                            }}
+                            className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
+                            style={{
+                              backgroundColor:
+                                screen.mode === 'inspiration'
+                                  ? '#10B981'
+                                  : '#F7F5F3',
+                              color:
+                                screen.mode === 'inspiration'
+                                  ? '#FFFFFF'
+                                  : '#929397',
+                              boxShadow:
+                                screen.mode === 'inspiration'
+                                  ? '0 4px 12px rgba(16,185,129,0.2)'
+                                  : 'none',
+                            }}
+                          >
+                            Loose Inspiration
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Upload zones - elegant design */}
+                      {screen.mode === 'exact' ||
+                      screen.mode === 'redesign' ||
+                      screen.mode === 'rethink' ? (
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Figma upload - elegant */}
+                          <div>
+                            <input
+                              id={`figma-${screen.id}`}
+                              type="file"
+                              accept=".json"
+                              onChange={e => {
+                                const file = e.target.files?.[0]
+                                if (file && file.name.endsWith('.json')) {
+                                  const newScreens = [...screens]
+                                  newScreens[index].figmaFile = file
+                                  setScreens(newScreens)
+                                }
+                              }}
+                              className="hidden"
+                            />
+                            <div
+                              onClick={() =>
+                                document
+                                  .getElementById(`figma-${screen.id}`)
+                                  ?.click()
+                              }
+                              className="rounded-xl p-4 cursor-pointer transition-all hover:scale-[1.02]"
+                              style={{
+                                backgroundColor: screen.figmaFile
+                                  ? '#EFF6FF'
+                                  : '#F7F5F3',
+                                border: screen.figmaFile
+                                  ? '2px dashed #4A90E2'
+                                  : '2px dashed #E8E1DD',
+                                minHeight: '120px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              {screen.figmaFile ? (
+                                <>
+                                  <FileJson
+                                    size={32}
+                                    style={{
+                                      color: '#4A90E2',
+                                      marginBottom: '8px',
+                                    }}
+                                  />
+                                  <p
+                                    className="text-xs text-center font-medium mb-1"
+                                    style={{ color: '#3B3B3B' }}
+                                  >
+                                    {screen.figmaFile.name.length > 20
+                                      ? screen.figmaFile.name.substring(0, 17) +
+                                        '...'
+                                      : screen.figmaFile.name}
+                                  </p>
+                                  <button
+                                    onClick={e => {
+                                      e.stopPropagation()
+                                      const newScreens = [...screens]
+                                      newScreens[index].figmaFile = null
+                                      setScreens(newScreens)
+                                    }}
+                                    className="mt-2 px-3 py-1 rounded-lg text-xs font-medium transition-all hover:scale-105"
+                                    style={{
+                                      backgroundColor: '#FEE2E2',
+                                      color: '#DC2626',
+                                    }}
+                                  >
+                                    Remove
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <FileJson
+                                    size={32}
+                                    style={{
+                                      color: '#929397',
+                                      marginBottom: '8px',
+                                    }}
+                                  />
+                                  <p
+                                    className="text-xs text-center font-medium"
+                                    style={{ color: '#3B3B3B' }}
+                                  >
+                                    Figma JSON
+                                  </p>
+                                  <p
+                                    className="text-xs text-center mt-1"
+                                    style={{ color: '#929397' }}
+                                  >
+                                    Click to upload
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Image upload - elegant */}
+                          <div>
+                            <input
+                              id={`image-${screen.id}`}
+                              type="file"
+                              accept="image/*"
+                              onChange={e => {
+                                const file = e.target.files?.[0]
+                                if (file) {
+                                  const newScreens = [...screens]
+                                  newScreens[index].imageFiles = [file]
+                                  setScreens(newScreens)
+                                }
+                              }}
+                              className="hidden"
+                            />
+                            <div
+                              onClick={() =>
+                                document
+                                  .getElementById(`image-${screen.id}`)
+                                  ?.click()
+                              }
+                              className="rounded-xl p-4 cursor-pointer transition-all hover:scale-[1.02]"
+                              style={{
+                                backgroundColor:
+                                  screen.imageFiles.length > 0
+                                    ? '#EFF6FF'
+                                    : '#F7F5F3',
+                                border:
+                                  screen.imageFiles.length > 0
+                                    ? '2px dashed #4A90E2'
+                                    : '2px dashed #E8E1DD',
+                                minHeight: '120px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              {screen.imageFiles.length > 0 ? (
+                                <>
+                                  <ImageIcon
+                                    size={32}
+                                    style={{
+                                      color: '#4A90E2',
+                                      marginBottom: '8px',
+                                    }}
+                                  />
+                                  <p
+                                    className="text-xs text-center font-medium mb-1"
+                                    style={{ color: '#3B3B3B' }}
+                                  >
+                                    {screen.imageFiles[0].name.length > 20
+                                      ? screen.imageFiles[0].name.substring(
+                                          0,
+                                          17,
+                                        ) + '...'
+                                      : screen.imageFiles[0].name}
+                                  </p>
+                                  <button
+                                    onClick={e => {
+                                      e.stopPropagation()
+                                      const newScreens = [...screens]
+                                      newScreens[index].imageFiles = []
+                                      setScreens(newScreens)
+                                    }}
+                                    className="mt-2 px-3 py-1 rounded-lg text-xs font-medium transition-all hover:scale-105"
+                                    style={{
+                                      backgroundColor: '#FEE2E2',
+                                      color: '#DC2626',
+                                    }}
+                                  >
+                                    Remove
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <ImageIcon
+                                    size={32}
+                                    style={{
+                                      color: '#929397',
+                                      marginBottom: '8px',
+                                    }}
+                                  />
+                                  <p
+                                    className="text-xs text-center font-medium"
+                                    style={{ color: '#3B3B3B' }}
+                                  >
+                                    Screenshot
+                                  </p>
+                                  <p
+                                    className="text-xs text-center mt-1"
+                                    style={{ color: '#929397' }}
+                                  >
+                                    Click to upload
+                                  </p>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
-
-                        {/* Image upload - elegant */}
+                      ) : (
+                        // Inspiration mode - elegant multi-image upload
                         <div>
                           <input
-                            id={`image-${screen.id}`}
+                            id={`images-${screen.id}`}
                             type="file"
                             accept="image/*"
+                            multiple
                             onChange={e => {
-                              const file = e.target.files?.[0]
-                              if (file) {
+                              const files = Array.from(e.target.files || [])
+                              if (files.length > 0) {
                                 const newScreens = [...screens]
-                                newScreens[index].imageFiles = [file]
+                                newScreens[index].imageFiles = [
+                                  ...newScreens[index].imageFiles,
+                                  ...files,
+                                ]
                                 setScreens(newScreens)
                               }
                             }}
@@ -1486,64 +1636,74 @@ export default function Home() {
                           <div
                             onClick={() =>
                               document
-                                .getElementById(`image-${screen.id}`)
+                                .getElementById(`images-${screen.id}`)
                                 ?.click()
                             }
-                            className="rounded-xl p-4 cursor-pointer transition-all hover:scale-[1.02]"
+                            className="rounded-xl p-4 cursor-pointer transition-all hover:scale-[1.01]"
                             style={{
                               backgroundColor:
                                 screen.imageFiles.length > 0
-                                  ? '#EFF6FF'
+                                  ? '#ECFDF5'
                                   : '#F7F5F3',
                               border:
                                 screen.imageFiles.length > 0
-                                  ? '2px dashed #4A90E2'
+                                  ? '2px dashed #10B981'
                                   : '2px dashed #E8E1DD',
                               minHeight: '120px',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              justifyContent: 'center',
                             }}
                           >
                             {screen.imageFiles.length > 0 ? (
-                              <>
-                                <ImageIcon
-                                  size={32}
-                                  style={{
-                                    color: '#4A90E2',
-                                    marginBottom: '8px',
-                                  }}
-                                />
+                              <div>
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                  {screen.imageFiles.map((file, fileIndex) => (
+                                    <div
+                                      key={fileIndex}
+                                      className="relative group"
+                                    >
+                                      <div
+                                        className="w-20 h-20 rounded-lg overflow-hidden"
+                                        style={{
+                                          backgroundColor: '#E8E1DD',
+                                          boxShadow:
+                                            '0 2px 8px rgba(0,0,0,0.08)',
+                                        }}
+                                      >
+                                        <img
+                                          src={URL.createObjectURL(file)}
+                                          alt={`Inspiration ${fileIndex + 1}`}
+                                          className="w-full h-full object-cover"
+                                        />
+                                      </div>
+                                      <button
+                                        onClick={e => {
+                                          e.stopPropagation()
+                                          const newScreens = [...screens]
+                                          newScreens[index].imageFiles =
+                                            newScreens[index].imageFiles.filter(
+                                              (_, i) => i !== fileIndex,
+                                            )
+                                          setScreens(newScreens)
+                                        }}
+                                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                                        style={{
+                                          backgroundColor: '#DC2626',
+                                          color: '#FFFFFF',
+                                        }}
+                                      >
+                                        <X size={12} />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
                                 <p
-                                  className="text-xs text-center font-medium mb-1"
-                                  style={{ color: '#3B3B3B' }}
+                                  className="text-xs text-center"
+                                  style={{ color: '#929397' }}
                                 >
-                                  {screen.imageFiles[0].name.length > 20
-                                    ? screen.imageFiles[0].name.substring(
-                                        0,
-                                        17,
-                                      ) + '...'
-                                    : screen.imageFiles[0].name}
+                                  Click to add more images
                                 </p>
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation()
-                                    const newScreens = [...screens]
-                                    newScreens[index].imageFiles = []
-                                    setScreens(newScreens)
-                                  }}
-                                  className="mt-2 px-3 py-1 rounded-lg text-xs font-medium transition-all hover:scale-105"
-                                  style={{
-                                    backgroundColor: '#FEE2E2',
-                                    color: '#DC2626',
-                                  }}
-                                >
-                                  Remove
-                                </button>
-                              </>
+                              </div>
                             ) : (
-                              <>
+                              <div className="flex flex-col items-center justify-center h-full">
                                 <ImageIcon
                                   size={32}
                                   style={{
@@ -1555,190 +1715,77 @@ export default function Home() {
                                   className="text-xs text-center font-medium"
                                   style={{ color: '#3B3B3B' }}
                                 >
-                                  Screenshot
+                                  Inspiration Images
                                 </p>
                                 <p
                                   className="text-xs text-center mt-1"
                                   style={{ color: '#929397' }}
                                 >
-                                  Click to upload
+                                  Upload multiple references
                                 </p>
-                              </>
+                              </div>
                             )}
                           </div>
                         </div>
-                      </div>
-                    ) : (
-                      // Inspiration mode - elegant multi-image upload
-                      <div>
-                        <input
-                          id={`images-${screen.id}`}
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={e => {
-                            const files = Array.from(e.target.files || [])
-                            if (files.length > 0) {
-                              const newScreens = [...screens]
-                              newScreens[index].imageFiles = [
-                                ...newScreens[index].imageFiles,
-                                ...files,
-                              ]
-                              setScreens(newScreens)
-                            }
-                          }}
-                          className="hidden"
-                        />
-                        <div
-                          onClick={() =>
-                            document
-                              .getElementById(`images-${screen.id}`)
-                              ?.click()
-                          }
-                          className="rounded-xl p-4 cursor-pointer transition-all hover:scale-[1.01]"
-                          style={{
-                            backgroundColor:
-                              screen.imageFiles.length > 0
-                                ? '#ECFDF5'
-                                : '#F7F5F3',
-                            border:
-                              screen.imageFiles.length > 0
-                                ? '2px dashed #10B981'
-                                : '2px dashed #E8E1DD',
-                            minHeight: '120px',
-                          }}
-                        >
-                          {screen.imageFiles.length > 0 ? (
-                            <div>
-                              <div className="flex flex-wrap gap-2 mb-3">
-                                {screen.imageFiles.map((file, fileIndex) => (
-                                  <div
-                                    key={fileIndex}
-                                    className="relative group"
-                                  >
-                                    <div
-                                      className="w-20 h-20 rounded-lg overflow-hidden"
-                                      style={{
-                                        backgroundColor: '#E8E1DD',
-                                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                                      }}
-                                    >
-                                      <img
-                                        src={URL.createObjectURL(file)}
-                                        alt={`Inspiration ${fileIndex + 1}`}
-                                        className="w-full h-full object-cover"
-                                      />
-                                    </div>
-                                    <button
-                                      onClick={e => {
-                                        e.stopPropagation()
-                                        const newScreens = [...screens]
-                                        newScreens[index].imageFiles =
-                                          newScreens[index].imageFiles.filter(
-                                            (_, i) => i !== fileIndex,
-                                          )
-                                        setScreens(newScreens)
-                                      }}
-                                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
-                                      style={{
-                                        backgroundColor: '#DC2626',
-                                        color: '#FFFFFF',
-                                      }}
-                                    >
-                                      <X size={12} />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                              <p
-                                className="text-xs text-center"
-                                style={{ color: '#929397' }}
-                              >
-                                Click to add more images
-                              </p>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center justify-center h-full">
-                              <ImageIcon
-                                size={32}
-                                style={{
-                                  color: '#929397',
-                                  marginBottom: '8px',
-                                }}
-                              />
-                              <p
-                                className="text-xs text-center font-medium"
-                                style={{ color: '#3B3B3B' }}
-                              >
-                                Inspiration Images
-                              </p>
-                              <p
-                                className="text-xs text-center mt-1"
-                                style={{ color: '#929397' }}
-                              >
-                                Upload multiple references
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
 
-            {/* Add Screen button - at the bottom for easy access */}
-            <button
-              onClick={() => {
-                setScreens([
-                  ...screens,
-                  {
-                    id: Math.random().toString(36).substr(2, 9),
-                    name: '',
-                    description: '',
-                    mode: 'rethink' as const,
-                    figmaFile: null,
-                    imageFiles: [],
-                  },
-                ])
-              }}
-              className="w-full mt-4 px-4 py-3 rounded-xl font-medium text-sm transition-all hover:scale-[1.01] border-2 border-dashed flex items-center justify-center gap-2"
-              style={{
-                borderColor: '#E8E1DD',
-                backgroundColor: '#FAFAFA',
-                color: '#3B3B3B',
-              }}
-            >
-              <Plus size={18} style={{ color: '#3B3B3B' }} />
-              Add Screen
-            </button>
-
-            {/* Empty state when no screens */}
-            {screens.length === 0 && (
-              <div
-                className="rounded-2xl p-8 text-center mt-4"
+              {/* Add Screen button - at the bottom for easy access */}
+              <button
+                onClick={() => {
+                  setScreens([
+                    ...screens,
+                    {
+                      id: Math.random().toString(36).substr(2, 9),
+                      name: '',
+                      description: '',
+                      mode: 'rethink' as const,
+                      figmaFile: null,
+                      imageFiles: [],
+                    },
+                  ])
+                }}
+                className="w-full mt-4 px-4 py-3 rounded-xl font-medium text-sm transition-all hover:scale-[1.01] border-2 border-dashed flex items-center justify-center gap-2"
                 style={{
-                  backgroundColor: '#F7F5F3',
-                  border: '2px dashed #E8E1DD',
+                  borderColor: '#E8E1DD',
+                  backgroundColor: '#FAFAFA',
+                  color: '#3B3B3B',
                 }}
               >
-                <Layers
-                  size={32}
-                  style={{ color: '#929397', margin: '0 auto 12px' }}
-                />
-                <p
-                  className="text-sm font-medium mb-1"
-                  style={{ color: '#3B3B3B' }}
+                <Plus size={18} style={{ color: '#3B3B3B' }} />
+                Add Screen
+              </button>
+
+              {/* Empty state when no screens */}
+              {screens.length === 0 && (
+                <div
+                  className="rounded-2xl p-8 text-center mt-4"
+                  style={{
+                    backgroundColor: '#F7F5F3',
+                    border: '2px dashed #E8E1DD',
+                  }}
                 >
-                  No screens defined yet
-                </p>
-                <p className="text-xs" style={{ color: '#929397' }}>
-                  Optional: Add screens to define your flow structure
-                </p>
-              </div>
-            )}
-          </div>
+                  <Layers
+                    size={32}
+                    style={{ color: '#929397', margin: '0 auto 12px' }}
+                  />
+                  <p
+                    className="text-sm font-medium mb-1"
+                    style={{ color: '#3B3B3B' }}
+                  >
+                    No screens defined yet
+                  </p>
+                  <p className="text-xs" style={{ color: '#929397' }}>
+                    Optional: Add screens to define your flow structure
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          {/* End of screen definitions section - PARAMETRIC MODE CONDITIONAL */}
 
           {/* Generate button */}
           <div className="flex justify-end">

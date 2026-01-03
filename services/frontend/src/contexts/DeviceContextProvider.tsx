@@ -43,7 +43,7 @@ export default function DeviceContextProvider({
   )
 
   const [rendering_mode, setRenderingModeState] = useState<
-    'react' | 'design-ml'
+    'react' | 'parametric'
   >(() => getStoredValue('rendering_mode', 'react'))
 
   // Wrapper setters that update both state and localStorage
@@ -52,7 +52,7 @@ export default function DeviceContextProvider({
     localStorage.setItem('device_info', JSON.stringify(info))
   }
 
-  const setRenderingMode = (mode: 'react' | 'design-ml') => {
+  const setRenderingMode = (mode: 'react' | 'parametric') => {
     setRenderingModeState(mode)
     localStorage.setItem('rendering_mode', JSON.stringify(mode))
   }

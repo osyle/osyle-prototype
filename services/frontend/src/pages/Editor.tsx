@@ -20,12 +20,18 @@ import FlowConnections from '../components/FlowConnections'
 import InfiniteCanvas, {
   type InfiniteCanvasHandle,
 } from '../components/InfiniteCanvas'
+import ParametricControls from '../components/ParametricControls'
 import PrototypeCanvas from '../components/PrototypeCanvas'
 import PrototypeRunner from '../components/PrototypeRunner'
 import VersionHistory from '../components/VersionHistory'
 import { useDeviceContext } from '../hooks/useDeviceContext'
 import api from '../services/api'
 import { type FlowGraph } from '../types/home.types'
+import type {
+  ParameterValues,
+  VariationSpace,
+  VariationDimension,
+} from '../types/parametric.types'
 
 type GenerationStage = 'idle' | 'generating' | 'complete' | 'error'
 type RethinkStage =
@@ -57,7 +63,8 @@ interface ScreenWithLoadingState {
 export default function Editor() {
   const navigate = useNavigate()
 
-  const { device_info, setDeviceInfo, setRenderingMode } = useDeviceContext()
+  const { device_info, rendering_mode, setDeviceInfo, setRenderingMode } =
+    useDeviceContext()
 
   // Canvas ref for programmatic control
   const canvasRef = useRef<InfiniteCanvasHandle>(null)
@@ -74,6 +81,9 @@ export default function Editor() {
     bg: 'linear-gradient(135deg, #FFB6A3 0%, #E8C5E8 33%, #B8D4E8 66%, #A8E8C0 100%)',
   })
 
+  // Parametric controls state
+  const [parameterValues, setParameterValues] = useState<ParameterValues>({})
+
   // Generation state
   const [generationStage, setGenerationStage] =
     useState<GenerationStage>('idle')
@@ -82,6 +92,10 @@ export default function Editor() {
   const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null)
   const [isFlowNavigatorOpen, setIsFlowNavigatorOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Compute selected screen for parametric controls
+  const selectedScreen =
+    flowGraph?.screens.find(s => s.screen_id === selectedScreenId) || null
 
   // Right panel collapsed state
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false)
@@ -101,6 +115,23 @@ export default function Editor() {
   const [currentFlowVersion, setCurrentFlowVersion] = useState<number>(1)
   const [viewingVersion, setViewingVersion] = useState<number | null>(null)
   const [isReverting, setIsReverting] = useState(false)
+
+  // Initialize parameter values from variation_space when screen changes
+  useEffect(() => {
+    if (selectedScreen && rendering_mode === 'parametric') {
+      // Type assertion for variation_space since it's from dynamic data
+      const variationSpace = selectedScreen['variation_space'] as
+        | VariationSpace
+        | undefined
+      if (variationSpace && variationSpace.dimensions) {
+        const defaults: ParameterValues = {}
+        variationSpace.dimensions.forEach((dim: VariationDimension) => {
+          defaults[dim.id] = dim.default_value
+        })
+        setParameterValues(defaults)
+      }
+    }
+  }, [selectedScreenId, rendering_mode, selectedScreen])
 
   // 4 tabs - Video pitch and Presentation disabled for now
   const tabs = [
@@ -550,15 +581,27 @@ export default function Editor() {
           }
           setFlowGraph(flowWithLoading)
         },
-        onScreenReady: (screenId, uiCode) => {
+        onScreenReady: (screenId, uiCode, variationSpace) => {
           console.log(`✅ Screen ready: ${screenId}`)
+          if (variationSpace) {
+            console.log(
+              `  📊 Variation space with ${(variationSpace['dimensions'] as VariationSpace['dimensions'])?.length || 0} dimensions`,
+            )
+          }
           setFlowGraph(prev => {
             if (!prev) return prev
             return {
               ...prev,
               screens: prev.screens.map(s =>
                 s.screen_id === screenId
-                  ? { ...s, ui_code: uiCode, ui_loading: false }
+                  ? {
+                      ...s,
+                      ui_code: uiCode,
+                      ui_loading: false,
+                      ...(variationSpace && {
+                        variation_space: variationSpace,
+                      }),
+                    }
                   : s,
               ),
             }
@@ -846,6 +889,11 @@ export default function Editor() {
                         jsxCode={screen.ui_code}
                         propsToInject={{
                           onTransition: () => {},
+                          // Pass parameters for parametric mode
+                          ...(rendering_mode === 'parametric' &&
+                          selectedScreenId === screen.screen_id
+                            ? { parameters: parameterValues }
+                            : {}),
                         }}
                       />
                     ) : (
@@ -1333,286 +1381,447 @@ export default function Editor() {
                   </p>
                 </div>
 
-                <div className="relative">
-                  <button
-                    onClick={() => setStyleDropdownOpen(!styleDropdownOpen)}
-                    className="w-full rounded-2xl p-4 flex flex-col transition-all hover:scale-[1.02]"
-                    style={{
-                      background: selectedStyle.bg,
-                      boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-                    }}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div
-                          className="text-xs mb-1"
-                          style={{ color: '#3B3B3B', opacity: 0.7 }}
-                        >
-                          Style
-                        </div>
-                        <div
-                          className="text-sm font-semibold"
-                          style={{ color: '#3B3B3B' }}
-                        >
-                          {selectedStyle.title}
-                        </div>
-                      </div>
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center"
-                        style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}
-                      >
-                        <ChevronDown
-                          size={16}
-                          style={{
-                            color: '#3B3B3B',
-                            transform: styleDropdownOpen
-                              ? 'rotate(180deg)'
-                              : 'rotate(0deg)',
-                            transition: 'transform 0.3s',
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div
-                      className="h-16 rounded-xl"
-                      style={{ backgroundColor: 'rgba(255,255,255,0.4)' }}
-                    />
-                  </button>
+                {/* PARAMETRIC MODE - Show ParametricControls */}
+                {rendering_mode === 'parametric' &&
+                  selectedScreen?.['variation_space'] && (
+                    <>
+                      {/* Parametric Controls - FUNCTIONAL */}
+                      <ParametricControls
+                        variationSpace={
+                          selectedScreen['variation_space'] as VariationSpace
+                        }
+                        initialValues={parameterValues}
+                        onChange={newValues => {
+                          setParameterValues(newValues)
+                        }}
+                      />
 
-                  {styleDropdownOpen && (
-                    <div
-                      className="absolute top-full left-0 right-0 mt-2 p-2 rounded-2xl z-10"
-                      style={{
-                        backgroundColor: '#FFFFFF',
-                        boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                      }}
-                    >
-                      {styleOptions.map((option, index) => (
-                        <button
-                          key={index}
-                          onClick={() => {
-                            setSelectedStyle(option)
-                            setStyleDropdownOpen(false)
+                      {/* Divider */}
+                      <div
+                        style={{
+                          height: '1px',
+                          backgroundColor: '#E5E5E5',
+                          margin: '8px 0',
+                        }}
+                      />
+
+                      {/* Style Selector - PLACEHOLDER (dummy for now) */}
+                      <div className="opacity-50 pointer-events-none">
+                        <div
+                          className="text-xs font-medium mb-2"
+                          style={{ color: '#929397' }}
+                        >
+                          Style (Coming Soon)
+                        </div>
+                        <div
+                          className="rounded-2xl p-4"
+                          style={{
+                            background: selectedStyle.bg,
+                            boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
                           }}
-                          className="w-full rounded-xl p-3 mb-2 last:mb-0 transition-all hover:scale-[1.02]"
-                          style={{ background: option.bg }}
                         >
                           <div
-                            className="text-sm font-semibold text-left"
+                            className="text-xs mb-1"
+                            style={{ color: 'rgba(255,255,255,0.7)' }}
+                          >
+                            Style
+                          </div>
+                          <div
+                            className="text-sm font-semibold"
+                            style={{ color: '#FFFFFF' }}
+                          >
+                            {selectedStyle.title}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick Action Buttons - PLACEHOLDER (dummy for now) */}
+                      <div className="opacity-50 pointer-events-none">
+                        <div
+                          className="text-xs font-medium mb-2"
+                          style={{ color: '#929397' }}
+                        >
+                          Actions (Coming Soon)
+                        </div>
+                        <div className="grid grid-cols-4 gap-3">
+                          <button
+                            className="flex flex-col items-center gap-2 p-3 rounded-xl"
+                            style={{ backgroundColor: '#F7F5F3' }}
+                          >
+                            <RotateCcw size={20} style={{ color: '#4F515A' }} />
+                            <span
+                              className="text-xs"
+                              style={{ color: '#929397' }}
+                            >
+                              Vary
+                            </span>
+                          </button>
+                          <button
+                            className="flex flex-col items-center gap-2 p-3 rounded-xl"
+                            style={{ backgroundColor: '#F7F5F3' }}
+                          >
+                            <Palette size={20} style={{ color: '#4F515A' }} />
+                            <span
+                              className="text-xs"
+                              style={{ color: '#929397' }}
+                            >
+                              Colors
+                            </span>
+                          </button>
+                          <button
+                            className="flex flex-col items-center gap-2 p-3 rounded-xl"
+                            style={{ backgroundColor: '#F7F5F3' }}
+                          >
+                            <Sparkles size={20} style={{ color: '#4F515A' }} />
+                            <span
+                              className="text-xs"
+                              style={{ color: '#929397' }}
+                            >
+                              Taste
+                            </span>
+                          </button>
+                          <button
+                            className="flex flex-col items-center gap-2 p-3 rounded-xl"
+                            style={{ backgroundColor: '#F7F5F3' }}
+                          >
+                            <span className="text-lg">08</span>
+                            <span
+                              className="text-xs"
+                              style={{ color: '#929397' }}
+                            >
+                              Style
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Feedback Input - PLACEHOLDER (dummy for now) */}
+                      <div className="opacity-50 pointer-events-none mt-auto">
+                        <div
+                          className="text-xs font-medium mb-2"
+                          style={{ color: '#929397' }}
+                        >
+                          Feedback (Coming Soon)
+                        </div>
+                        <textarea
+                          placeholder="Add suggestions or feedback..."
+                          className="w-full px-4 py-3 rounded-xl resize-none"
+                          style={{
+                            backgroundColor: '#F7F5F3',
+                            border: 'none',
+                            color: '#3B3B3B',
+                            fontSize: '14px',
+                          }}
+                          rows={3}
+                          disabled
+                        />
+                      </div>
+                    </>
+                  )}
+
+                {/* REACT MODE - Original controls */}
+                {rendering_mode !== 'parametric' && (
+                  <>
+                    <div className="relative">
+                      <button
+                        onClick={() => setStyleDropdownOpen(!styleDropdownOpen)}
+                        className="w-full rounded-2xl p-4 flex flex-col transition-all hover:scale-[1.02]"
+                        style={{
+                          background: selectedStyle.bg,
+                          boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+                        }}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <div
+                              className="text-xs mb-1"
+                              style={{ color: '#3B3B3B', opacity: 0.7 }}
+                            >
+                              Style
+                            </div>
+                            <div
+                              className="text-sm font-semibold"
+                              style={{ color: '#3B3B3B' }}
+                            >
+                              {selectedStyle.title}
+                            </div>
+                          </div>
+                          <div
+                            className="w-8 h-8 rounded-full flex items-center justify-center"
+                            style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}
+                          >
+                            <ChevronDown
+                              size={16}
+                              style={{
+                                color: '#3B3B3B',
+                                transform: styleDropdownOpen
+                                  ? 'rotate(180deg)'
+                                  : 'rotate(0deg)',
+                                transition: 'transform 0.3s',
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div
+                          className="h-16 rounded-xl"
+                          style={{ backgroundColor: 'rgba(255,255,255,0.4)' }}
+                        />
+                      </button>
+
+                      {styleDropdownOpen && (
+                        <div
+                          className="absolute top-full left-0 right-0 mt-2 p-2 rounded-2xl z-10"
+                          style={{
+                            backgroundColor: '#FFFFFF',
+                            boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                          }}
+                        >
+                          {styleOptions.map((option, index) => (
+                            <button
+                              key={index}
+                              onClick={() => {
+                                setSelectedStyle(option)
+                                setStyleDropdownOpen(false)
+                              }}
+                              className="w-full rounded-xl p-3 mb-2 last:mb-0 transition-all hover:scale-[1.02]"
+                              style={{ background: option.bg }}
+                            >
+                              <div
+                                className="text-sm font-semibold text-left"
+                                style={{ color: '#3B3B3B' }}
+                              >
+                                {option.title}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="text-sm font-medium"
+                              style={{ color: '#3B3B3B' }}
+                            >
+                              Details
+                            </span>
+                            <span
+                              className="text-xs"
+                              style={{ color: '#929397' }}
+                            >
+                              ||
+                            </span>
+                          </div>
+                          <span
+                            className="text-sm font-medium"
                             style={{ color: '#3B3B3B' }}
                           >
-                            {option.title}
+                            {getDetailsLabel()}
+                          </span>
+                        </div>
+                        <div
+                          className="relative h-2 rounded-full"
+                          style={{ backgroundColor: '#F4F4F4' }}
+                        >
+                          <div
+                            className="absolute left-0 top-0 h-full rounded-full"
+                            style={{
+                              backgroundColor: '#3B3B3B',
+                              width: `${detailsValue}%`,
+                            }}
+                          />
+                          <input
+                            type="range"
+                            min="10"
+                            max="100"
+                            value={detailsValue}
+                            onChange={e =>
+                              setDetailsValue(Number(e.target.value))
+                            }
+                            className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="text-sm font-medium"
+                              style={{ color: '#3B3B3B' }}
+                            >
+                              Energy
+                            </span>
+                            <span
+                              className="text-xs"
+                              style={{ color: '#929397' }}
+                            >
+                              ||
+                            </span>
                           </div>
+                          <span
+                            className="text-sm font-medium"
+                            style={{ color: '#3B3B3B' }}
+                          >
+                            {getEnergyValue()}
+                          </span>
+                        </div>
+                        <div
+                          className="relative h-2 rounded-full"
+                          style={{ backgroundColor: '#F4F4F4' }}
+                        >
+                          <div
+                            className="absolute left-0 top-0 h-full rounded-full"
+                            style={{
+                              backgroundColor: '#3B3B3B',
+                              width: `${energyValue}%`,
+                            }}
+                          />
+                          <input
+                            type="range"
+                            min="10"
+                            max="100"
+                            value={energyValue}
+                            onChange={e =>
+                              setEnergyValue(Number(e.target.value))
+                            }
+                            className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="text-sm font-medium"
+                              style={{ color: '#3B3B3B' }}
+                            >
+                              Craft
+                            </span>
+                            <span
+                              className="text-xs"
+                              style={{ color: '#929397' }}
+                            >
+                              ||
+                            </span>
+                          </div>
+                          <span
+                            className="text-sm font-medium"
+                            style={{ color: '#3B3B3B' }}
+                          >
+                            {getCraftValue()}
+                          </span>
+                        </div>
+                        <div
+                          className="relative h-2 rounded-full"
+                          style={{ backgroundColor: '#F4F4F4' }}
+                        >
+                          <div
+                            className="absolute left-0 top-0 h-full rounded-full"
+                            style={{
+                              backgroundColor: '#3B3B3B',
+                              width: `${craftValue}%`,
+                            }}
+                          />
+                          <input
+                            type="range"
+                            min="10"
+                            max="100"
+                            value={craftValue}
+                            onChange={e =>
+                              setCraftValue(Number(e.target.value))
+                            }
+                            className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-3">
+                      <button
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
+                        style={{ backgroundColor: '#F7F5F3' }}
+                      >
+                        <RotateCcw size={20} style={{ color: '#4F515A' }} />
+                        <span className="text-xs" style={{ color: '#929397' }}>
+                          Vary
+                        </span>
+                      </button>
+                      <button
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
+                        style={{ backgroundColor: '#F7F5F3' }}
+                      >
+                        <Palette size={20} style={{ color: '#4F515A' }} />
+                        <span className="text-xs" style={{ color: '#929397' }}>
+                          Colors
+                        </span>
+                      </button>
+                      <button
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
+                        style={{ backgroundColor: '#F7F5F3' }}
+                      >
+                        <Sparkles size={20} style={{ color: '#4F515A' }} />
+                        <span className="text-xs" style={{ color: '#929397' }}>
+                          Taste
+                        </span>
+                      </button>
+                      <button
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
+                        style={{ backgroundColor: '#F7F5F3' }}
+                      >
+                        <span className="text-lg">08</span>
+                        <span className="text-xs" style={{ color: '#929397' }}>
+                          Style
+                        </span>
+                      </button>
+                    </div>
+
+                    <div className="mt-auto">
+                      <div className="relative">
+                        <textarea
+                          placeholder="Add suggestions or feedback..."
+                          value={inputText}
+                          onChange={e => setInputText(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl resize-none focus:outline-none"
+                          style={{
+                            backgroundColor: '#F7F5F3',
+                            border: 'none',
+                            color: '#3B3B3B',
+                            fontSize: '14px',
+                          }}
+                          rows={3}
+                        />
+                        {inputText.length > 0 && (
+                          <div
+                            className="absolute bottom-3 right-4 px-2 py-1 rounded text-xs"
+                            style={{
+                              backgroundColor: '#FFFFFF',
+                              color: '#929397',
+                            }}
+                          >
+                            Enter
+                          </div>
+                        )}
+                      </div>
+                      {inputText.length > 0 && (
+                        <button
+                          className="w-full mt-3 px-6 py-3 rounded-xl font-medium text-sm transition-all hover:scale-[1.02]"
+                          style={{
+                            backgroundColor: '#F5C563',
+                            color: '#1F1F20',
+                            boxShadow: '0 2px 12px rgba(245, 197, 99, 0.3)',
+                          }}
+                        >
+                          Submit
                         </button>
-                      ))}
+                      )}
                     </div>
-                  )}
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="text-sm font-medium"
-                          style={{ color: '#3B3B3B' }}
-                        >
-                          Details
-                        </span>
-                        <span className="text-xs" style={{ color: '#929397' }}>
-                          ||
-                        </span>
-                      </div>
-                      <span
-                        className="text-sm font-medium"
-                        style={{ color: '#3B3B3B' }}
-                      >
-                        {getDetailsLabel()}
-                      </span>
-                    </div>
-                    <div
-                      className="relative h-2 rounded-full"
-                      style={{ backgroundColor: '#F4F4F4' }}
-                    >
-                      <div
-                        className="absolute left-0 top-0 h-full rounded-full"
-                        style={{
-                          backgroundColor: '#3B3B3B',
-                          width: `${detailsValue}%`,
-                        }}
-                      />
-                      <input
-                        type="range"
-                        min="10"
-                        max="100"
-                        value={detailsValue}
-                        onChange={e => setDetailsValue(Number(e.target.value))}
-                        className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="text-sm font-medium"
-                          style={{ color: '#3B3B3B' }}
-                        >
-                          Energy
-                        </span>
-                        <span className="text-xs" style={{ color: '#929397' }}>
-                          ||
-                        </span>
-                      </div>
-                      <span
-                        className="text-sm font-medium"
-                        style={{ color: '#3B3B3B' }}
-                      >
-                        {getEnergyValue()}
-                      </span>
-                    </div>
-                    <div
-                      className="relative h-2 rounded-full"
-                      style={{ backgroundColor: '#F4F4F4' }}
-                    >
-                      <div
-                        className="absolute left-0 top-0 h-full rounded-full"
-                        style={{
-                          backgroundColor: '#3B3B3B',
-                          width: `${energyValue}%`,
-                        }}
-                      />
-                      <input
-                        type="range"
-                        min="10"
-                        max="100"
-                        value={energyValue}
-                        onChange={e => setEnergyValue(Number(e.target.value))}
-                        className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="text-sm font-medium"
-                          style={{ color: '#3B3B3B' }}
-                        >
-                          Craft
-                        </span>
-                        <span className="text-xs" style={{ color: '#929397' }}>
-                          ||
-                        </span>
-                      </div>
-                      <span
-                        className="text-sm font-medium"
-                        style={{ color: '#3B3B3B' }}
-                      >
-                        {getCraftValue()}
-                      </span>
-                    </div>
-                    <div
-                      className="relative h-2 rounded-full"
-                      style={{ backgroundColor: '#F4F4F4' }}
-                    >
-                      <div
-                        className="absolute left-0 top-0 h-full rounded-full"
-                        style={{
-                          backgroundColor: '#3B3B3B',
-                          width: `${craftValue}%`,
-                        }}
-                      />
-                      <input
-                        type="range"
-                        min="10"
-                        max="100"
-                        value={craftValue}
-                        onChange={e => setCraftValue(Number(e.target.value))}
-                        className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-4 gap-3">
-                  <button
-                    className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
-                    style={{ backgroundColor: '#F7F5F3' }}
-                  >
-                    <RotateCcw size={20} style={{ color: '#4F515A' }} />
-                    <span className="text-xs" style={{ color: '#929397' }}>
-                      Vary
-                    </span>
-                  </button>
-                  <button
-                    className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
-                    style={{ backgroundColor: '#F7F5F3' }}
-                  >
-                    <Palette size={20} style={{ color: '#4F515A' }} />
-                    <span className="text-xs" style={{ color: '#929397' }}>
-                      Colors
-                    </span>
-                  </button>
-                  <button
-                    className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
-                    style={{ backgroundColor: '#F7F5F3' }}
-                  >
-                    <Sparkles size={20} style={{ color: '#4F515A' }} />
-                    <span className="text-xs" style={{ color: '#929397' }}>
-                      Taste
-                    </span>
-                  </button>
-                  <button
-                    className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
-                    style={{ backgroundColor: '#F7F5F3' }}
-                  >
-                    <span className="text-lg">08</span>
-                    <span className="text-xs" style={{ color: '#929397' }}>
-                      Style
-                    </span>
-                  </button>
-                </div>
-
-                <div className="mt-auto">
-                  <div className="relative">
-                    <textarea
-                      placeholder="Add suggestions or feedback..."
-                      value={inputText}
-                      onChange={e => setInputText(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl resize-none focus:outline-none"
-                      style={{
-                        backgroundColor: '#F7F5F3',
-                        border: 'none',
-                        color: '#3B3B3B',
-                        fontSize: '14px',
-                      }}
-                      rows={3}
-                    />
-                    {inputText.length > 0 && (
-                      <div
-                        className="absolute bottom-3 right-4 px-2 py-1 rounded text-xs"
-                        style={{ backgroundColor: '#FFFFFF', color: '#929397' }}
-                      >
-                        Enter
-                      </div>
-                    )}
-                  </div>
-                  {inputText.length > 0 && (
-                    <button
-                      className="w-full mt-3 px-6 py-3 rounded-xl font-medium text-sm transition-all hover:scale-[1.02]"
-                      style={{
-                        backgroundColor: '#F5C563',
-                        color: '#1F1F20',
-                        boxShadow: '0 2px 12px rgba(245, 197, 99, 0.3)',
-                      }}
-                    >
-                      Submit
-                    </button>
-                  )}
-                </div>
+                  </>
+                )}
               </>
             )}
           </div>

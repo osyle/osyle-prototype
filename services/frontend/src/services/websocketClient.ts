@@ -240,6 +240,8 @@ export interface FlowGenerationCallbacks {
     screenId: string,
     // eslint-disable-next-line no-unused-vars
     uiCode: string,
+    // eslint-disable-next-line no-unused-vars
+    variationSpace?: Record<string, unknown>,
   ) => void
   onScreenError?: (
     // eslint-disable-next-line no-unused-vars
@@ -306,7 +308,11 @@ export function generateFlowWebSocket(
                 }
               | {
                   type: 'screen_ready'
-                  data: { screen_id: string; ui_code: string }
+                  data: {
+                    screen_id: string
+                    ui_code: string
+                    variation_space?: Record<string, unknown>
+                  }
                 }
               | {
                   type: 'screen_error'
@@ -327,6 +333,7 @@ export function generateFlowWebSocket(
               callbacks.onScreenReady?.(
                 message.data.screen_id,
                 message.data.ui_code,
+                message.data.variation_space,
               )
             } else if (message.type === 'screen_error') {
               callbacks.onScreenError?.(

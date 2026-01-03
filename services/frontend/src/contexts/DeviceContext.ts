@@ -11,7 +11,7 @@ export interface DeviceInfo {
 }
 
 export interface RenderingMode {
-  mode: 'react' | 'design-ml'
+  mode: 'react' | 'parametric'
 }
 
 export interface DeviceProperties {
@@ -19,9 +19,9 @@ export interface DeviceProperties {
   // eslint-disable-next-line no-unused-vars
   setDeviceInfo: (device_info: DeviceInfo) => void
 
-  rendering_mode: 'react' | 'design-ml'
+  rendering_mode: 'react' | 'parametric'
   // eslint-disable-next-line no-unused-vars
-  setRenderingMode: (mode: 'react' | 'design-ml') => void
+  setRenderingMode: (mode: 'react' | 'parametric') => void
 }
 
 export const DeviceContext = createContext<DeviceProperties | undefined>(

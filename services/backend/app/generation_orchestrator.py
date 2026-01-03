@@ -12,6 +12,8 @@ Generation Strategy:
 from typing import Dict, Any, List, Optional
 import base64
 
+from app.parametric import ParametricGenerator
+
 
 class GenerationOrchestrator:
     """Orchestrate UI generation using DTM v2"""
@@ -35,12 +37,13 @@ class GenerationOrchestrator:
         selected_resource_ids: Optional[List[str]] = None,
         max_examples: int = 3,
         flow_context: Optional[Dict[str, Any]] = None,  # Flow context for multi-screen flows
-        reference_mode: Optional[str] = None,  # NEW: "exact" | "redesign" | "inspiration"
+        reference_mode: Optional[str] = None,  # NEW: "exact" | "redesign" | "inspiration" | "parametric"
         screen_description: Optional[str] = None,  # NEW: Screen description
-        reference_files: Optional[Dict[str, Any]] = None  # NEW: Reference files (figma_data, images)
-    ) -> str:
+        reference_files: Optional[Dict[str, Any]] = None,  # NEW: Reference files (figma_data, images)
+        rendering_mode: Optional[str] = None  # NEW: "react" or "parametric"
+    ) -> Dict[str, Any]:
         """
-        Generate UI using DTM v2 (or exact recreation for exact mode)
+        Generate UI using DTM v2 (or exact recreation for exact mode, or parametric for parametric mode)
         
         Args:
             dtm: DTM v2 dictionary (potentially filtered) - not used for exact mode
@@ -54,10 +57,34 @@ class GenerationOrchestrator:
             reference_mode: How to use reference files - "exact", "redesign", "inspiration", or None
             screen_description: Optional screen description from user
             reference_files: Optional reference files (figma_data, images)
+            rendering_mode: "react" (default) or "parametric"
             
         Returns:
-            Generated React code
+            For react mode: Generated React code (string)
+            For parametric mode: {"ui_code": str, "variation_space": dict}
         """
+        
+        # NEW: Handle parametric mode
+        if rendering_mode == "parametric":
+            print(f"\n{'='*60}")
+            print(f"PARAMETRIC MODE - Generating with Variation Dimensions")
+            print(f"{'='*60}")
+            
+            parametric_generator = ParametricGenerator(self.llm)
+            
+            result = await parametric_generator.generate(
+                task_description=task_description,
+                dtm=dtm,
+                device_info=device_info,
+                screen_context={
+                    "flow_context": flow_context,
+                    "screen_description": screen_description
+                }
+            )
+            
+            print(f"✓ Parametric generation complete with {len(result['variation_space']['dimensions'])} dimensions")
+            
+            return result  # Returns {ui_code, variation_space}
         
         # NEW: Handle exact recreation mode (no DTM needed)
         if reference_mode == "exact":

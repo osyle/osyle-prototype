@@ -168,6 +168,7 @@ class FlowScreen(BaseModel):
     ui_code: Optional[str] = None  # Generated React code
     ui_loading: Optional[bool] = False
     ui_error: Optional[bool] = False
+    variation_space: Optional[dict] = None  # Parametric design dimensions (for parametric mode)
 
 
 class FlowGraph(BaseModel):
@@ -190,7 +191,7 @@ class ProjectCreate(BaseModel):
     selected_resource_ids: Optional[List[str]] = []
     inspiration_image_keys: Optional[List[str]] = []  # S3 keys for inspiration images
     device_info: Optional[DeviceInfo] = None  # Device settings when project was created
-    rendering_mode: Optional[str] = None  # 'react' or 'design-ml'
+    rendering_mode: Optional[str] = None  # 'react' or 'parametric'
     flow_mode: Optional[bool] = True  # NEW: Generate flow vs single screen
     max_screens: Optional[int] = 5  # NEW: Max screens in flow
     screen_definitions: Optional[List[ScreenDefinition]] = []  # NEW: Screen definitions from user
@@ -207,7 +208,7 @@ class ProjectOut(BaseModel):
     selected_resource_ids: List[str] = []
     inspiration_image_keys: List[str] = []  # S3 keys for inspiration images
     device_info: Optional[dict] = None  # Device settings when project was created
-    rendering_mode: Optional[str] = None  # 'react' or 'design-ml'
+    rendering_mode: Optional[str] = None  # 'react' or 'parametric'
     flow_mode: Optional[bool] = True  # NEW: Flow mode flag
     flow_graph: Optional[dict] = None  # NEW: Flow graph structure
     outputs: List[str] = []  # List of S3 keys
