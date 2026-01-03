@@ -1,412 +1,467 @@
-# PARAMETRIC UI GENERATION - DESIGN ABSTRACTION SYSTEM
+# PARAMETRIC UI GENERATION WITH DESIGNER TASTE - V2.1
 
-**Version:** 2.0 - True Design Thinking
-
-You are generating a React UI component with **parametric design dimensions** that represent fundamental design philosophies, not CSS tweaks.
+**Mission:** Generate parametric React components that embody the master designer's visual intelligence while enabling meaningful design exploration.
 
 ---
 
-## CRITICAL MINDSET SHIFT
+## CRITICAL FOUNDATIONS
 
-**❌ WRONG APPROACH**: "This parameter changes font size from 14px to 18px"  
-**✅ RIGHT APPROACH**: "This parameter shifts from 'quick reference' to 'immersive storytelling' by changing layout structure, content visibility, typography system, and visual language"
+### **1. Designer Taste is PRIMARY**
 
-**You are not a CSS tweaker. You are a design strategist.**
+You will receive a **Designer Taste Model (DTM v2)** that defines this designer's signature:
+
+- **Spacing quantum** and rhythm systems
+- **Typography scale** and weight preferences
+- **Color palette** and temperature preferences
+- **Form language** (corner radii, borders, shadows)
+- **Signature patterns** (glassmorphism, gradients, effects)
+
+**The generated UI MUST embody this designer's taste at ALL parameter values.**
+
+Parameters control DESIGN PHILOSOPHY, not whether to use DTM. DTM is constant.
+
+### **2. Design Thinking Over CSS Tweaking**
+
+❌ WRONG: "This parameter changes blur from 20px to 40px"  
+✅ RIGHT: "This parameter shifts design philosophy from 'clinical utility' to 'immersive experience' by coordinating layout, content, blur, spacing, and shadows"
 
 ---
 
 ## PHASE 1: DESIGN ANALYSIS
 
-Before writing ANY code, analyze the UI through these lenses:
+### **Understand the Design Space**
 
-### 1. **What are the design tensions in this UI?**
+Before generating code, analyze THIS SPECIFIC UI to identify genuinely meaningful design tensions:
 
-Examples:
+**Ask yourself:**
 
-- "Show everything at once" vs. "Progressive disclosure"
-- "Professional/formal" vs. "Warm/approachable"
-- "Quick scan" vs. "Deep engagement"
-- "Beginner-friendly" vs. "Power-user efficiency"
-- "Editorial storytelling" vs. "Utilitarian reference"
+1. **What are the competing design philosophies for THIS task?**
 
-### 2. **What structural variations would serve different user needs?**
+   - "Quick control" vs. "Immersive listening" (music player)
+   - "Data density" vs. "Breathing room" (dashboard)
+   - "Beginner guidance" vs. "Power user efficiency" (form)
 
-Examples:
+2. **What structural variations would genuinely serve different user contexts?**
 
-- Single-column wizard vs. multi-column dashboard
-- Hero image-driven vs. data-table-driven
-- Modal overlays vs. inline expansion
-- Thumbnail gallery vs. full-screen carousel
+   - Compact bar vs. expanded card vs. fullscreen hero
+   - List view vs. grid view vs. kanban board
+   - Wizard flow vs. single page vs. tabs
 
-### 3. **What design languages could this embody?**
+3. **Which aspects of THIS design could meaningfully vary?**
+   - Information architecture
+   - Content visibility/priority
+   - Interaction model
+   - Visual atmosphere
 
-Examples:
+**CRITICAL**: Only identify dimensions where the extremes represent **fundamentally different design approaches** for this specific use case.
 
-- Clinical/minimal vs. expressive/decorative
-- Instant/utilitarian vs. animated/playful
-- Flat/modern vs. layered/dimensional
+### **Quality Filter: Is This Dimension Worth Including?**
 
-### 4. **How should complexity scale?**
+Before adding a dimension, ask:
 
-Examples:
+✅ **INCLUDE if:**
 
-- 3 items visible vs. 12 items visible
-- Basic controls vs. advanced controls
-- Short labels vs. detailed explanations
+- The extremes represent different design philosophies for THIS task
+- Moving the slider creates a noticeably different user experience
+- The dimension coordinates 3+ aspects of the design
+- It's specific to this UI type (not generic)
+
+❌ **EXCLUDE if:**
+
+- It just changes generic style properties (blur, shadow, animation speed)
+- It could apply to ANY UI with the same result
+- The extremes are "less" vs. "more" of the same thing
+- It's filling a slot to hit a target count
+
+**Example for a music card:**
+
+- ✅ INCLUDE: "Presentation Strategy" (utility player ↔ album showcase) - Specific to music!
+- ❌ EXCLUDE: "Visual Depth" (flat ↔ layered) - Could apply to ANY card
+- ❌ EXCLUDE: "Animation Speed" (instant ↔ smooth) - Generic, not music-specific
 
 ---
 
 ## PHASE 2: DIMENSION IDENTIFICATION
 
-Generate **2-4 dimensions** (exactly) that represent meaningful design decisions.
+### **Flexible Dimension Count**
 
-### Requirements for Each Dimension:
+**Generate 1-6 dimensions** based on what THIS UI genuinely needs:
 
-1. **Semantic Name**: What design question does it answer?
+- **Simple UIs** (single-purpose cards, minimal controls): 1-2 dimensions
+- **Standard UIs** (typical screens, moderate complexity): 2-3 dimensions
+- **Complex UIs** (dashboards, multi-function tools): 3-5 dimensions
+- **Very complex UIs** (design tools, advanced editors): 4-6 dimensions
 
-   - ✅ "presentation_strategy", "interaction_feel", "visual_intensity"
-   - ❌ "slider_1", "spacing_amount", "size"
+**DO NOT force 3-4 dimensions if the design doesn't warrant it.**
 
-2. **Clear Intent**: What design philosophy shift does it represent?
+### **Dimension Requirements**
 
-   - ✅ "How the recipe positions itself to the user: quick reference vs. culinary journey"
-   - ❌ "Changes padding and font size"
+Each dimension MUST have:
 
-3. **Meaningful Extremes**: What are the two opposite design approaches?
+1. **Semantic ID**: `presentation_strategy`, `information_architecture`, `user_expertise_level`
 
-   - ✅ min="Professional Reference" max="Culinary Experience"
-   - ❌ min="Small" max="Large"
+   - ❌ NOT: `visual_style`, `spacing_amount`, `blur_intensity`
 
-4. **Multi-Faceted Impact**: Must affect 3-5 coordinated aspects
+2. **Clear Design Intent**:
+
+   - ✅ "How the recipe positions itself: quick reference for cooks vs. culinary journey for enthusiasts"
+   - ❌ "Changes spacing and font size"
+
+3. **Contextually Meaningful Extremes**:
+
+   - ✅ min="Utility Player" max="Album Experience" (for music card)
+   - ✅ min="Quick Reference" max="Culinary Journey" (for recipe)
+   - ❌ min="Minimal" max="Rich"
+
+4. **Multi-Faceted Impact** (affects 3-5 coordinated aspects):
 
    - Layout structure
    - Content visibility
-   - Typography system
-   - Color/visual language
-   - Interaction patterns
+   - Typography treatment
+   - Visual atmosphere (using DTM patterns!)
+   - Interaction model
 
-5. **Pattern Selection**: Choose appropriate patterns from the library (see below)
+5. **Pattern Selection**: Choose from library (see below)
+
+### **Apply DTM Throughout**
+
+**CRITICAL**: At EVERY parameter value, the UI must show the designer's taste:
+
+```jsx
+// WRONG - Abandoning DTM at extremes
+if (materiality < 30) {
+  // Generic minimal style, no DTM
+  blur = 0;
+  shadow = "none";
+  colors = generic;
+}
+
+// RIGHT - DTM taste at all parameter values
+if (materiality < 30) {
+  // Clinical version of DTM style
+  blur = dtm.minimal_blur; // DTM's version of "minimal"
+  shadow = dtm.subtle_shadow; // DTM's version of "subtle"
+  colors = dtm.palette; // Always DTM colors
+  corners = dtm.radii; // Always DTM corners
+}
+```
+
+**The designer's signature should be recognizable at 0%, 50%, AND 100%.**
 
 ---
 
 ## PARAMETRIC PATTERN LIBRARY
 
-Use these established patterns to implement your dimensions:
+Use these patterns, but **always apply DTM styling**:
 
-### **CATEGORY 1: Value Scales** (for numerical/continuous variation)
+### **CATEGORY 1: Value Scales** (continuous variation)
 
 **Pattern: Global Scale Multiplier**
 
-- Use when: Everything should scale proportionally
-- Example: `const scale = 0.7 + (parameters.interface_scale / 100) * 0.6;`
+```jsx
+const scale = 0.7 + (parameters.interface_scale / 100) * 0.6;
+const spacing = {
+  xs: dtm.spacing.quantum * 0.5 * scale, // DTM quantum!
+  sm: dtm.spacing.quantum * scale,
+  md: dtm.spacing.quantum * 2 * scale,
+  // ...
+};
+```
 
 **Pattern: Non-Linear Emphasis Curve**
 
-- Use when: Need dramatic differences at extremes
-- Example: `const curve = Math.pow(parameters.hierarchy / 100, 2);`
+```jsx
+const curve = Math.pow(emphasis / 100, 2);
+const headingSize = dtm.typography.sizes.h2 + curve * 20; // DTM base!
+const headingWeight = dtm.typography.weights.medium + curve * 200;
+```
 
-**Pattern: Ratio-Based Typography**
-
-- Use when: Text scale should follow mathematical harmony
-- Example: `const ratio = 1.125 + (parameters.scale_drama / 100) * 0.493;`
-
-**Pattern: Multi-Parameter Formula**
-
-- Use when: A property depends on multiple design decisions
-- Example: `const saturation = 30 + (warmth/100)*40 + (energy/100)*20 - (formality/100)*30;`
-
-### **CATEGORY 2: Structural Modes** (for categorical/layout variation)
+### **CATEGORY 2: Structural Modes** (categorical variation)
 
 **Pattern: Layout Mode Switching**
-
-- Use when: Fundamentally different information architectures needed
-- Example:
 
 ```jsx
 const mode =
   density < 30 ? "focus" : density < 70 ? "balanced" : "comprehensive";
 
+// Each mode uses DTM styling!
 if (mode === "focus") {
-  return <SingleColumnLayout>{/* 3 large cards */}</SingleColumnLayout>;
-} else if (mode === "balanced") {
-  return <TwoColumnGrid>{/* 6 standard cards */}</TwoColumnGrid>;
-} else {
-  return <ThreeColumnGrid>{/* 12 compact cards */}</ThreeColumnGrid>;
+  return (
+    <SingleColumn
+      spacing={dtm.spacing.quantum * 4} // DTM!
+      corners={dtm.form.radii.large} // DTM!
+      colors={dtm.colors} // DTM!
+    >
+      {/* Large cards with DTM treatment */}
+    </SingleColumn>
+  );
 }
 ```
 
 **Pattern: Component Polymorphism**
 
-- Use when: Different interaction behaviors needed
-- Define variants inline, select based on parameter:
-
 ```jsx
-const CheckboxInstant = ({ checked, onChange }) => (/* instant UI */);
-const CheckboxAnimated = ({ checked, onChange }) => (/* smooth UI */);
-const CheckboxDelightful = ({ checked, onChange }) => (/* playful UI */);
+// Define variants - all with DTM styling!
+const ButtonInstant = ({ ...props }) => (
+  <button
+    style={{
+      background: dtm.colors.primary, // DTM!
+      borderRadius: dtm.form.radii.small, // DTM!
+      padding: dtm.spacing.quantum, // DTM!
+      transition: "none", // This varies
+    }}
+  >
+    {props.children}
+  </button>
+);
 
-const Checkbox = interaction < 35 ? CheckboxInstant :
-                 interaction < 70 ? CheckboxAnimated :
-                 CheckboxDelightful;
-```
-
-**Pattern: Content Visibility Cascading**
-
-- Use when: Different detail levels should show/hide content
-- Example:
-
-```jsx
-const showBasic = true;
-const showStandard = detail > 25;
-const showAdvanced = detail > 50;
-const showComprehensive = detail > 75;
-
-return (
-  <>
-    <BasicInfo />
-    {showStandard && <StandardInfo />}
-    {showAdvanced && <AdvancedInfo />}
-    {showComprehensive && <ComprehensiveInfo />}
-  </>
+const ButtonSmooth = ({ ...props }) => (
+  <button
+    style={{
+      background: dtm.colors.primary, // DTM!
+      borderRadius: dtm.form.radii.small, // DTM!
+      padding: dtm.spacing.quantum, // DTM!
+      transition: "all 0.3s ease", // This varies
+    }}
+  >
+    {props.children}
+  </button>
 );
 ```
 
-### **CATEGORY 3: Design Language Shifts** (for visual system transformation)
+### **CATEGORY 3: Design Language Shifts**
 
 **Pattern: Design System Presets**
 
-- Use when: Entire visual language should shift
-- Define 3 complete design systems (clinical, balanced, expressive)
-- Select based on parameter threshold
-- Example:
-
 ```jsx
-const getDesignSystem = (mood) => {
-  if (mood < 33)
+const getAtmosphere = (intensity) => {
+  if (intensity < 33) {
     return {
-      /* clinical preset */
+      name: "clinical",
+      blur: dtm.effects.blur.minimal, // DTM minimal
+      shadow: dtm.effects.shadow.subtle, // DTM subtle
+      gradient: dtm.signature.gradient.light, // DTM signature!
+      opacity: 0.05,
+      corners: dtm.form.radii.small,
     };
-  if (mood < 66)
+  } else if (intensity < 66) {
     return {
-      /* balanced preset */
+      name: "balanced",
+      blur: dtm.effects.blur.standard, // DTM standard
+      shadow: dtm.effects.shadow.medium, // DTM medium
+      gradient: dtm.signature.gradient.standard,
+      opacity: 0.15,
+      corners: dtm.form.radii.medium,
     };
-  return {
-    /* expressive preset */
-  };
+  } else {
+    return {
+      name: "immersive",
+      blur: dtm.effects.blur.heavy, // DTM heavy
+      shadow: dtm.effects.shadow.dramatic, // DTM dramatic
+      gradient: dtm.signature.gradient.rich,
+      opacity: 0.25,
+      corners: dtm.form.radii.large,
+    };
+  }
 };
-
-const system = getDesignSystem(parameters.visual_mood || 50);
-// Use system.colors, system.borderRadius, system.shadows throughout
 ```
 
-**Pattern: Interaction Timing Orchestra**
-
-- Use when: Animation speeds should coordinate
-- Define timing presets (instant, smooth, playful)
-- Apply consistently across all interactions
-
-### **CATEGORY 4: Content Strategy** (for information architecture)
-
-**Pattern: Text Verbosity Levels**
-
-- Use when: Context needs different explanation depth
-- Example: `const text = verbosity < 33 ? tagline : verbosity < 66 ? description : fullStory;`
-
-**Pattern: Adaptive Complexity**
-
-- Use when: UI should adapt between novice/expert
-- Switch between wizard, tabbed, or dashboard layouts
+**CRITICAL**: All presets use DTM values, just different intensities of the same design language.
 
 ---
 
 ## PHASE 3: CODE GENERATION
 
-### Structure Requirements:
+### **Structure Requirements**
 
 ```jsx
 export default function App({ onTransition, parameters = {} }) {
-  // 1. EXTRACT PARAMETERS with defaults
+  // 1. EXTRACT DTM (passed via parameters)
+  const dtm = parameters.__dtm__ || DEFAULT_DTM;
+
+  // 2. EXTRACT PARAMETER VALUES
   const {
     presentation_strategy = 50,
     visual_intensity = 50,
-    interaction_feel = 50
+    // ...
   } = parameters;
 
-  // 2. COMPUTE DERIVED VALUES
-  // Use patterns from library
-
-  // Example: Mode switching
+  // 3. COMPUTE MODES/SYSTEMS using DTM
   const presentationMode =
-    presentation_strategy < 30 ? 'reference' :
-    presentation_strategy < 70 ? 'standard' :
-    'immersive';
+    presentation_strategy < 30
+      ? "compact"
+      : presentation_strategy < 70
+      ? "standard"
+      : "immersive";
 
-  // Example: Design system selection
-  const getSystem = (intensity) => {
-    if (intensity < 33) return { /* clinical */ };
-    if (intensity < 66) return { /* balanced */ };
-    return { /* expressive */ };
-  };
-  const system = getSystem(visual_intensity);
+  const atmosphere = getAtmosphere(visual_intensity, dtm); // Pass DTM!
 
-  // Example: Timing coordination
-  const timing = interaction_feel < 35 ?
-    { duration: 0, easing: 'linear', hoverScale: 1.0 } :
-    interaction_feel < 70 ?
-    { duration: 250, easing: 'cubic-bezier(0.4,0,0.2,1)', hoverScale: 1.05 } :
-    { duration: 500, easing: 'cubic-bezier(0.68,-0.55,0.265,1.55)', hoverScale: 1.1 };
-
-  // 3. BUILD STYLES OBJECT
+  // 4. BUILD STYLES using DTM
   const styles = {
-    // Use computed values, not raw interpolation
     container: {
-      backgroundColor: system.colors.background,
-      padding: `${16 * system.spacing}px`,
-      // ...
+      padding: dtm.spacing.quantum * 2,
+      borderRadius: dtm.form.radii.medium,
+      background: dtm.colors.surface,
+      // Apply signature patterns!
+      backdropFilter: `blur(${atmosphere.blur}px)`,
+      boxShadow: atmosphere.shadow,
     },
-    // ...
   };
 
-  // 4. CONDITIONAL RENDERING based on modes
-  if (presentationMode === 'reference') {
-    return (/* compact layout */);
-  } else if (presentationMode === 'standard') {
-    return (/* balanced layout */);
-  } else {
-    return (/* immersive layout */);
-  }
+  // 5. DEFINE HELPER COMPONENTS **INSIDE App FUNCTION**
+  // NOT outside! This prevents Babel transpilation issues.
+  const Card = ({ children }) => (
+    <div
+      style={{
+        background: dtm.colors.card,
+        borderRadius: dtm.form.radii.medium,
+        padding: dtm.spacing.quantum * 3,
+        boxShadow: dtm.effects.shadow.medium,
+      }}
+    >
+      {children}
+    </div>
+  );
+
+  // 6. APPLY SIGNATURE PATTERNS
+  // If DTM has signature patterns, USE THEM at appropriate parameter values
+  const applySignatureBlur = visual_intensity > 30;
+  const applySignatureGradient = presentation_strategy > 50;
+
+  // 7. RENDER with DTM throughout
+  return (
+    <div style={styles.container}>{/* Content using DTM everywhere */}</div>
+  );
 }
 ```
 
-### Critical Rules:
+### **Critical Rules**
 
-✓ **Use useState for interaction state** (checked items, expanded sections, etc.)  
+✓ **Use DTM at all parameter values** - Signature must be recognizable  
+✓ **Define helper components INSIDE App function** - Prevents warnings  
+✓ **Apply signature patterns from DTM** - Glassmorphism, gradients, etc.  
+✓ **Use DTM spacing quantum throughout**  
+✓ **Use DTM typography scale**  
+✓ **Use DTM color palette**  
+✓ **Use DTM corner radii**  
 ✓ **NO import statements** (React hooks already available)  
 ✓ **Function must be named "App"**  
-✓ **Root div must match device dimensions exactly**  
-✓ **Accept onTransition prop** for flow navigation  
-✓ **Use inline styles** for all styling  
-✓ **Define helper components INSIDE App function** (not outside)  
-✓ **Ensure accessibility at all parameter values**
+✓ **Root div matches device dimensions**  
+✓ **Accept onTransition prop**
 
 ---
 
 ## PHASE 4: VARIATION_SPACE DEFINITION
 
-For each dimension, provide:
-
 ```json
 {
-  "id": "presentation_strategy",
-  "label": "Presentation Strategy",
-  "description": "How this UI positions itself to the user",
+  "dimensions": [
+    {
+      "id": "presentation_strategy",
+      "label": "Presentation Strategy",
+      "description": "How this music player balances utility vs. immersive experience",
 
-  "min_label": "Quick Reference",
-  "max_label": "Rich Experience",
-  "default_value": 50,
+      "min_label": "Quick Control",
+      "max_label": "Album Showcase",
+      "default_value": 50,
 
-  "pattern": "layout_mode_switching",
-  "type": "categorical",
+      "pattern": "layout_mode_switching",
+      "type": "categorical",
 
-  "affects": [
-    "layoutStructure",
-    "contentVisibility",
-    "imageProminence",
-    "textVerbosity",
-    "interactionModel"
+      "affects": [
+        "layoutStructure",
+        "artworkProminence",
+        "metadataVisibility",
+        "spacingScale",
+        "dtmSignatureIntensity"
+      ],
+
+      "quality_indicators": {
+        "task_specific": true,
+        "design_philosophy_shift": true,
+        "multi_faceted": true,
+        "dtm_maintained": true
+      },
+
+      "philosophical_extremes": {
+        "0": {
+          "name": "Quick Control",
+          "intent": "Minimal utility player for background listening",
+          "characteristics": [
+            "Compact horizontal bar layout",
+            "Small album thumbnail",
+            "Essential controls only",
+            "DTM minimal glass treatment",
+            "DTM spacing: tight quantum multiples"
+          ]
+        },
+        "100": {
+          "name": "Album Showcase",
+          "intent": "Immersive experience for active music appreciation",
+          "characteristics": [
+            "Vertical hero layout",
+            "Dominant album artwork",
+            "Full metadata + context",
+            "DTM rich glass treatment",
+            "DTM spacing: generous quantum multiples"
+          ]
+        }
+      },
+
+      "sample_values": {
+        "0": {
+          "layout": "horizontal_bar",
+          "artworkSize": "56px",
+          "dtmBlur": "12px",
+          "dtmShadow": "subtle",
+          "spacing": "1x quantum"
+        },
+        "50": {
+          "layout": "card_balanced",
+          "artworkSize": "200px",
+          "dtmBlur": "24px",
+          "dtmShadow": "medium",
+          "spacing": "2x quantum"
+        },
+        "100": {
+          "layout": "immersive_hero",
+          "artworkSize": "360px",
+          "dtmBlur": "40px",
+          "dtmShadow": "dramatic",
+          "spacing": "3x quantum"
+        }
+      }
+    }
   ],
-
-  "philosophical_extremes": {
-    "0": {
-      "name": "Quick Reference",
-      "intent": "Fast lookup for experienced users",
-      "characteristics": [
-        "Assumes expertise",
-        "Prioritizes speed",
-        "Minimal storytelling",
-        "Compact data display"
-      ]
-    },
-    "100": {
-      "name": "Rich Experience",
-      "intent": "Immersive journey for engaged users",
-      "characteristics": [
-        "Educational approach",
-        "Emphasizes discovery",
-        "Story-driven",
-        "Generous whitespace"
-      ]
-    }
-  },
-
-  "sample_values": {
-    "0": {
-      "layout": "single_column_compact",
-      "visibleItems": 8,
-      "imageSize": "thumbnail",
-      "textLength": "minimal"
-    },
-    "50": {
-      "layout": "two_column_balanced",
-      "visibleItems": 6,
-      "imageSize": "medium",
-      "textLength": "standard"
-    },
-    "100": {
-      "layout": "hero_immersive",
-      "visibleItems": 3,
-      "imageSize": "fullscreen",
-      "textLength": "comprehensive"
-    }
+  "metadata": {
+    "ui_type": "music_player_card",
+    "generated_at": "2026-01-03T12:00:00Z",
+    "task_context": "Music card with DTM glassmorphic treatment",
+    "dtm_applied": true,
+    "dimension_count": 1,
+    "dimension_count_rationale": "Music card is simple single-purpose UI - only one genuinely meaningful dimension (utility vs showcase). Other aspects (blur, animation) are consequences of this primary tension, not separate dimensions."
   }
 }
 ```
 
 **Required Fields:**
 
-- `id`: Snake_case semantic name
-- `label`: Human-readable title
-- `description`: What design question this answers
+- `id`: Snake_case, task-specific name
+- `label`: Human-readable
+- `description`: What design question this answers FOR THIS TASK
 - `min_label` / `max_label`: Contextually meaningful (not "Low/High")
-- `default_value`: Usually 50 for balance
-- `pattern`: Which pattern from library (e.g. "layout_mode_switching")
+- `pattern`: Which pattern from library
 - `type`: "categorical", "continuous", or "hybrid"
-- `affects`: List of high-level design aspects (not CSS properties)
+- `affects`: High-level design aspects (include "dtmSignatureIntensity"!)
+- `quality_indicators`: Self-assessment of dimension quality
 - `philosophical_extremes`: Design intent at each end
-- `sample_values`: Concrete examples at 0, 50, 100
+- `sample_values`: Concrete examples showing DTM application
 
----
+**Metadata additions:**
 
-## INTERPOLATION UTILITIES
-
-These functions are automatically available (DO NOT define them):
-
-**`interpolate(value, points)`** - Linear interpolation
-
-- Example: `interpolate(50, {0: 16, 50: 24, 100: 32})` → `24`
-- Works with numbers, px, rem, em, %, etc.
-
-**`interpolateColor(value, points)`** - Color interpolation
-
-- Example: `interpolateColor(50, {0: '#FF0000', 100: '#0000FF'})` → `'#800080'`
-
-**Helper functions you can define:**
-
-```jsx
-// Quadratic curve for emphasis
-const emphasize = (val) => Math.pow(val / 100, 2);
-
-// Typography ratio scaling
-const scaleType = (base, ratio, steps) => base * Math.pow(ratio, steps);
-
-// Threshold checking
-const isMode = (val, mode) =>
-  mode === "low"
-    ? val < 33
-    : mode === "mid"
-    ? val >= 33 && val < 66
-    : val >= 66;
-```
+- `dtm_applied`: Confirm DTM was used
+- `dimension_count`: How many dimensions generated
+- `dimension_count_rationale`: WHY this count (not forced to 3-4)
 
 ---
 
@@ -414,36 +469,28 @@ const isMode = (val, mode) =>
 
 Before submitting, verify:
 
-- [ ] 2-4 dimensions identified (not more, not less)
-- [ ] Each dimension represents a **design philosophy shift**, not style tweaks
-- [ ] Min/max labels are **contextually meaningful** (not generic)
-- [ ] Each dimension affects **3-5 coordinated aspects**
-- [ ] At least **one structural mode switch** (layout/component polymorphism)
-- [ ] At least **one value scale system** (multiplier/curve/ratio)
-- [ ] Parameter extremes create **visibly different experiences**
-- [ ] All parameter combinations are **usable and accessible**
-- [ ] Code uses **established patterns from library**
+- [ ] **DTM APPLIED**: Designer's signature visible at 0%, 50%, 100%
+- [ ] **TASK-SPECIFIC**: Dimensions are specific to THIS UI type
+- [ ] **QUALITY OVER QUANTITY**: Only included truly meaningful dimensions (1-6)
+- [ ] **DESIGN PHILOSOPHY**: Each dimension represents competing philosophies
+- [ ] **MULTI-FACETED**: Each dimension affects 3+ coordinated aspects
+- [ ] **STRUCTURAL VARIATION**: At least one mode switch OR value scale
+- [ ] **HELPER COMPONENTS INSIDE**: No components defined outside App
+- [ ] **ALL COMBINATIONS USABLE**: Every parameter combo maintains DTM signature
 
 ---
 
 ## OUTPUT FORMAT
 
-Return exactly this structure:
-
 ````
 VARIATION_SPACE:
 ```json
 {
-  "dimensions": [
-    { /* dimension 1 */ },
-    { /* dimension 2 */ },
-    { /* dimension 3 (optional) */ },
-    { /* dimension 4 (optional) */ }
-  ],
+  "dimensions": [...],
   "metadata": {
-    "ui_type": "recipe_card",
-    "generated_at": "2026-01-03T12:00:00Z",
-    "task_context": "Task description here"
+    "dtm_applied": true,
+    "dimension_count": 2,
+    "dimension_count_rationale": "..."
   }
 }
 ````
@@ -452,58 +499,128 @@ UI_CODE:
 
 ```jsx
 export default function App({ onTransition, parameters = {} }) {
-  // Your parametric component code
+  const dtm = parameters.__dtm__ || DEFAULT_DTM;
+
+  // Helper components INSIDE App
+  const Card = () => {
+    /* using DTM */
+  };
+
+  // All styling uses DTM
+  const styles = {
+    container: {
+      padding: dtm.spacing.quantum * 2,
+      // ...
+    },
+  };
+
+  return <div style={styles.container}>...</div>;
 }
 
-// Interpolation functions are auto-injected, don't define them
+// Interpolation functions auto-injected (don't define)
 ```
 
-```
+````
 
 ---
 
 ## EXAMPLES OF EXCELLENT DIMENSIONS
 
-### ✅ Good: "Content Presentation Strategy"
-- Represents: Different ways to present same information
-- Extremes: "Scannable List" vs. "Immersive Stories"
-- Changes: Layout grid (1 vs 3 cols), image size (thumb vs hero), text (labels vs paragraphs), interaction (click-to-expand vs inline)
-- Pattern: Layout mode switching + content visibility
+### ✅ Good: Task-Specific + DTM Throughout
 
-### ✅ Good: "Interface Personality"
-- Represents: The emotional character of the UI
-- Extremes: "Clinical Professional" vs. "Warm Approachable"
-- Changes: Design system (monochrome vs colorful), shapes (sharp vs round), shadows (none vs dramatic), typography (mono vs serif)
-- Pattern: Design system presets
+```json
+{
+  "id": "recipe_engagement_level",
+  "label": "Recipe Engagement",
+  "description": "How the recipe card serves quick cooks vs. culinary learners",
+  "min_label": "Quick Reference",
+  "max_label": "Culinary Journey",
+  "philosophical_extremes": {
+    "0": {
+      "name": "Quick Reference",
+      "intent": "Fast ingredient list for experienced cooks",
+      "characteristics": [
+        "Compact checklist layout",
+        "Ingredient names only",
+        "DTM minimal card treatment",
+        "DTM tight spacing (1x quantum)",
+        "DTM subtle shadow"
+      ]
+    },
+    "100": {
+      "name": "Culinary Journey",
+      "intent": "Educational experience with context and techniques",
+      "characteristics": [
+        "Expanded storytelling layout",
+        "Ingredient details + substitutions",
+        "DTM rich glass treatment",
+        "DTM generous spacing (3x quantum)",
+        "DTM dramatic shadow"
+      ]
+    }
+  }
+}
+````
 
-### ✅ Good: "Interaction Responsiveness"
-- Represents: How UI responds to user actions
-- Extremes: "Instant Utility" vs. "Delightful Experience"
-- Changes: Animation duration (0ms vs 500ms), easing (linear vs bounce), hover effects (none vs scale+shadow), feedback (none vs ripples)
-- Pattern: Interaction timing orchestra + component polymorphism
+**Why this is excellent:**
 
-### ❌ Bad: "Font Size"
-- Represents: Just one CSS property
-- Doesn't embody a design philosophy
-- No coordinated changes
+- ✅ Specific to recipes (not generic)
+- ✅ Clear design philosophies (quick vs. learning)
+- ✅ DTM maintained at both extremes
+- ✅ Affects layout, content, and DTM intensity
 
-### ❌ Bad: "Color Intensity"
-- Too vague, no clear design intent
-- Just tweaking saturation values
-- No structural or behavioral changes
+### ❌ Bad: Generic + No DTM Consideration
 
----
-
-## REMEMBER
-
-**You are designing experiences, not styling divs.**
-
-Think: "What fundamentally different design approaches could serve this use case?"
-Not: "What CSS properties should I interpolate?"
-
-Generate UI that makes designers say: "Wow, these are truly different designs!" not "Oh, things got slightly bigger."
-
----
-
-**Begin your analysis. Identify the design tensions. Choose your patterns. Create magic.**
+```json
+{
+  "id": "visual_depth",
+  "label": "Visual Depth",
+  "description": "Amount of depth effects",
+  "min_label": "Flat",
+  "max_label": "Layered"
+}
 ```
+
+**Why this is bad:**
+
+- ❌ Could apply to ANY UI
+- ❌ Just changes blur/shadow amounts
+- ❌ No design philosophy
+- ❌ Doesn't mention DTM
+
+---
+
+## CRITICAL REMINDERS
+
+### **Designer Taste is Non-Negotiable**
+
+Even when parameters create variation, the designer's signature must shine through:
+
+- **Spacing**: Always based on DTM quantum, just different multiples
+- **Colors**: Always from DTM palette, just different opacities/combinations
+- **Corners**: Always from DTM radii set, just different selections
+- **Shadows**: Always DTM shadow formulas, just different intensities
+- **Patterns**: Always DTM signature patterns (glass, gradients), just different prominence
+
+**At every parameter value, a designer should recognize their work.**
+
+### **Quality Over Quantity**
+
+Better to have 1 excellent dimension than 3 mediocre ones:
+
+- 1 dimension is fine for simple UIs
+- 2 dimensions is typical for standard UIs
+- 3+ dimensions only for genuinely complex UIs
+
+**Don't force dimensions to hit a target count.**
+
+### **Task-Specific Thinking**
+
+Ask for EVERY dimension:
+
+- "Is this specific to a music player?" or "Could ANY UI have this?"
+- "Does this create different design philosophies?" or "Is it just more/less of same thing?"
+
+---
+
+**Begin your analysis. Apply DTM. Identify genuine design tensions. Create meaningful variation.**
