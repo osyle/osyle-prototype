@@ -85,7 +85,7 @@ Screen: {device_info['screen']['width']}px × {device_info['screen']['height']}p
         response = await self.llm.call_claude(
             prompt_name="generate_ui_parametric",
             user_message=user_message,
-            max_tokens=6000,
+            max_tokens=10000,  # Increased for v2.0 parametric (needs more for analysis + variation_space + complete UI)
             temperature=0.7
         )
         
@@ -142,54 +142,157 @@ Screen: {device_info['screen']['width']}px × {device_info['screen']['height']}p
     
     def _parse_parametric_response(self, response_text: str) -> Dict[str, Any]:
         """
-        Parse LLM response into variation_space and ui_code
-        
-        Expected format:
-        VARIATION_SPACE:
-        {json}
-        
-        UI_CODE:
-        {react code}
+        Parse LLM response into variation_space and ui_code with maximum tolerance.
+        Handles multiple format variations including extra backticks, case differences, etc.
         """
         
-        # Extract variation space
-        variation_space_match = re.search(
+        # LOG THE FULL RESPONSE FOR DEBUGGING
+        import os
+        import datetime
+        log_dir = "/app/logs"
+        os.makedirs(log_dir, exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_file = f"{log_dir}/parametric_response_{timestamp}.txt"
+        
+        with open(log_file, 'w') as f:
+            f.write("="*80 + "\n")
+            f.write("PARAMETRIC LLM RESPONSE - FULL OUTPUT\n")
+            f.write("="*80 + "\n\n")
+            f.write(response_text)
+            f.write("\n\n" + "="*80 + "\n")
+            f.write("END OF RESPONSE\n")
+            f.write("="*80 + "\n")
+        
+        print(f"\n{'='*80}")
+        print(f"[PARAMETRIC PARSER] Response logged to: {log_file}")
+        print(f"[PARAMETRIC PARSER] Response length: {len(response_text)} chars")
+        print(f"{'='*80}\n")
+        
+        # ========================================
+        # EXTRACT VARIATION_SPACE
+        # ========================================
+        
+        variation_space = None
+        variation_space_patterns = [
+            # Pattern 1: Quadruple backticks + triple backticks (LLM is using this)
+            r'````json\s*VARIATION_SPACE:\s*```json\s*(.*?)\s*```\s*````',
+            
+            # Pattern 2: Triple backticks only (expected format)
             r'VARIATION_SPACE:\s*```json\s*(.*?)\s*```',
-            response_text,
-            re.DOTALL
-        )
+            
+            # Pattern 3: No code fence, JSON object directly
+            r'VARIATION_SPACE:\s*(\{.*?\})\s*(?:UI_CODE:|$)',
+            
+            # Pattern 4: Reversed order
+            r'```json\s*VARIATION_SPACE\s*(.*?)\s*```',
+            
+            # Pattern 5: Case insensitive loose matching
+            r'variation[_\s]*space[:\s]*```json\s*(.*?)\s*```',
+        ]
         
-        if not variation_space_match:
-            # Try without code fence
-            variation_space_match = re.search(
-                r'VARIATION_SPACE:\s*(\{.*?\})\s*UI_CODE:',
-                response_text,
-                re.DOTALL
-            )
+        for i, pattern in enumerate(variation_space_patterns, 1):
+            match = re.search(pattern, response_text, re.DOTALL | re.IGNORECASE)
+            if match:
+                try:
+                    json_text = match.group(1).strip()
+                    # Remove any remaining backticks
+                    json_text = re.sub(r'```\w*', '', json_text).strip()
+                    variation_space = json.loads(json_text)
+                    print(f"[PARSER] ✓ VARIATION_SPACE extracted using pattern {i}")
+                    break
+                except json.JSONDecodeError as e:
+                    print(f"[PARSER] Pattern {i} matched but JSON parse failed: {e}")
+                    continue
         
-        if not variation_space_match:
-            raise ValueError("Could not find VARIATION_SPACE in response")
+        if not variation_space:
+            print(f"[PARSER] ✗ All patterns failed, trying fallback extraction...")
+            
+            # Fallback: Find any JSON with "dimensions" field
+            json_objects = re.findall(r'\{[^{}]*"dimensions"[^{}]*\[.*?\].*?\}', response_text, re.DOTALL)
+            if json_objects:
+                for obj_text in json_objects:
+                    try:
+                        # Expand to get complete JSON object
+                        start = response_text.index(obj_text)
+                        bracket_count = 0
+                        end = start
+                        for i, char in enumerate(response_text[start:], start):
+                            if char == '{':
+                                bracket_count += 1
+                            elif char == '}':
+                                bracket_count -= 1
+                                if bracket_count == 0:
+                                    end = i + 1
+                                    break
+                        
+                        full_json = response_text[start:end]
+                        variation_space = json.loads(full_json)
+                        print(f"[PARSER] ✓ VARIATION_SPACE extracted via fallback JSON search")
+                        break
+                    except Exception as e:
+                        continue
         
-        variation_space_json = variation_space_match.group(1).strip()
-        variation_space = json.loads(variation_space_json)
+        if not variation_space:
+            print(f"[ERROR] Could not extract VARIATION_SPACE from response")
+            print(f"[ERROR] Full response saved to: {log_file}")
+            raise ValueError("Could not extract VARIATION_SPACE from response")
         
-        # Extract UI code
-        ui_code_match = re.search(
-            r'UI_CODE:\s*```(?:jsx|javascript|tsx|typescript)?\s*(.*?)\s*```',
-            response_text,
-            re.DOTALL
-        )
+        # ========================================
+        # EXTRACT UI_CODE
+        # ========================================
         
-        if not ui_code_match:
-            # Try without code fence
-            ui_code_match = re.search(
-                r'UI_CODE:\s*(export default function.*)',
-                response_text,
-                re.DOTALL
-            )
+        ui_code = None
+        ui_code_patterns = [
+            # Pattern 1: Standard with code fence and language tag
+            r'UI_CODE:\s*```(?:jsx|javascript|tsx|typescript|js)\s*(.*?)\s*```',
+            
+            # Pattern 2: Without language tag
+            r'UI_CODE:\s*```\s*(export default function.*?)\s*```',
+            
+            # Pattern 3: Without code fence
+            r'UI_CODE:\s*(export default function.*?)(?:```|VARIATION_SPACE:|$)',
+            
+            # Pattern 4: Just grab everything after "export default function App"
+            r'(export default function App\s*\([^)]*\)\s*\{.*)',
+        ]
         
-        if not ui_code_match:
-            raise ValueError("Could not find UI_CODE in response")
+        for i, pattern in enumerate(ui_code_patterns, 1):
+            match = re.search(pattern, response_text, re.DOTALL | re.IGNORECASE)
+            if match:
+                ui_code = match.group(1).strip()
+                print(f"[PARSER] ✓ UI_CODE extracted using pattern {i}")
+                print(f"[PARSER] UI_CODE length: {len(ui_code)} chars")
+                
+                # Check if truncated
+                if not ui_code.rstrip().endswith('}'):
+                    print(f"[PARSER] ⚠ WARNING: UI_CODE appears truncated (doesn't end with }})")
+                    print(f"[PARSER] Last 100 chars: ...{ui_code[-100:]}")
+                
+                break
+        
+        if not ui_code:
+            print(f"[ERROR] Could not extract UI_CODE from response")
+            print(f"[ERROR] Full response saved to: {log_file}")
+            raise ValueError("Could not extract UI_CODE from response")
+        
+        # ========================================
+        # VALIDATE & RETURN
+        # ========================================
+        
+        if 'dimensions' not in variation_space:
+            raise ValueError("VARIATION_SPACE missing 'dimensions' field")
+        
+        if not ui_code.startswith('export default function'):
+            print(f"[PARSER] ⚠ WARNING: UI_CODE doesn't start with 'export default function'")
+        
+        print(f"[PARSER] ✓ Successfully parsed parametric response")
+        print(f"[PARSER] Dimensions: {len(variation_space['dimensions'])}")
+        print(f"[PARSER] UI_CODE length: {len(ui_code)} chars\n")
+        
+        return {
+            'variation_space': variation_space,
+            'ui_code': ui_code
+        }
         
         ui_code = ui_code_match.group(1).strip()
         
@@ -202,7 +305,7 @@ Screen: {device_info['screen']['width']}px × {device_info['screen']['height']}p
         }
     
     def _validate_result(self, result: Dict[str, Any]):
-        """Validate the parametric result"""
+        """Validate the parametric result with enhanced checks"""
         
         # Check structure
         if 'ui_code' not in result:
@@ -233,6 +336,21 @@ Screen: {device_info['screen']['width']}px × {device_info['screen']['height']}p
             # Check default value
             if not (0 <= dim['default_value'] <= 100):
                 raise ValueError(f"Default value must be 0-100, got {dim['default_value']}")
+            
+            # Quality checks (warnings, not errors)
+            if 'affects' in dim and len(dim['affects']) < 3:
+                print(f"  ⚠ Dimension '{dim['id']}' affects <3 properties - might be too narrow")
+            
+            if dim['min_label'].lower() in ['low', 'small', 'less'] or dim['max_label'].lower() in ['high', 'large', 'more']:
+                print(f"  ⚠ Dimension '{dim['id']}' has generic labels - consider more contextual labels")
+            
+            # Check for design thinking indicators
+            has_pattern = 'pattern' in dim
+            has_philosophical = 'philosophical_extremes' in dim
+            has_type = 'type' in dim
+            
+            if has_pattern or has_philosophical or has_type:
+                print(f"  ✓ Dimension '{dim['id']}' shows design abstraction thinking")
         
         print(f"  ✓ Validation passed")
 
