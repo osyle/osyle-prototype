@@ -1,6 +1,5 @@
 import React from 'react'
 import { type ProjectDisplay } from '../types/home.types'
-import DesignMLv2Renderer from './DesignMLRenderer'
 import DynamicReactRenderer from './DynamicReactRenderer'
 
 // ============================================================================
@@ -133,9 +132,8 @@ const ProjectCardPreview: React.FC<ProjectCardPreviewProps> = ({
     )
   }
 
-  const isDesignML = project.rendering_mode === 'design-ml'
-  const baseWidth = isDesignML ? 1024 : 375
-  const baseHeight = isDesignML ? 768 : 812
+  const baseWidth = 375
+  const baseHeight = 812
 
   const availableHeight = cardHeight - 70
   const availableWidth = 280
@@ -161,10 +159,12 @@ const ProjectCardPreview: React.FC<ProjectCardPreviewProps> = ({
           justifyContent: 'center',
         }}
       >
-        {project.rendering_mode === 'design-ml' ? (
-          <DesignMLv2Renderer document={project.ui} />
+        {typeof project.ui === 'string' ? (
+          // Handle JSX code strings from backend
+          <DynamicReactRenderer jsxCode={project.ui} />
         ) : (
-          <DynamicReactRenderer jsxCode={project.ui as string} />
+          // Handle React component trees
+          <DynamicReactRenderer jsxCode={JSON.stringify(project.ui)} />
         )}
       </div>
     </div>

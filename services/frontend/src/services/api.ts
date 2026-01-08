@@ -63,7 +63,7 @@ export interface Project {
   inspiration_image_keys?: string[] // S3 keys
   inspiration_image_urls?: string[] // Presigned URLs (when requested)
   device_info?: DeviceInfo // Device settings when project was created
-  rendering_mode?: 'react' | 'design-ml' // Rendering mode when project was created
+  rendering_mode?: 'react' | 'parametric' // Rendering mode when project was created
   flow_mode?: boolean // Enable flow mode
   max_screens?: number // Max screens in flow
   flow_graph?: FlowGraph // Flow graph structure
@@ -83,8 +83,8 @@ export interface DeviceInfo {
 
 export interface GenerateUIResponse {
   status: string
-  type: 'design-ml' | 'react'
-  ui: unknown // JSON object for design-ml, string for react
+  type: 'react' | 'parametric'
+  ui: unknown
   version: number
   dtr_applied?: boolean
 }
@@ -385,7 +385,7 @@ export const projectsAPI = {
     }>
     screen_files?: Record<string, File> // e.g., { 'screen_0_figma': file, 'screen_0_image_0': file }
     device_info?: DeviceInfo
-    rendering_mode?: 'react' | 'design-ml'
+    rendering_mode?: 'react' | 'parametric'
     flow_mode?: boolean
     max_screens?: number
     metadata?: Record<string, unknown>
@@ -646,7 +646,7 @@ export const llmAPI = {
     projectId: string,
     taskDescription: string,
     deviceInfo: DeviceInfo,
-    renderingMode: 'design-ml' | 'react',
+    renderingMode: 'react' | 'parametric',
     callbacks?: WSCallbacks,
   ): Promise<GenerateUIResponse> => {
     const result = await generateUIWebSocket(
@@ -820,7 +820,7 @@ export const llmAPI = {
    * Get a random UI by rendering mode
    */
   getRandomUIByMode: async (
-    renderingMode: 'design-ml' | 'react',
+    renderingMode: 'parametric' | 'react',
   ): Promise<
     GenerateUIResponse & { project_id: string; project_name: string }
   > => {
@@ -833,7 +833,7 @@ export const llmAPI = {
    * Check if user has any UIs of a specific rendering mode
    */
   hasUIsByMode: async (
-    renderingMode: 'design-ml' | 'react',
+    renderingMode: 'parametric' | 'react',
   ): Promise<boolean> => {
     try {
       await apiRequest(`/api/llm/ui/random?rendering_mode=${renderingMode}`)

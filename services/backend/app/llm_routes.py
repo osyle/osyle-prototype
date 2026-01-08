@@ -850,12 +850,12 @@ async def get_ui(
         if not ui_output:
             raise HTTPException(status_code=404, detail="UI not found")
         
-        # Determine type
-        ui_type = "design-ml" if isinstance(ui_output, dict) else "react"
+        # Get rendering mode from project metadata
+        rendering_mode = project.get("rendering_mode", "react")
         
         return {
             "status": "success",
-            "type": ui_type,
+            "type": rendering_mode,  # 'react' or 'parametric'
             "ui": ui_output,
             "version": target_version
         }
@@ -993,7 +993,7 @@ async def get_random_ui(
 ):
     """
     Get a random UI from current user's projects
-    Optional: filter by rendering_mode ('react' or 'design-ml')
+    Optional: filter by rendering_mode ('react' or 'parametric')
     """
     user_id = user.get("user_id")
     
@@ -1023,11 +1023,12 @@ async def get_random_ui(
             version=project.get("metadata", {}).get("ui_version", 1)
         )
         
-        ui_type = "design-ml" if isinstance(ui_output, dict) else "react"
+        # Get rendering mode from project metadata
+        rendering_mode = project.get("rendering_mode", "react")
         
         return {
             "status": "success",
-            "type": ui_type,
+            "type": rendering_mode,  # 'react' or 'parametric'
             "ui": ui_output,
             "project_id": project["project_id"],
             "project_name": project["name"],

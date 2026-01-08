@@ -82,7 +82,7 @@ export interface ProjectDisplay {
   ui?: Record<string, unknown> | string // Legacy: single screen UI
   ui_loading?: boolean
   ui_error?: boolean
-  rendering_mode?: 'design-ml' | 'react'
+  rendering_mode?: 'react' | 'parametric'
   created_at?: string // Timestamp for sorting
 }
 

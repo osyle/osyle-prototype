@@ -204,7 +204,7 @@ export function generateUIWebSocket(
   projectId: string,
   taskDescription: string,
   deviceInfo: { platform: string; screen: { width: number; height: number } },
-  renderingMode: 'design-ml' | 'react',
+  renderingMode: 'react' | 'parametric',
   callbacks: WSCallbacks,
 ): Promise<Record<string, unknown>> {
   return connectWebSocket(

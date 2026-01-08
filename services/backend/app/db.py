@@ -320,7 +320,7 @@ def create_project(
     selected_resource_ids: List[str] = None,
     inspiration_image_keys: List[str] = None,  # S3 keys for inspiration images
     device_info: dict = None,  # Device settings when project was created
-    rendering_mode: str = None,  # 'react' or 'design-ml'
+    rendering_mode: str = None,  # 'react' or 'parametric'
     flow_mode: bool = True,  # NEW: Flow mode flag
     max_screens: int = 5,  # NEW: Max screens in flow
     screen_definitions: List[dict] = None,  # NEW: Screen definitions from user

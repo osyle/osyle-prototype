@@ -37,7 +37,7 @@ async def create_project(
     - **inspiration_images**: Optional list of image files for visual inspiration (max 5)
     - **screen_definitions**: Optional JSON array of screen definitions
     - **device_info**: Optional JSON string of device settings (platform, screen dimensions)
-    - **rendering_mode**: Optional rendering mode ('react' or 'design-ml')
+    - **rendering_mode**: Optional rendering mode ('react' or 'parametric')
     - **metadata**: Optional JSON metadata
     - **screen_N_figma**: Optional figma.json file for screen N
     - **screen_N_image_M**: Optional image M for screen N

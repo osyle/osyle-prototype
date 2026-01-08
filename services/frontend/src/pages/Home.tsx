@@ -2190,7 +2190,7 @@ export default function Home() {
                           <div className="text-xs" style={{ color: '#929397' }}>
                             {project.rendering_mode === 'react'
                               ? 'React'
-                              : 'Design ML'}
+                              : 'Parametric'}
                           </div>
                         </div>
 
