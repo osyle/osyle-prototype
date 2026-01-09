@@ -1,6 +1,7 @@
 import { ChevronLeft, Home } from 'lucide-react'
 import { useState } from 'react'
 import type { FlowGraph } from '../types/home.types'
+import type { ParameterValues } from '../types/parametric.types'
 import DynamicReactRenderer from './DynamicReactRenderer'
 
 interface PrototypeRunnerProps {
@@ -9,11 +10,13 @@ interface PrototypeRunnerProps {
     platform: 'web' | 'phone'
     screen: { width: number; height: number }
   }
+  parametricValues?: ParameterValues // NEW: Accept parametric state from Concept tab
 }
 
 export default function PrototypeRunner({
   flow,
   deviceInfo,
+  parametricValues = {}, // NEW: Default to empty object if not provided
 }: PrototypeRunnerProps) {
   const [currentScreenId, setCurrentScreenId] = useState(flow.entry_screen_id)
   const [history, setHistory] = useState<string[]>([])
@@ -109,6 +112,10 @@ export default function PrototypeRunner({
               jsxCode={currentScreen.ui_code}
               propsToInject={{
                 onTransition: handleTransition,
+                // NEW: Pass parametric values to the rendered component
+                // This ensures the Prototype tab initializes with the state
+                // that was set in the Concept tab
+                parameters: parametricValues,
               }}
             />
           ) : (

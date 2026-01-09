@@ -903,7 +903,11 @@ export default function Editor() {
                 overflow: 'auto',
               }}
             >
-              <PrototypeRunner flow={flowGraph} deviceInfo={device_info} />
+              <PrototypeRunner
+                flow={flowGraph}
+                deviceInfo={device_info}
+                parametricValues={parameterValues}
+              />
             </div>
           </DeviceFrame>
         )
