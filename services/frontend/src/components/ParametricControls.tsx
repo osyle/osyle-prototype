@@ -1,5 +1,5 @@
 import { Info } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import type {
   VariationSpace,
   ParameterValues,
@@ -11,6 +11,64 @@ interface ParametricControlsProps {
   initialValues?: ParameterValues
   // eslint-disable-next-line no-unused-vars
   onChange: (values: ParameterValues) => void
+}
+
+// Simple tooltip component with fixed positioning to avoid clipping
+interface SimpleTooltipProps {
+  content: string
+  children: React.ReactNode
+}
+
+function SimpleTooltip({ content, children }: SimpleTooltipProps) {
+  const [show, setShow] = useState(false)
+  const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({})
+  const triggerRef = useRef<HTMLDivElement>(null)
+
+  const handleMouseEnter = () => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      setTooltipStyle({
+        position: 'fixed',
+        top: `${rect.bottom + 8}px`,
+        left: `${rect.left}px`,
+        zIndex: 9999,
+      })
+      setShow(true)
+    }
+  }
+
+  return (
+    <div className="relative inline-block">
+      <div
+        ref={triggerRef}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={() => setShow(false)}
+      >
+        {children}
+      </div>
+      {show && (
+        <div
+          className="animate-in fade-in duration-150"
+          style={{
+            ...tooltipStyle,
+            maxWidth: '220px',
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            className="px-3 py-2 rounded-lg text-xs"
+            style={{
+              backgroundColor: '#1F1F20',
+              color: '#FFFFFF',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+            }}
+          >
+            {content}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // Enhanced tooltip component for philosophical extremes
@@ -28,11 +86,38 @@ function PhilosophicalTooltip({
   position,
 }: PhilosophicalTooltipProps) {
   const [show, setShow] = useState(false)
+  const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({})
+  const triggerRef = useRef<HTMLDivElement>(null)
+
+  const handleMouseEnter = () => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      const tooltipWidth = 220
+
+      // Calculate position based on which side the tooltip should appear
+      let left = rect.left
+      if (position === 'right') {
+        // Align right edge of tooltip with right edge of trigger
+        left = rect.right - tooltipWidth
+      }
+      // For 'left', just use rect.left as is
+
+      setTooltipStyle({
+        position: 'fixed',
+        top: `${rect.top - 10}px`,
+        left: `${left}px`,
+        transform: 'translateY(-100%)',
+        zIndex: 9999,
+      })
+      setShow(true)
+    }
+  }
 
   return (
     <div className="relative inline-block">
       <div
-        onMouseEnter={() => setShow(true)}
+        ref={triggerRef}
+        onMouseEnter={handleMouseEnter}
         onMouseLeave={() => setShow(false)}
       >
         <Info
@@ -43,10 +128,11 @@ function PhilosophicalTooltip({
       </div>
       {show && (
         <div
-          className="absolute bottom-full mb-2 z-50 animate-in fade-in duration-150"
+          className="animate-in fade-in duration-150"
           style={{
-            [position]: '0',
+            ...tooltipStyle,
             width: '220px',
+            pointerEvents: 'none',
           }}
         >
           <div
@@ -155,7 +241,7 @@ export default function ParametricControls({
       dimension.pattern?.includes('preset')
     ) {
       return {
-        label: 'Modes',
+        label: 'Categorical',
         color: '#3B82F6',
         bgColor: '#EFF6FF',
       }
@@ -163,7 +249,7 @@ export default function ParametricControls({
 
     if (dimension.type === 'continuous') {
       return {
-        label: 'Scale',
+        label: 'Numerical',
         color: '#8B5CF6',
         bgColor: '#F5F3FF',
       }
@@ -214,25 +300,13 @@ export default function ParametricControls({
                   )}
 
                   {/* Description Tooltip */}
-                  <div className="group relative">
+                  <SimpleTooltip content={dimension.description}>
                     <Info
                       size={14}
                       style={{ color: '#929397' }}
                       className="cursor-help hover:opacity-70 transition-opacity"
                     />
-                    <div className="absolute left-0 top-full mt-2 hidden group-hover:block z-50">
-                      <div
-                        className="px-3 py-2 rounded-lg text-xs w-56"
-                        style={{
-                          backgroundColor: '#1F1F20',
-                          color: '#FFFFFF',
-                          boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-                        }}
-                      >
-                        {dimension.description}
-                      </div>
-                    </div>
-                  </div>
+                  </SimpleTooltip>
                 </div>
 
                 {/* Current Value Display */}
