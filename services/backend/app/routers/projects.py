@@ -351,6 +351,33 @@ async def update_project(
     return updated
 
 
+@router.patch("/{project_id}/flow-graph")
+async def update_project_flow_graph(
+    project_id: str,
+    flow_graph: dict,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Update project's flow_graph (including display_title and display_description)
+    """
+    # Check ownership
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.get("owner_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Update flow_graph in database
+    updated = db.update_project_flow_graph(project_id, flow_graph)
+    
+    return {
+        "status": "success",
+        "message": "Flow graph updated successfully",
+        "flow_graph": updated.get("flow_graph")
+    }
+
+
 @router.delete("/{project_id}", response_model=MessageResponse)
 async def delete_project(
     project_id: str,

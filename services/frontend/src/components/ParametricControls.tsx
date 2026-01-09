@@ -127,13 +127,13 @@ export default function ParametricControls({
       if (value < 33) {
         // Try to use philosophical extreme name, fall back to min_label
         return (
-          dimension.philosophical_extremes?.['0']?.name || dimension.min_label
+          dimension.philosophical_extremes?.[0]?.name || dimension.min_label
         )
       }
       if (value > 66) {
         // Try to use philosophical extreme name, fall back to max_label
         return (
-          dimension.philosophical_extremes?.['100']?.name || dimension.max_label
+          dimension.philosophical_extremes?.[100]?.name || dimension.max_label
         )
       }
       return 'Balanced'
@@ -173,143 +173,143 @@ export default function ParametricControls({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div>
-        <div className="text-xs font-medium" style={{ color: '#6B7280' }}>
-          Parametric Controls
-        </div>
-        <div className="text-xs" style={{ color: '#929397' }}>
-          {variationSpace.metadata.ui_type}
-        </div>
-      </div>
-
+    <div className="space-y-3">
       {/* Dimension Controls */}
       {variationSpace.dimensions.map(dimension => {
         const currentValue = sliderValues[dimension.id]
         const badge = getPatternBadge(dimension)
 
         return (
-          <div key={dimension.id}>
+          <div
+            key={dimension.id}
+            className="rounded-xl p-4 transition-all hover:shadow-md"
+            style={{
+              backgroundColor: '#FAFAFA',
+              border: '1px solid #E8E1DD',
+            }}
+          >
             {/* Dimension Header */}
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <span
-                  className="text-sm font-medium"
-                  style={{ color: '#3B3B3B' }}
-                >
-                  {dimension.label}
-                </span>
-
-                {/* Pattern Type Badge */}
-                {badge && (
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
                   <span
-                    className="px-2 py-0.5 text-xs rounded-full font-medium"
-                    style={{
-                      backgroundColor: badge.bgColor,
-                      color: badge.color,
-                      border: `1px solid ${badge.color}20`,
-                    }}
+                    className="text-sm font-semibold"
+                    style={{ color: '#1F1F20' }}
                   >
-                    {badge.label}
+                    {dimension.label}
                   </span>
-                )}
 
-                {/* Description Tooltip */}
-                <div className="group relative">
-                  <Info
-                    size={12}
-                    style={{ color: '#929397' }}
-                    className="cursor-help"
-                  />
-                  <div className="absolute left-0 top-full mt-1 hidden group-hover:block z-50">
-                    <div
-                      className="px-3 py-2 rounded-lg text-xs w-48"
+                  {/* Pattern Type Badge */}
+                  {badge && (
+                    <span
+                      className="px-2 py-0.5 text-xs rounded-md font-medium"
                       style={{
-                        backgroundColor: '#1F1F20',
-                        color: '#FFFFFF',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                        backgroundColor: badge.bgColor,
+                        color: badge.color,
+                        border: `1px solid ${badge.color}20`,
                       }}
                     >
-                      {dimension.description}
+                      {badge.label}
+                    </span>
+                  )}
+
+                  {/* Description Tooltip */}
+                  <div className="group relative">
+                    <Info
+                      size={14}
+                      style={{ color: '#929397' }}
+                      className="cursor-help hover:opacity-70 transition-opacity"
+                    />
+                    <div className="absolute left-0 top-full mt-2 hidden group-hover:block z-50">
+                      <div
+                        className="px-3 py-2 rounded-lg text-xs w-56"
+                        style={{
+                          backgroundColor: '#1F1F20',
+                          color: '#FFFFFF',
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                        }}
+                      >
+                        {dimension.description}
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <span className="text-xs" style={{ color: '#929397' }}>
-                  ||
-                </span>
+                {/* Current Value Display */}
+                <div
+                  className="text-xs font-medium px-2 py-1 rounded-md inline-block"
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    color: '#3B3B3B',
+                    border: '1px solid #E8E1DD',
+                  }}
+                >
+                  {getValueLabel(dimension, currentValue)}
+                </div>
               </div>
-
-              {/* Current Value Label */}
-              <span
-                className="text-sm font-medium"
-                style={{ color: '#3B3B3B' }}
-              >
-                {getValueLabel(dimension, currentValue)}
-              </span>
             </div>
 
-            {/* Slider Track */}
-            <div
-              className="relative h-2 rounded-full"
-              style={{ backgroundColor: '#F4F4F4' }}
-            >
+            {/* Slider with Extreme Labels */}
+            <div className="space-y-2">
+              {/* Slider Track */}
               <div
-                className="absolute left-0 top-0 h-full rounded-full transition-all duration-150"
-                style={{
-                  backgroundColor: '#3B3B3B',
-                  width: `${currentValue}%`,
-                }}
-              />
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={currentValue}
-                onChange={e =>
-                  handleSliderChange(dimension.id, Number(e.target.value))
-                }
-                className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-              />
-            </div>
-
-            {/* Min/Max Labels with Philosophical Tooltips */}
-            <div className="flex justify-between items-center mt-1.5">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs" style={{ color: '#929397' }}>
-                  {dimension.min_label}
-                </span>
-                {dimension.philosophical_extremes?.['0'] && (
-                  <PhilosophicalTooltip
-                    extreme={dimension.philosophical_extremes['0']}
-                    position="left"
-                  />
-                )}
+                className="relative h-2 rounded-full"
+                style={{ backgroundColor: '#E8E1DD' }}
+              >
+                {/* Fill */}
+                <div
+                  className="absolute left-0 top-0 h-full rounded-full transition-all"
+                  style={{
+                    backgroundColor: '#3B3B3B',
+                    width: `${currentValue}%`,
+                  }}
+                />
+                {/* Slider Input */}
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={currentValue}
+                  onChange={e =>
+                    handleSliderChange(dimension.id, Number(e.target.value))
+                  }
+                  className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+                  style={{ margin: 0 }}
+                />
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs" style={{ color: '#929397' }}>
-                  {dimension.max_label}
-                </span>
-                {dimension.philosophical_extremes?.['100'] && (
-                  <PhilosophicalTooltip
-                    extreme={dimension.philosophical_extremes['100']}
-                    position="right"
-                  />
-                )}
+              {/* Extreme Labels */}
+              <div className="flex items-center justify-between">
+                {/* Min Extreme */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs" style={{ color: '#6B7280' }}>
+                    {dimension.min_label}
+                  </span>
+                  {dimension.philosophical_extremes?.[0] && (
+                    <PhilosophicalTooltip
+                      extreme={dimension.philosophical_extremes[0]}
+                      position="left"
+                    />
+                  )}
+                </div>
+
+                {/* Max Extreme */}
+                <div className="flex items-center gap-1.5">
+                  {dimension.philosophical_extremes?.[100] && (
+                    <PhilosophicalTooltip
+                      extreme={dimension.philosophical_extremes[100]}
+                      position="right"
+                    />
+                  )}
+                  <span className="text-xs" style={{ color: '#6B7280' }}>
+                    {dimension.max_label}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
         )
       })}
-
-      {/* Empty State */}
-      {variationSpace.dimensions.length === 0 && (
-        <div className="text-xs text-center py-4" style={{ color: '#9CA3AF' }}>
-          No parametric controls available for this UI
-        </div>
-      )}
     </div>
   )
 }

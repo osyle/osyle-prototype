@@ -89,6 +89,8 @@ Return **ONLY** a valid JSON object (no markdown, no explanations):
 ```json
 {
   "flow_name": "string (use strategic name from optimal design)",
+  "display_title": "string (3-5 word punchy title for UI display)",
+  "display_description": "string (10-15 word strategic one-liner)",
   "entry_screen_id": "string",
   "screens": [
     {
@@ -138,6 +140,8 @@ Return **ONLY** a valid JSON object (no markdown, no explanations):
 ```json
 {
   "flow_name": "Marketing Intelligence Discovery",
+  "display_title": "Opportunity Intelligence",
+  "display_description": "Discover and capture competitive marketing opportunities with AI-powered insights",
   "entry_screen_id": "screen_1",
   "screens": [
     {

@@ -504,6 +504,23 @@ export const projectsAPI = {
   },
 
   /**
+   * Update project's flow graph (including display_title and display_description)
+   */
+  updateFlowGraph: async (
+    projectId: string,
+    flowGraph: FlowGraph,
+  ): Promise<{ status: string; message: string; flow_graph: FlowGraph }> => {
+    return apiRequest<{
+      status: string
+      message: string
+      flow_graph: FlowGraph
+    }>(`/api/projects/${projectId}/flow-graph`, {
+      method: 'PATCH',
+      body: JSON.stringify(flowGraph),
+    })
+  },
+
+  /**
    * Get upload URL for project output
    */
   getOutputUploadUrl: async (

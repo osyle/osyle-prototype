@@ -64,6 +64,8 @@ export interface FlowScreen {
 export interface FlowGraph {
   flow_id: string
   flow_name: string
+  display_title?: string
+  display_description?: string
   description?: string
   entry_screen_id: string
   screens: FlowScreen[]

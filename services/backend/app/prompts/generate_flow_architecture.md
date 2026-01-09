@@ -64,6 +64,8 @@ Return **ONLY** a valid JSON object (no markdown, no explanations):
 ```json
 {
   "flow_name": "string",
+  "display_title": "string (3-5 word punchy title for UI display)",
+  "display_description": "string (10-15 word one-liner description)",
   "entry_screen_id": "string",
   "screens": [
     {
@@ -91,6 +93,17 @@ Return **ONLY** a valid JSON object (no markdown, no explanations):
 ```
 
 ---
+
+## Field Descriptions
+
+**display_title**: Short, professional title (3-5 words) - NOT the user's raw input. Examples:
+
+- "Fitness Progress Tracker", "Couple's Travel Companion", "Step-by-Step Cooking"
+
+**display_description**: Brief value proposition (10-15 words). Examples:
+
+- "Track workouts, set goals, and monitor your fitness journey"
+- "Plan trips together with shared itineraries and memories"
 
 ## Field Descriptions
 
@@ -139,6 +152,8 @@ If task can be accomplished on one screen, output a single-screen flow:
 ```json
 {
   "flow_name": "Landing Page",
+  "display_title": "Product Landing Page",
+  "display_description": "Showcase your product with compelling features and clear call-to-action",
   "entry_screen_id": "screen_1",
   "screens": [
     {
@@ -185,6 +200,8 @@ For processes that need multiple screens:
 ```json
 {
   "flow_name": "Signup Flow",
+  "display_title": "Create Your Account",
+  "display_description": "Join thousands of users with a simple and secure signup process",
   "entry_screen_id": "screen_1",
   "screens": [
     {

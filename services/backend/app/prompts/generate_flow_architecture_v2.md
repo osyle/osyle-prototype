@@ -112,6 +112,8 @@ Return **ONLY** a valid JSON object (no markdown, no explanations):
 ```json
 {
   "flow_name": "string",
+  "display_title": "string (3-5 word punchy title for UI display)",
+  "display_description": "string (10-15 word one-liner description)",
   "entry_screen_id": "string",
   "screens": [
     {
@@ -144,6 +146,20 @@ Return **ONLY** a valid JSON object (no markdown, no explanations):
 ---
 
 ## Field Descriptions
+
+### Top-Level Fields:
+
+- **flow_name**: Technical name for the flow (e.g., "Signup Flow", "Recipe Cooking Flow")
+- **display_title**: Short, punchy title for UI display (3-5 words). Examples:
+  - User input: "app for tracking my workouts" → "Fitness Progress Tracker"
+  - User input: "travel planner with partner" → "Couple's Travel Companion"
+  - User input: "recipe cooking app" → "Step-by-Step Cooking"
+  - Make it professional, clear, and catchy - NOT the user's raw input
+- **display_description**: Brief one-liner description (10-15 words). Examples:
+  - "Track workouts, set goals, and monitor your fitness journey"
+  - "Plan trips together with shared itineraries and memories"
+  - "Cook confidently with interactive step-by-step recipe guidance"
+  - Clear value proposition that explains what the app does
 
 ### Screen Fields:
 
@@ -228,6 +244,8 @@ If task can be accomplished on one screen (and no screen definitions provided), 
 ```json
 {
   "flow_name": "Landing Page",
+  "display_title": "Product Landing Page",
+  "display_description": "Showcase your product with compelling features and clear call-to-action",
   "entry_screen_id": "screen_1",
   "screens": [
     {
@@ -305,6 +323,8 @@ For processes that need multiple screens:
 ```json
 {
   "flow_name": "Recipe Cooking Flow",
+  "display_title": "Step-by-Step Cooking",
+  "display_description": "Cook confidently with interactive recipe guidance and real-time instructions",
   "entry_screen_id": "screen_1",
   "screens": [
     {
@@ -380,6 +400,8 @@ For processes that need multiple screens:
 ```json
 {
   "flow_name": "Signup Flow",
+  "display_title": "Create Your Account",
+  "display_description": "Join thousands of users with a simple and secure signup process",
   "entry_screen_id": "screen_1",
   "screens": [
     {
@@ -481,6 +503,8 @@ For processes that need multiple screens:
 ```json
 {
   "flow_name": "Checkout Flow",
+  "display_title": "Secure Checkout",
+  "display_description": "Complete your purchase quickly with our streamlined payment process",
   "entry_screen_id": "screen_1",
   "screens": [
     {
@@ -631,6 +655,8 @@ For processes that need multiple screens:
 ```json
 {
   "flow_name": "Recipe Preparation Flow",
+  "display_title": "Meal Prep Assistant",
+  "display_description": "Organize ingredients and follow cooking steps for perfect results",
   "entry_screen_id": "screen_1",
   "screens": [
     {

@@ -1,3 +1,4 @@
+import { fetchAuthSession, getCurrentUser, signOut } from 'aws-amplify/auth'
 import {
   ArrowLeft,
   Settings,
@@ -10,6 +11,13 @@ import {
   Sparkles,
   Plus,
   List,
+  Wand2,
+  Sliders,
+  MessageSquare,
+  Layers,
+  Eye,
+  Type,
+  Layout,
 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -21,6 +29,7 @@ import InfiniteCanvas, {
   type InfiniteCanvasHandle,
 } from '../components/InfiniteCanvas'
 import ParametricControls from '../components/ParametricControls'
+import ProfileDropdown from '../components/ProfileDropdown'
 import PrototypeCanvas from '../components/PrototypeCanvas'
 import PrototypeRunner from '../components/PrototypeRunner'
 import VersionHistory from '../components/VersionHistory'
@@ -42,6 +51,13 @@ type RethinkStage =
   | 'flow'
   | 'screens'
   | null
+
+interface UserInfo {
+  name: string
+  email: string
+  initials: string
+  picture?: string
+}
 
 // Extended screen type with loading states
 // These fields are added dynamically during progressive generation
@@ -71,11 +87,7 @@ export default function Editor() {
   const hasInitialized = useRef(false)
 
   const [activeTab, setActiveTab] = useState('Concept')
-  const [detailsValue, setDetailsValue] = useState(66)
-  const [energyValue, setEnergyValue] = useState(50)
-  const [craftValue, setCraftValue] = useState(10)
   const [inputText, setInputText] = useState('')
-  const [styleDropdownOpen, setStyleDropdownOpen] = useState(false)
   const [selectedStyle, setSelectedStyle] = useState({
     title: 'Playful & bold',
     bg: 'linear-gradient(135deg, #FFB6A3 0%, #E8C5E8 33%, #B8D4E8 66%, #A8E8C0 100%)',
@@ -83,6 +95,23 @@ export default function Editor() {
 
   // Parametric controls state
   const [parameterValues, setParameterValues] = useState<ParameterValues>({})
+
+  // User info state
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
+
+  // Editable project title/description state
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [isEditingDescription, setIsEditingDescription] = useState(false)
+  const [editedTitle, setEditedTitle] = useState('')
+  const [editedDescription, setEditedDescription] = useState('')
+
+  // Right panel tab state
+  const [activeRightTab, setActiveRightTab] = useState<
+    'explore' | 'refine' | 'iterate'
+  >('explore')
+
+  // Style dropdown state
+  const [styleDropdownOpen, setStyleDropdownOpen] = useState(false)
 
   // Generation state
   const [generationStage, setGenerationStage] =
@@ -156,15 +185,6 @@ export default function Editor() {
     },
   ]
 
-  const getDetailsLabel = () => {
-    if (detailsValue < 33) return 'Light'
-    if (detailsValue < 66) return 'Medium'
-    return 'Bold'
-  }
-
-  const getEnergyValue = () => Math.max(1, Math.round((energyValue / 100) * 10))
-  const getCraftValue = () => Math.max(1, Math.round((craftValue / 100) * 10))
-
   const handleBackToHome = () => {
     if (generationStage !== 'complete' && generationStage !== 'error') {
       return
@@ -185,6 +205,95 @@ export default function Editor() {
     navigate('/')
   }
 
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      navigate('/')
+    } catch (err) {
+      console.error('Sign out failed:', err)
+    }
+  }
+
+  const handleTitleEdit = () => {
+    setEditedTitle(flowGraph?.display_title || 'Untitled Project')
+    setIsEditingTitle(true)
+  }
+
+  const handleTitleSave = async () => {
+    if (flowGraph && editedTitle.trim()) {
+      const updatedFlowGraph = {
+        ...flowGraph,
+        display_title: editedTitle.trim(),
+      }
+      setFlowGraph(updatedFlowGraph)
+
+      // Update in localStorage
+      const currentProject = localStorage.getItem('current_project')
+      if (currentProject) {
+        try {
+          const project = JSON.parse(currentProject)
+          project.flow_graph = updatedFlowGraph
+          localStorage.setItem('current_project', JSON.stringify(project))
+
+          // Save to database
+          await api.projects.updateFlowGraph(
+            project.project_id,
+            updatedFlowGraph,
+          )
+          console.log('✅ Title saved to database')
+        } catch (err) {
+          console.error('Failed to update title in database:', err)
+        }
+      }
+    }
+    setIsEditingTitle(false)
+  }
+
+  const handleTitleCancel = () => {
+    setIsEditingTitle(false)
+    setEditedTitle('')
+  }
+
+  const handleDescriptionEdit = () => {
+    setEditedDescription(flowGraph?.display_description || 'No description')
+    setIsEditingDescription(true)
+  }
+
+  const handleDescriptionSave = async () => {
+    if (flowGraph && editedDescription.trim()) {
+      const updatedFlowGraph = {
+        ...flowGraph,
+        display_description: editedDescription.trim(),
+      }
+      setFlowGraph(updatedFlowGraph)
+
+      // Update in localStorage
+      const currentProject = localStorage.getItem('current_project')
+      if (currentProject) {
+        try {
+          const project = JSON.parse(currentProject)
+          project.flow_graph = updatedFlowGraph
+          localStorage.setItem('current_project', JSON.stringify(project))
+
+          // Save to database
+          await api.projects.updateFlowGraph(
+            project.project_id,
+            updatedFlowGraph,
+          )
+          console.log('✅ Description saved to database')
+        } catch (err) {
+          console.error('Failed to update description in database:', err)
+        }
+      }
+    }
+    setIsEditingDescription(false)
+  }
+
+  const handleDescriptionCancel = () => {
+    setIsEditingDescription(false)
+    setEditedDescription('')
+  }
+
   useEffect(() => {
     // Prevent double execution in React StrictMode
     if (hasInitialized.current) return
@@ -192,6 +301,44 @@ export default function Editor() {
 
     checkAndStartGeneration()
     loadInspirationImages()
+  }, [])
+
+  // Load user info
+  useEffect(() => {
+    async function loadUserInfo() {
+      try {
+        await getCurrentUser()
+        const session = await fetchAuthSession()
+        const email = session.tokens?.idToken?.payload['email'] as
+          | string
+          | undefined
+        const name = session.tokens?.idToken?.payload['name'] as
+          | string
+          | undefined
+        const picture = session.tokens?.idToken?.payload['picture'] as
+          | string
+          | undefined
+
+        if (email) {
+          const nameParts = (name || email.split('@')[0]).split(' ')
+          const initials =
+            nameParts.length > 1
+              ? `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase()
+              : nameParts[0].slice(0, 2).toUpperCase()
+
+          setUserInfo({
+            name: name || email.split('@')[0],
+            email,
+            initials,
+            picture,
+          })
+        }
+      } catch (err) {
+        console.error('Failed to load user info:', err)
+      }
+    }
+
+    loadUserInfo()
   }, [])
 
   // Handle ESC key to exit fullscreen
@@ -1121,7 +1268,7 @@ export default function Editor() {
           className="fixed top-6 transition-all duration-300 z-40"
           style={{
             left: '80px',
-            right: isRightPanelCollapsed ? '80px' : 'calc(20% + 40px)',
+            right: isRightPanelCollapsed ? '80px' : 'calc(28% + 40px)',
             display: 'flex',
             justifyContent: 'center',
           }}
@@ -1173,7 +1320,7 @@ export default function Editor() {
               top: '80px',
               bottom: '100px',
               left: '80px',
-              right: isRightPanelCollapsed ? '80px' : 'calc(20% + 40px)',
+              right: isRightPanelCollapsed ? '80px' : 'calc(28% + 40px)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -1275,7 +1422,7 @@ export default function Editor() {
           className="fixed bottom-6 transition-all duration-300 z-40"
           style={{
             left: '80px',
-            right: isRightPanelCollapsed ? '80px' : 'calc(20% + 40px)',
+            right: isRightPanelCollapsed ? '80px' : 'calc(28% + 40px)',
             display: 'flex',
             justifyContent: 'center',
           }}
@@ -1332,196 +1479,218 @@ export default function Editor() {
         <div
           className="fixed right-0 top-0 h-screen transition-all duration-300 z-30"
           style={{
-            width: isRightPanelCollapsed ? '0' : '20%',
+            width: isRightPanelCollapsed ? '0' : '28%',
           }}
         >
           <div
-            className="relative rounded-3xl mt-6 mr-6 mb-6 ml-0 p-6 flex flex-col gap-6 h-[calc(100vh-48px)]"
+            className="relative rounded-3xl mt-6 mr-6 mb-6 ml-0 flex flex-col gap-6 h-[calc(100vh-48px)]"
             style={{
               backgroundColor: '#FFFFFF',
               boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
               opacity: isRightPanelCollapsed ? 0 : 1,
               overflow: isRightPanelCollapsed ? 'hidden' : 'auto',
+              paddingLeft: '24px',
+              paddingRight: '24px',
+              paddingTop: '24px',
+              paddingBottom: '24px',
             }}
           >
             {!isRightPanelCollapsed && (
               <>
-                <div className="flex items-center justify-between">
-                  <button
-                    className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-semibold transition-all hover:scale-105"
-                    style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
+                {/* Top Row: Tabs (left) + User Profile (right) */}
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  {/* Tab Navigation - Figma Style */}
+                  <div
+                    className="flex items-center gap-0 border-b"
+                    style={{ borderColor: '#E8E1DD' }}
                   >
-                    L
-                  </button>
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="px-4 py-2 rounded-lg text-sm font-medium"
-                      style={{ backgroundColor: '#F7F5F3', color: '#3B3B3B' }}
-                    >
-                      25%
-                    </div>
                     <button
-                      className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm"
-                      style={{ backgroundColor: '#3B3B3B', color: '#FFFFFF' }}
+                      onClick={() => setActiveRightTab('explore')}
+                      className="px-3 py-2 text-xs font-medium transition-colors border-b-2"
+                      style={{
+                        color:
+                          activeRightTab === 'explore' ? '#3B3B3B' : '#929397',
+                        borderColor:
+                          activeRightTab === 'explore'
+                            ? '#3B3B3B'
+                            : 'transparent',
+                      }}
                     >
-                      NI
+                      Explore
+                    </button>
+                    <button
+                      onClick={() => setActiveRightTab('refine')}
+                      className="px-3 py-2 text-xs font-medium transition-colors border-b-2"
+                      style={{
+                        color:
+                          activeRightTab === 'refine' ? '#3B3B3B' : '#929397',
+                        borderColor:
+                          activeRightTab === 'refine'
+                            ? '#3B3B3B'
+                            : 'transparent',
+                      }}
+                    >
+                      Refine
+                    </button>
+                    <button
+                      onClick={() => setActiveRightTab('iterate')}
+                      className="px-3 py-2 text-xs font-medium transition-colors border-b-2"
+                      style={{
+                        color:
+                          activeRightTab === 'iterate' ? '#3B3B3B' : '#929397',
+                        borderColor:
+                          activeRightTab === 'iterate'
+                            ? '#3B3B3B'
+                            : 'transparent',
+                      }}
+                    >
+                      Iterate
                     </button>
                   </div>
+
+                  {/* User Profile */}
+                  <ProfileDropdown
+                    userInfo={userInfo}
+                    onSignOut={handleSignOut}
+                  />
                 </div>
 
+                {/* Project Title & Description - Editable */}
                 <div>
-                  <h2
-                    className="text-2xl font-semibold mb-1"
-                    style={{ color: '#3B3B3B' }}
-                  >
-                    Travel interface
-                  </h2>
-                  <p className="text-sm" style={{ color: '#929397' }}>
-                    App for travelling with partner, iOS app
-                  </p>
-                </div>
-
-                {/* PARAMETRIC MODE - Show ParametricControls */}
-                {rendering_mode === 'parametric' &&
-                  selectedScreen?.['variation_space'] && (
-                    <>
-                      {/* Parametric Controls - FUNCTIONAL */}
-                      <ParametricControls
-                        variationSpace={
-                          selectedScreen['variation_space'] as VariationSpace
-                        }
-                        initialValues={parameterValues}
-                        onChange={newValues => {
-                          setParameterValues(newValues)
+                  {/* Title */}
+                  {isEditingTitle ? (
+                    <div className="mb-1">
+                      <input
+                        type="text"
+                        value={editedTitle}
+                        onChange={e => setEditedTitle(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            handleTitleSave()
+                          } else if (e.key === 'Escape') {
+                            handleTitleCancel()
+                          }
                         }}
-                      />
-
-                      {/* Divider */}
-                      <div
+                        onBlur={handleTitleSave}
+                        autoFocus
+                        className="w-full text-2xl font-semibold px-2 py-1 -ml-2 rounded-lg border-2 outline-none"
                         style={{
-                          height: '1px',
-                          backgroundColor: '#E5E5E5',
-                          margin: '8px 0',
+                          color: '#3B3B3B',
+                          borderColor: '#3B3B3B',
+                          backgroundColor: '#FFFFFF',
                         }}
                       />
-
-                      {/* Style Selector - PLACEHOLDER (dummy for now) */}
-                      <div className="opacity-50 pointer-events-none">
-                        <div
-                          className="text-xs font-medium mb-2"
-                          style={{ color: '#929397' }}
-                        >
-                          Style (Coming Soon)
-                        </div>
-                        <div
-                          className="rounded-2xl p-4"
-                          style={{
-                            background: selectedStyle.bg,
-                            boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-                          }}
-                        >
-                          <div
-                            className="text-xs mb-1"
-                            style={{ color: 'rgba(255,255,255,0.7)' }}
-                          >
-                            Style
-                          </div>
-                          <div
-                            className="text-sm font-semibold"
-                            style={{ color: '#FFFFFF' }}
-                          >
-                            {selectedStyle.title}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Quick Action Buttons - PLACEHOLDER (dummy for now) */}
-                      <div className="opacity-50 pointer-events-none">
-                        <div
-                          className="text-xs font-medium mb-2"
-                          style={{ color: '#929397' }}
-                        >
-                          Actions (Coming Soon)
-                        </div>
-                        <div className="grid grid-cols-4 gap-3">
-                          <button
-                            className="flex flex-col items-center gap-2 p-3 rounded-xl"
-                            style={{ backgroundColor: '#F7F5F3' }}
-                          >
-                            <RotateCcw size={20} style={{ color: '#4F515A' }} />
-                            <span
-                              className="text-xs"
-                              style={{ color: '#929397' }}
-                            >
-                              Vary
-                            </span>
-                          </button>
-                          <button
-                            className="flex flex-col items-center gap-2 p-3 rounded-xl"
-                            style={{ backgroundColor: '#F7F5F3' }}
-                          >
-                            <Palette size={20} style={{ color: '#4F515A' }} />
-                            <span
-                              className="text-xs"
-                              style={{ color: '#929397' }}
-                            >
-                              Colors
-                            </span>
-                          </button>
-                          <button
-                            className="flex flex-col items-center gap-2 p-3 rounded-xl"
-                            style={{ backgroundColor: '#F7F5F3' }}
-                          >
-                            <Sparkles size={20} style={{ color: '#4F515A' }} />
-                            <span
-                              className="text-xs"
-                              style={{ color: '#929397' }}
-                            >
-                              Taste
-                            </span>
-                          </button>
-                          <button
-                            className="flex flex-col items-center gap-2 p-3 rounded-xl"
-                            style={{ backgroundColor: '#F7F5F3' }}
-                          >
-                            <span className="text-lg">08</span>
-                            <span
-                              className="text-xs"
-                              style={{ color: '#929397' }}
-                            >
-                              Style
-                            </span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Feedback Input - PLACEHOLDER (dummy for now) */}
-                      <div className="opacity-50 pointer-events-none mt-auto">
-                        <div
-                          className="text-xs font-medium mb-2"
-                          style={{ color: '#929397' }}
-                        >
-                          Feedback (Coming Soon)
-                        </div>
-                        <textarea
-                          placeholder="Add suggestions or feedback..."
-                          className="w-full px-4 py-3 rounded-xl resize-none"
-                          style={{
-                            backgroundColor: '#F7F5F3',
-                            border: 'none',
-                            color: '#3B3B3B',
-                            fontSize: '14px',
-                          }}
-                          rows={3}
-                          disabled
-                        />
-                      </div>
-                    </>
+                    </div>
+                  ) : (
+                    <h2
+                      onClick={handleTitleEdit}
+                      className="text-2xl font-semibold mb-1 px-2 py-1 -ml-2 rounded-lg cursor-pointer transition-colors"
+                      style={{ color: '#3B3B3B' }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.backgroundColor = '#F7F5F3'
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.backgroundColor = 'transparent'
+                      }}
+                      title="Click to edit"
+                    >
+                      {flowGraph?.display_title || 'Untitled Project'}
+                    </h2>
                   )}
 
-                {/* REACT MODE - Original controls */}
-                {rendering_mode !== 'parametric' && (
-                  <>
+                  {/* Description */}
+                  {isEditingDescription ? (
+                    <div>
+                      <textarea
+                        value={editedDescription}
+                        onChange={e => setEditedDescription(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault()
+                            handleDescriptionSave()
+                          } else if (e.key === 'Escape') {
+                            handleDescriptionCancel()
+                          }
+                        }}
+                        onBlur={handleDescriptionSave}
+                        autoFocus
+                        rows={2}
+                        className="w-full text-sm px-2 py-1 -ml-2 rounded-lg border-2 outline-none resize-none"
+                        style={{
+                          color: '#929397',
+                          borderColor: '#929397',
+                          backgroundColor: '#FFFFFF',
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <p
+                      onClick={handleDescriptionEdit}
+                      className="text-sm px-2 py-1 -ml-2 rounded-lg cursor-pointer transition-colors"
+                      style={{ color: '#929397' }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.backgroundColor = '#F7F5F3'
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.backgroundColor = 'transparent'
+                      }}
+                      title="Click to edit"
+                    >
+                      {flowGraph?.display_description || 'No description'}
+                    </p>
+                  )}
+                </div>
+
+                {/* Tab Content - Explore */}
+                {activeRightTab === 'explore' && (
+                  <div
+                    className="flex-1 flex flex-col gap-5 overflow-y-auto"
+                    style={{ paddingRight: '4px' }}
+                  >
+                    {/* Parametric Controls - Only in parametric mode */}
+                    {rendering_mode === 'parametric' &&
+                      !!selectedScreen?.['variation_space'] && (
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div
+                              className="w-8 h-8 rounded-lg flex items-center justify-center"
+                              style={{
+                                background:
+                                  'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+                              }}
+                            >
+                              <Sliders size={16} style={{ color: '#FFFFFF' }} />
+                            </div>
+                            <div>
+                              <div
+                                className="text-sm font-semibold"
+                                style={{ color: '#3B3B3B' }}
+                              >
+                                Variation Space
+                              </div>
+                              <div
+                                className="text-xs"
+                                style={{ color: '#929397' }}
+                              >
+                                Explore design parameters
+                              </div>
+                            </div>
+                          </div>
+                          <ParametricControls
+                            variationSpace={
+                              selectedScreen[
+                                'variation_space'
+                              ] as VariationSpace
+                            }
+                            initialValues={parameterValues}
+                            onChange={newValues =>
+                              setParameterValues(newValues)
+                            }
+                          />
+                        </div>
+                      )}
+
+                    {/* Style Selector - Dropdown */}
                     <div className="relative">
                       <button
                         onClick={() => setStyleDropdownOpen(!styleDropdownOpen)}
@@ -1570,7 +1739,7 @@ export default function Editor() {
 
                       {styleDropdownOpen && (
                         <div
-                          className="absolute top-full left-0 right-0 mt-2 p-2 rounded-2xl z-10"
+                          className="absolute top-full left-0 right-0 mt-2 p-2 rounded-2xl z-50"
                           style={{
                             backgroundColor: '#FFFFFF',
                             boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
@@ -1598,149 +1767,7 @@ export default function Editor() {
                       )}
                     </div>
 
-                    <div className="space-y-4">
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="text-sm font-medium"
-                              style={{ color: '#3B3B3B' }}
-                            >
-                              Details
-                            </span>
-                            <span
-                              className="text-xs"
-                              style={{ color: '#929397' }}
-                            >
-                              ||
-                            </span>
-                          </div>
-                          <span
-                            className="text-sm font-medium"
-                            style={{ color: '#3B3B3B' }}
-                          >
-                            {getDetailsLabel()}
-                          </span>
-                        </div>
-                        <div
-                          className="relative h-2 rounded-full"
-                          style={{ backgroundColor: '#F4F4F4' }}
-                        >
-                          <div
-                            className="absolute left-0 top-0 h-full rounded-full"
-                            style={{
-                              backgroundColor: '#3B3B3B',
-                              width: `${detailsValue}%`,
-                            }}
-                          />
-                          <input
-                            type="range"
-                            min="10"
-                            max="100"
-                            value={detailsValue}
-                            onChange={e =>
-                              setDetailsValue(Number(e.target.value))
-                            }
-                            className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="text-sm font-medium"
-                              style={{ color: '#3B3B3B' }}
-                            >
-                              Energy
-                            </span>
-                            <span
-                              className="text-xs"
-                              style={{ color: '#929397' }}
-                            >
-                              ||
-                            </span>
-                          </div>
-                          <span
-                            className="text-sm font-medium"
-                            style={{ color: '#3B3B3B' }}
-                          >
-                            {getEnergyValue()}
-                          </span>
-                        </div>
-                        <div
-                          className="relative h-2 rounded-full"
-                          style={{ backgroundColor: '#F4F4F4' }}
-                        >
-                          <div
-                            className="absolute left-0 top-0 h-full rounded-full"
-                            style={{
-                              backgroundColor: '#3B3B3B',
-                              width: `${energyValue}%`,
-                            }}
-                          />
-                          <input
-                            type="range"
-                            min="10"
-                            max="100"
-                            value={energyValue}
-                            onChange={e =>
-                              setEnergyValue(Number(e.target.value))
-                            }
-                            className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="text-sm font-medium"
-                              style={{ color: '#3B3B3B' }}
-                            >
-                              Craft
-                            </span>
-                            <span
-                              className="text-xs"
-                              style={{ color: '#929397' }}
-                            >
-                              ||
-                            </span>
-                          </div>
-                          <span
-                            className="text-sm font-medium"
-                            style={{ color: '#3B3B3B' }}
-                          >
-                            {getCraftValue()}
-                          </span>
-                        </div>
-                        <div
-                          className="relative h-2 rounded-full"
-                          style={{ backgroundColor: '#F4F4F4' }}
-                        >
-                          <div
-                            className="absolute left-0 top-0 h-full rounded-full"
-                            style={{
-                              backgroundColor: '#3B3B3B',
-                              width: `${craftValue}%`,
-                            }}
-                          />
-                          <input
-                            type="range"
-                            min="10"
-                            max="100"
-                            value={craftValue}
-                            onChange={e =>
-                              setCraftValue(Number(e.target.value))
-                            }
-                            className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
+                    {/* Quick Action Buttons - 4 buttons in grid */}
                     <div className="grid grid-cols-4 gap-3">
                       <button
                         className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all hover:scale-105"
@@ -1779,48 +1806,408 @@ export default function Editor() {
                         </span>
                       </button>
                     </div>
+                  </div>
+                )}
 
-                    <div className="mt-auto">
-                      <div className="relative">
-                        <textarea
-                          placeholder="Add suggestions or feedback..."
-                          value={inputText}
-                          onChange={e => setInputText(e.target.value)}
-                          className="w-full px-4 py-3 rounded-xl resize-none focus:outline-none"
+                {/* Tab Content - Refine */}
+                {activeRightTab === 'refine' && (
+                  <div
+                    className="flex-1 flex flex-col gap-5 overflow-y-auto"
+                    style={{ paddingRight: '4px' }}
+                  >
+                    {/* Layout Controls */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center"
+                          style={{
+                            background:
+                              'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
+                          }}
+                        >
+                          <Layout size={16} style={{ color: '#FFFFFF' }} />
+                        </div>
+                        <div>
+                          <div
+                            className="text-sm font-semibold"
+                            style={{ color: '#3B3B3B' }}
+                          >
+                            Layout & Spacing
+                          </div>
+                          <div className="text-xs" style={{ color: '#929397' }}>
+                            Fine-tune structure
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          className="p-3 rounded-lg transition-all hover:scale-[1.02]"
                           style={{
                             backgroundColor: '#F7F5F3',
-                            border: 'none',
+                            border: '1px solid #E8E1DD',
+                          }}
+                        >
+                          <div
+                            className="w-full h-16 rounded flex items-center justify-center mb-2"
+                            style={{ backgroundColor: '#FFFFFF' }}
+                          >
+                            <div
+                              className="text-xs"
+                              style={{ color: '#929397' }}
+                            >
+                              □
+                            </div>
+                          </div>
+                          <div
+                            className="text-xs text-center"
+                            style={{ color: '#3B3B3B' }}
+                          >
+                            Compact
+                          </div>
+                        </button>
+                        <button
+                          className="p-3 rounded-lg transition-all hover:scale-[1.02]"
+                          style={{
+                            backgroundColor: '#F7F5F3',
+                            border: '2px solid #3B3B3B',
+                          }}
+                        >
+                          <div
+                            className="w-full h-16 rounded flex items-center justify-center mb-2"
+                            style={{ backgroundColor: '#FFFFFF' }}
+                          >
+                            <div
+                              className="text-xs"
+                              style={{ color: '#929397' }}
+                            >
+                              ▭
+                            </div>
+                          </div>
+                          <div
+                            className="text-xs text-center font-semibold"
+                            style={{ color: '#3B3B3B' }}
+                          >
+                            Balanced
+                          </div>
+                        </button>
+                        <button
+                          className="p-3 rounded-lg transition-all hover:scale-[1.02]"
+                          style={{
+                            backgroundColor: '#F7F5F3',
+                            border: '1px solid #E8E1DD',
+                          }}
+                        >
+                          <div
+                            className="w-full h-16 rounded flex items-center justify-center mb-2"
+                            style={{ backgroundColor: '#FFFFFF' }}
+                          >
+                            <div
+                              className="text-xs"
+                              style={{ color: '#929397' }}
+                            >
+                              ▬
+                            </div>
+                          </div>
+                          <div
+                            className="text-xs text-center"
+                            style={{ color: '#3B3B3B' }}
+                          >
+                            Spacious
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Typography */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center"
+                          style={{
+                            background:
+                              'linear-gradient(135deg, #A8EDEA 0%, #FED6E3 100%)',
+                          }}
+                        >
+                          <Type size={16} style={{ color: '#3B3B3B' }} />
+                        </div>
+                        <div>
+                          <div
+                            className="text-sm font-semibold"
+                            style={{ color: '#3B3B3B' }}
+                          >
+                            Typography Scale
+                          </div>
+                          <div className="text-xs" style={{ color: '#929397' }}>
+                            Text sizing and hierarchy
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div
+                          className="flex items-center justify-between p-3 rounded-lg"
+                          style={{ backgroundColor: '#F7F5F3' }}
+                        >
+                          <span
+                            className="text-sm"
+                            style={{ color: '#3B3B3B' }}
+                          >
+                            Scale
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="text-xs font-mono"
+                              style={{ color: '#929397' }}
+                            >
+                              1.25
+                            </span>
+                            <input
+                              type="range"
+                              min="1.1"
+                              max="1.6"
+                              step="0.05"
+                              defaultValue="1.25"
+                              className="w-24"
+                              style={{ accentColor: '#3B3B3B' }}
+                            />
+                          </div>
+                        </div>
+                        <div
+                          className="flex items-center justify-between p-3 rounded-lg"
+                          style={{ backgroundColor: '#F7F5F3' }}
+                        >
+                          <span
+                            className="text-sm"
+                            style={{ color: '#3B3B3B' }}
+                          >
+                            Line Height
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="text-xs font-mono"
+                              style={{ color: '#929397' }}
+                            >
+                              1.5
+                            </span>
+                            <input
+                              type="range"
+                              min="1.2"
+                              max="2.0"
+                              step="0.1"
+                              defaultValue="1.5"
+                              className="w-24"
+                              style={{ accentColor: '#3B3B3B' }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Component Overrides */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center"
+                          style={{
+                            background:
+                              'linear-gradient(135deg, #FFD89B 0%, #19547B 100%)',
+                          }}
+                        >
+                          <Layers size={16} style={{ color: '#FFFFFF' }} />
+                        </div>
+                        <div>
+                          <div
+                            className="text-sm font-semibold"
+                            style={{ color: '#3B3B3B' }}
+                          >
+                            Component Details
+                          </div>
+                          <div className="text-xs" style={{ color: '#929397' }}>
+                            Element-level adjustments
+                          </div>
+                        </div>
+                      </div>
+
+                      <div
+                        className="p-4 rounded-xl"
+                        style={{
+                          backgroundColor: '#F7F5F3',
+                          border: '1px solid #E8E1DD',
+                        }}
+                      >
+                        <div
+                          className="flex items-center justify-center gap-2 py-6"
+                          style={{ color: '#929397' }}
+                        >
+                          <Eye size={16} />
+                          <span className="text-xs">
+                            Select a component to edit
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tab Content - Iterate */}
+                {activeRightTab === 'iterate' && (
+                  <div
+                    className="flex-1 flex flex-col gap-5 overflow-y-auto"
+                    style={{ paddingRight: '4px' }}
+                  >
+                    {/* AI Feedback */}
+                    <div className="flex-1 flex flex-col space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center"
+                          style={{
+                            background:
+                              'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+                          }}
+                        >
+                          <MessageSquare
+                            size={16}
+                            style={{ color: '#FFFFFF' }}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <div
+                            className="text-sm font-semibold"
+                            style={{ color: '#3B3B3B' }}
+                          >
+                            AI Feedback
+                          </div>
+                          <div className="text-xs" style={{ color: '#929397' }}>
+                            Describe what you&apos;d like to change
+                          </div>
+                        </div>
+                        <div
+                          className="px-2 py-1 rounded-md text-xs font-medium"
+                          style={{
+                            backgroundColor: '#F7F5F3',
+                            color: '#929397',
+                          }}
+                        >
+                          ⌘K
+                        </div>
+                      </div>
+
+                      <div className="relative flex-1">
+                        <textarea
+                          placeholder="E.g., 'Make the header more prominent' or 'Adjust spacing between cards'..."
+                          value={inputText}
+                          onChange={e => setInputText(e.target.value)}
+                          className="w-full h-full px-4 py-3 rounded-xl resize-none focus:outline-none transition-all"
+                          style={{
+                            backgroundColor: '#FFFFFF',
+                            border: '2px solid #E8E1DD',
                             color: '#3B3B3B',
                             fontSize: '14px',
+                            minHeight: '180px',
                           }}
-                          rows={3}
+                          onFocus={e => {
+                            e.currentTarget.style.borderColor = '#3B3B3B'
+                          }}
+                          onBlur={e => {
+                            e.currentTarget.style.borderColor = '#E8E1DD'
+                          }}
                         />
                         {inputText.length > 0 && (
-                          <div
-                            className="absolute bottom-3 right-4 px-2 py-1 rounded text-xs"
-                            style={{
-                              backgroundColor: '#FFFFFF',
-                              color: '#929397',
-                            }}
-                          >
-                            Enter
+                          <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                            <div
+                              className="px-2 py-1 rounded text-xs"
+                              style={{
+                                backgroundColor: '#F7F5F3',
+                                color: '#929397',
+                              }}
+                            >
+                              {inputText.length} characters
+                            </div>
+                            <div
+                              className="px-2 py-1 rounded text-xs"
+                              style={{
+                                backgroundColor: '#3B3B3B',
+                                color: '#FFFFFF',
+                              }}
+                            >
+                              Enter
+                            </div>
                           </div>
                         )}
                       </div>
+
                       {inputText.length > 0 && (
                         <button
-                          className="w-full mt-3 px-6 py-3 rounded-xl font-medium text-sm transition-all hover:scale-[1.02]"
+                          className="w-full px-6 py-3.5 rounded-xl font-semibold text-sm transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
                           style={{
-                            backgroundColor: '#F5C563',
-                            color: '#1F1F20',
-                            boxShadow: '0 2px 12px rgba(245, 197, 99, 0.3)',
+                            background:
+                              'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+                            color: '#FFFFFF',
+                            boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)',
                           }}
                         >
-                          Submit
+                          <Wand2 size={16} />
+                          Apply Changes
                         </button>
                       )}
                     </div>
-                  </>
+
+                    {/* Feedback History */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div
+                          className="text-xs font-semibold"
+                          style={{ color: '#3B3B3B' }}
+                        >
+                          Recent Changes
+                        </div>
+                        <button
+                          className="text-xs"
+                          style={{ color: '#929397' }}
+                        >
+                          Clear all
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div
+                          className="p-3 rounded-lg"
+                          style={{
+                            backgroundColor: '#F7F5F3',
+                            border: '1px solid #E8E1DD',
+                          }}
+                        >
+                          <div
+                            className="text-xs mb-1"
+                            style={{ color: '#929397' }}
+                          >
+                            2 minutes ago
+                          </div>
+                          <div className="text-xs" style={{ color: '#3B3B3B' }}>
+                            Increased header font size
+                          </div>
+                        </div>
+                        <div
+                          className="p-3 rounded-lg"
+                          style={{
+                            backgroundColor: '#F7F5F3',
+                            border: '1px solid #E8E1DD',
+                          }}
+                        >
+                          <div
+                            className="text-xs mb-1"
+                            style={{ color: '#929397' }}
+                          >
+                            5 minutes ago
+                          </div>
+                          <div className="text-xs" style={{ color: '#3B3B3B' }}>
+                            Adjusted card spacing
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </>
             )}
