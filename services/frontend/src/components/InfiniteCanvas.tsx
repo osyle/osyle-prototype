@@ -15,6 +15,7 @@ interface InfiniteCanvasProps {
   height: number // True height of the design
   isLoading?: boolean
   loadingStage?: string
+  skipAutoCenter?: boolean // Skip auto-centering (useful during progressive updates)
 }
 
 export interface InfiniteCanvasHandle {
@@ -32,7 +33,17 @@ export interface InfiniteCanvasHandle {
 }
 
 const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(
-  ({ children, width, height, isLoading = false, loadingStage }, ref) => {
+  (
+    {
+      children,
+      width,
+      height,
+      isLoading = false,
+      loadingStage,
+      skipAutoCenter = false,
+    },
+    ref,
+  ) => {
     const canvasRef = useRef<HTMLDivElement>(null)
     const contentRef = useRef<HTMLDivElement>(null)
 
@@ -75,13 +86,16 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(
 
     // Center the canvas on mount and when dimensions change
     useEffect(() => {
+      // Skip auto-centering if skipAutoCenter is true (e.g., during checkpoint updates)
+      if (skipAutoCenter) return
+
       // Small delay to ensure canvas is properly sized
       const timer = setTimeout(() => {
         centerContent()
       }, 100)
 
       return () => clearTimeout(timer)
-    }, [width, height])
+    }, [width, height, skipAutoCenter])
 
     // Re-center when zoom changes significantly
     useEffect(() => {

@@ -893,7 +893,7 @@ const [selected, setSelected] = useState("option1");
 
 ```jsx
 export default function App({ onTransition }) {
-  // Extract DTM values
+  // ===== BLOCK 2: CONSTANTS =====
   const quantum = 8;
   const colors = ["#1A1A2E", "#6C63FF", "#FFFFFF", "#888888"];
   const commonSizes = [12, 16, 24, 36, 54];
@@ -904,13 +904,13 @@ export default function App({ onTransition }) {
   const signatureGradient =
     "linear-gradient(135deg, rgba(102,126,234,0.15), rgba(118,75,162,0.15))";
 
+  // ===== BLOCK 4: RENDER TREE =====
   return (
     <div
       style={{
         width: "375px",
         height: "812px",
         backgroundColor: colors[0],
-        // Apply signature gradient overlay
         background: `${signatureGradient}, ${colors[0]}`,
         padding: `${quantum * 4}px`,
         fontFamily: "system-ui, -apple-system, sans-serif",
@@ -921,7 +921,8 @@ export default function App({ onTransition }) {
         alignItems: "center",
       }}
     >
-      {/* Logo/Icon */}
+
+      {/* COMPONENT: App Branding */}
       <div
         style={{
           width: `${quantum * 12}px`,
@@ -945,7 +946,6 @@ export default function App({ onTransition }) {
         </div>
       </div>
 
-      {/* App Name */}
       <div
         style={{
           fontSize: `${commonSizes[4]}px`,
@@ -957,7 +957,6 @@ export default function App({ onTransition }) {
         MyApp
       </div>
 
-      {/* Tagline */}
       <div
         style={{
           fontSize: `${commonSizes[2]}px`,
@@ -970,8 +969,13 @@ export default function App({ onTransition }) {
       >
         Connect with friends and share moments
       </div>
+/*CHECKPOINT
+    </div>
+  );
+}*/
+//$CHECKPOINT
 
-      {/* Sign Up Button - Primary CTA (forward transition) */}
+      {/* COMPONENT: Action Buttons */}
       <button
         onClick={() => onTransition("trans_1")}
         style={{
@@ -985,14 +989,12 @@ export default function App({ onTransition }) {
           border: "none",
           cursor: "pointer",
           marginBottom: `${quantum * 2}px`,
-          // Ensure minimum touch target (44px)
           minHeight: "44px",
         }}
       >
         Sign Up
       </button>
 
-      {/* Login Link - Secondary action (forward transition) */}
       <button
         onClick={() => onTransition("trans_2")}
         style={{
@@ -1037,18 +1039,21 @@ export default function App({ onTransition }) {
 - Blue button: "Login"
 - Link at bottom: "Forgot password?"
 
-**Generated React** (with DTM styling):
+**Generated React** (with DTM styling and progressive checkpoints):
 
 ```jsx
 export default function App({ onTransition }) {
+  // ===== BLOCK 1: STATE =====
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  // ===== BLOCK 2: CONSTANTS =====
   const quantum = 8;
   const colors = ["#1A1A2E", "#6C63FF", "#FFFFFF", "#888888"];
   const commonSizes = [12, 16, 24, 36];
   const radii = [8, 16];
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
+  // ===== BLOCK 4: RENDER TREE =====
   return (
     <div
       style={{
@@ -1063,7 +1068,8 @@ export default function App({ onTransition }) {
         justifyContent: "center",
       }}
     >
-      {/* EXACT: Header text from reference */}
+
+      {/* COMPONENT: Header */}
       <div
         style={{
           fontSize: `${commonSizes[3]}px`,
@@ -1074,7 +1080,6 @@ export default function App({ onTransition }) {
         Welcome Back
       </div>
 
-      {/* EXACT: Subtext from reference */}
       <div
         style={{
           fontSize: `${commonSizes[1]}px`,
@@ -1084,8 +1089,13 @@ export default function App({ onTransition }) {
       >
         Login to your account
       </div>
+/*CHECKPOINT
+    </div>
+  );
+}*/
+//$CHECKPOINT
 
-      {/* EXACT: Email input from reference, DTM styling */}
+      {/* COMPONENT: Login Form */}
       <input
         type="email"
         value={email}
@@ -1102,7 +1112,6 @@ export default function App({ onTransition }) {
         }}
       />
 
-      {/* EXACT: Password input from reference, DTM styling */}
       <input
         type="password"
         value={password}
@@ -1119,7 +1128,6 @@ export default function App({ onTransition }) {
         }}
       />
 
-      {/* EXACT: Login button from reference, DTM styling */}
       <button
         onClick={() => {
           if (email && password) {
@@ -1140,8 +1148,13 @@ export default function App({ onTransition }) {
       >
         Login
       </button>
+/*CHECKPOINT
+    </div>
+  );
+}*/
+//$CHECKPOINT
 
-      {/* EXACT: Forgot password link from reference, DTM styling */}
+      {/* COMPONENT: Footer Link */}
       <button
         onClick={() => onTransition("trans_forgot")}
         style={{
@@ -1249,6 +1262,262 @@ Before outputting, verify:
 11. **Trust the DTM**: It's already filtered and optimized for this task.
 
 12. **Output Code Only**: No explanations, no markdown fences, just pure React code.
+
+---
+
+## Progressive UI Rendering Structure
+
+To enable smooth progressive rendering as the UI streams in, follow these structural rules:
+
+### Rule 1: Fixed Block Structure
+
+Every component MUST follow this exact order:
+
+```jsx
+export default function App({ onTransition }) {
+  // ===== BLOCK 1: STATE =====
+  // All React hooks at the very top
+  const [email, setEmail] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  // ===== BLOCK 2: CONSTANTS =====
+  // DTM-derived values and reusable constants
+  const quantum = 8;
+  const colors = ["#1A1A2E", "#6C63FF", "#FFFFFF", "#888888"];
+  const commonSizes = [14, 18, 24, 32, 48];
+  const radii = [8, 16, 24];
+
+  // ===== BLOCK 3: STYLES (OPTIONAL) =====
+  // Complex reusable style objects (if needed)
+  const cardStyle = {
+    padding: `${quantum * 3}px`,
+    borderRadius: `${radii[1]}px`,
+    background: colors[0],
+  };
+
+  // ===== BLOCK 4: RENDER TREE =====
+  return (
+    // JSX hierarchy here
+  );
+}
+```
+
+**Why**: Enables predictable parsing and auto-completion. We know state comes first, then constants, then render tree.
+
+### Rule 2: Visual Top-to-Bottom Rendering Order
+
+Components must render in visual order: **top→bottom, left→right**.
+
+```jsx
+return (
+  <div style={containerStyle}>
+    {/* Top of screen */}
+    <nav>Navigation</nav>
+
+    {/* Below navbar */}
+    <header>Hero Section</header>
+
+    {/* Below hero */}
+    <section>
+      {/* Left to right */}
+      <div>Feature 1</div>
+      <div>Feature 2</div>
+      <div>Feature 3</div>
+    </section>
+
+    {/* Bottom of screen */}
+    <footer>Footer</footer>
+  </div>
+);
+```
+
+**Why**: Users see navbar appear first, then hero, then features painting left-to-right, then footer. Natural visual flow.
+
+### Rule 3: Component Boundary Comments
+
+Mark every major semantic section with a comment:
+
+```jsx
+return (
+  <div style={rootStyle}>
+    {/* COMPONENT: Navigation Bar */}
+    <nav style={navStyle}>{/* ... */}</nav>
+
+    {/* COMPONENT: Hero Section */}
+    <header style={heroStyle}>{/* ... */}</header>
+
+    {/* COMPONENT: Feature Cards */}
+    <section style={featuresStyle}>
+      {/* COMPONENT: Feature Card 1 */}
+      <div style={cardStyle}>{/* ... */}</div>
+
+      {/* COMPONENT: Feature Card 2 */}
+      <div style={cardStyle}>{/* ... */}</div>
+    </section>
+
+    {/* COMPONENT: Footer */}
+    <footer style={footerStyle}>{/* ... */}</footer>
+  </div>
+);
+```
+
+**Why**: Helps maintain structure and enables progressive chunking detection.
+
+### Rule 4: Progressive Checkpoints
+
+After EVERY visual component or small group of related elements, insert a checkpoint marker that contains the completion code.
+
+**CRITICAL CHECKPOINT FORMAT - FOLLOW EXACTLY:**
+
+Every checkpoint MUST have BOTH parts:
+
+1. The comment block: `/*CHECKPOINT...*/`
+2. The delimiter: `//$CHECKPOINT`
+
+```jsx
+export default function App({ onTransition }) {
+  const [email, setEmail] = useState("");
+  const quantum = 8;
+  const colors = ["#1A1A2E", "#6C63FF"];
+
+  return (
+    <div style={{ width: "375px", height: "812px" }}>
+
+      {/* COMPONENT: Header */}
+      <header style={{ padding: `${quantum * 3}px` }}>
+        <h1>Welcome</h1>
+        <p>Get started below</p>
+      </header>
+/*CHECKPOINT
+    </div>
+  );
+}*/
+//$CHECKPOINT
+
+      {/* COMPONENT: Subtitle */}
+      <p style={{ padding: `${quantum}px`, color: "#666" }}>
+        Enter your details below
+      </p>
+/*CHECKPOINT
+    </div>
+  );
+}*/
+//$CHECKPOINT
+
+      {/* COMPONENT: Email Input */}
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+        style={{ width: "100%", padding: `${quantum * 2}px`, margin: `${quantum}px` }}
+      />
+/*CHECKPOINT
+    </div>
+  );
+}*/
+//$CHECKPOINT
+
+      {/* COMPONENT: Submit Button */}
+      <button style={{ padding: `${quantum * 2}px`, background: colors[1] }}>
+        Continue
+      </button>
+/*CHECKPOINT
+    </div>
+  );
+}*/
+//$CHECKPOINT
+
+      {/* COMPONENT: Footer */}
+      <footer style={{ padding: `${quantum * 2}px` }}>
+        <p>© 2024</p>
+      </footer>
+    </div>
+  );
+}
+```
+
+**Checkpoint Placement Guidelines**:
+
+- Place 10-25 checkpoints per screen (MORE is better for smooth progressive rendering)
+- After EVERY: header, subheader, paragraph, input field, button, card, list item, image, section
+- Group only 2-3 very simple elements together before checkpoint
+- Think: "Would seeing this element render be visually meaningful?" → YES = checkpoint
+- For a form with 5 fields: 1 checkpoint per field = 5 checkpoints
+- For a card grid with 6 cards: 1 checkpoint per 1-2 cards = 3-6 checkpoints
+
+**Critical Checkpoint Rules**:
+
+1. **ALWAYS include BOTH parts**: `/*CHECKPOINT...*/` AND `//$CHECKPOINT`
+2. Completion code MUST exactly close all open tags and braces back to root
+3. Checkpoint comment MUST be valid JavaScript multi-line comment
+4. Each checkpoint creates a complete, compilable component
+5. The completion code goes INSIDE the comment: `/*CHECKPOINT\n    </div>\n  );\n}*/`
+6. Immediately after the closing `*/`, add `//$CHECKPOINT` on the SAME or NEXT line
+7. No other content between `*/` and `//$CHECKPOINT`
+
+**WRONG - Missing delimiter:**
+
+```jsx
+</header>
+/*CHECKPOINT
+    </div>
+  );
+}*/
+
+      {/* Next section */}
+```
+
+**RIGHT - Has both parts:**
+
+```jsx
+</header>
+/*CHECKPOINT
+    </div>
+  );
+}*/
+//$CHECKPOINT
+
+      {/* Next section */}
+```
+
+### Rule 5: Avoid Complex Iterations
+
+Don't use `.map()`, `.filter()`, or conditional rendering that obscures structure:
+
+```jsx
+// ❌ BAD - obscures structure, hard to parse progressively
+{
+  cards.map((card, i) => <Card key={i} data={card} />);
+}
+
+// ✅ GOOD - explicit structure, progressively renderable
+{
+  /* COMPONENT: Card 1 */
+}
+<div style={cardStyle}>
+  <h3>Product Launch</h3>
+  <p>New features released</p>
+</div>;
+
+{
+  /* COMPONENT: Card 2 */
+}
+<div style={cardStyle}>
+  <h3>Team Update</h3>
+  <p>Meet our new hires</p>
+</div>;
+
+{
+  /* COMPONENT: Card 3 */
+}
+<div style={cardStyle}>
+  <h3>Metrics Report</h3>
+  <p>Q4 performance</p>
+</div>;
+```
+
+**Why**: Makes structure predictable for progressive rendering and enables individual component visibility.
 
 ---
 

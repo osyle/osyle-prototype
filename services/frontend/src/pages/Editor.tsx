@@ -97,6 +97,11 @@ export default function Editor() {
   const [isFlowNavigatorOpen, setIsFlowNavigatorOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Progressive UI checkpoint state
+  const [screenCheckpoints, setScreenCheckpoints] = useState<
+    Record<string, string>
+  >({})
+
   // Compute selected screen for parametric controls
   const selectedScreen =
     flowGraph?.screens.find(s => s.screen_id === selectedScreenId) || null
@@ -609,8 +614,37 @@ export default function Editor() {
           }
           setFlowGraph(flowWithLoading)
         },
+        onUICheckpoint: (screenId, uiCode, checkpointNumber) => {
+          console.log(`📍 Checkpoint ${checkpointNumber} for ${screenId}`)
+
+          // Store checkpoint code for progressive preview
+          setScreenCheckpoints(prev => ({
+            ...prev,
+            [screenId]: uiCode,
+          }))
+
+          // CRITICAL FIX: Set ui_loading to false so checkpoint renders
+          // Without this, the "Generating..." spinner blocks checkpoint rendering
+          setFlowGraph(prev => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              screens: prev.screens.map(s =>
+                s.screen_id === screenId ? { ...s, ui_loading: false } : s,
+              ),
+            }
+          })
+        },
         onScreenReady: (screenId, uiCode, variationSpace) => {
           console.log(`✅ Screen ready: ${screenId}`)
+
+          // Clear checkpoint preview when final version arrives
+          setScreenCheckpoints(prev => {
+            const newCheckpoints = { ...prev }
+            delete newCheckpoints[screenId]
+            return newCheckpoints
+          })
+
           if (variationSpace) {
             console.log(
               `  📊 Variation space with ${(variationSpace['dimensions'] as VariationSpace['dimensions'])?.length || 0} dimensions`,
@@ -647,6 +681,13 @@ export default function Editor() {
                   : s,
               ),
             }
+          })
+
+          // Also clear checkpoint preview on error
+          setScreenCheckpoints(prev => {
+            const newCheckpoints = { ...prev }
+            delete newCheckpoints[screenId]
+            return newCheckpoints
           })
         },
         onComplete: result => {
@@ -916,18 +957,43 @@ export default function Editor() {
                           </div>
                         </div>
                       </div>
-                    ) : screen.ui_code ? (
-                      <DynamicReactRenderer
-                        jsxCode={screen.ui_code}
-                        propsToInject={{
-                          onTransition: () => {},
-                          // Pass parameters for parametric mode
-                          ...(rendering_mode === 'parametric' &&
-                          selectedScreenId === screen.screen_id
-                            ? { parameters: parameterValues }
-                            : {}),
-                        }}
-                      />
+                    ) : screen.ui_code ||
+                      screenCheckpoints[screen.screen_id] ? (
+                      <>
+                        <DynamicReactRenderer
+                          jsxCode={
+                            screenCheckpoints[screen.screen_id] ||
+                            screen.ui_code ||
+                            ''
+                          }
+                          propsToInject={{
+                            onTransition: () => {},
+                            // Pass parameters for parametric mode
+                            ...(rendering_mode === 'parametric' &&
+                            selectedScreenId === screen.screen_id
+                              ? { parameters: parameterValues }
+                              : {}),
+                          }}
+                        />
+                        {screenCheckpoints[screen.screen_id] && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '8px',
+                              left: '8px',
+                              background: 'rgba(59, 130, 246, 0.9)',
+                              color: 'white',
+                              padding: '4px 12px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              zIndex: 100,
+                            }}
+                          >
+                            ⚡ Streaming...
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="flex items-center justify-center h-full">
                         <div className="text-gray-400">Loading...</div>
@@ -1235,8 +1301,8 @@ export default function Editor() {
             </div>
           </div>
         ) : activeTab === 'Prototype' &&
-        generationStage === 'complete' &&
-        flowGraph ? (
+          generationStage === 'complete' &&
+          flowGraph ? (
           // Prototype mode - dark box container with light background
           <div
             className="fixed"
@@ -1336,6 +1402,7 @@ export default function Editor() {
                   })()
                 : device_info.screen.height
             }
+            skipAutoCenter={Object.keys(screenCheckpoints).length > 0}
           >
             {renderDeviceContent()}
           </InfiniteCanvas>

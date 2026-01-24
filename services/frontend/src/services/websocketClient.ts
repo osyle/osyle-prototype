@@ -235,6 +235,14 @@ export interface FlowGenerationCallbacks {
   onRethinkComplete?: (rethinkData: Record<string, unknown>) => void
   // eslint-disable-next-line no-unused-vars
   onFlowArchitecture?: (flowArchitecture: FlowArchitectureResult) => void
+  onUICheckpoint?: (
+    // eslint-disable-next-line no-unused-vars
+    screenId: string,
+    // eslint-disable-next-line no-unused-vars
+    uiCode: string,
+    // eslint-disable-next-line no-unused-vars
+    checkpointNumber: number,
+  ) => void
   onScreenReady?: (
     // eslint-disable-next-line no-unused-vars
     screenId: string,
@@ -293,6 +301,12 @@ export function generateFlowWebSocket(
         }
 
         ws.onmessage = event => {
+          // ========== ENHANCED LOGGING FOR DEBUGGING ==========
+          console.log(
+            '[WebSocket] Raw message received (first 300 chars):',
+            event.data.substring(0, 300),
+          )
+
           try {
             const message = JSON.parse(event.data) as
               | ProgressUpdate
@@ -307,6 +321,14 @@ export function generateFlowWebSocket(
                   data: FlowArchitectureResult
                 }
               | {
+                  type: 'ui_checkpoint'
+                  data: {
+                    screen_id: string
+                    ui_code: string
+                    checkpoint_number: number
+                  }
+                }
+              | {
                   type: 'screen_ready'
                   data: {
                     screen_id: string
@@ -319,6 +341,9 @@ export function generateFlowWebSocket(
                   data: { screen_id: string; error: string }
                 }
 
+            console.log('[WebSocket] Parsed message type:', message.type)
+            // ========== END ENHANCED LOGGING ==========
+
             if (message.type === 'progress') {
               callbacks.onProgress?.(
                 message.stage,
@@ -329,11 +354,69 @@ export function generateFlowWebSocket(
               callbacks.onRethinkComplete?.(message.data)
             } else if (message.type === 'flow_architecture') {
               callbacks.onFlowArchitecture?.(message.data)
+            } else if (message.type === 'ui_checkpoint') {
+              console.log(`
+╔════════════════════════════════════════════════════════════════════════════╗
+║                     📍 UI CHECKPOINT RECEIVED                              ║
+╚════════════════════════════════════════════════════════════════════════════╝
+              `)
+              console.log('Checkpoint Details:', {
+                screenId: message.data.screen_id,
+                checkpointNumber: message.data.checkpoint_number,
+                codeLength: message.data.ui_code?.length || 0,
+                timestamp: new Date().toISOString(),
+              })
+              console.log('\nFirst 500 chars of checkpoint code:')
+              console.log(message.data.ui_code?.substring(0, 500))
+              console.log('\nLast 500 chars of checkpoint code:')
+              console.log(
+                message.data.ui_code?.substring(
+                  message.data.ui_code.length - 500,
+                ),
+              )
+              console.log('\n🔧 Calling callbacks.onUICheckpoint...')
+
+              callbacks.onUICheckpoint?.(
+                message.data.screen_id,
+                message.data.ui_code,
+                message.data.checkpoint_number,
+              )
+
+              console.log('✅ callbacks.onUICheckpoint completed')
+              console.log(
+                '╚════════════════════════════════════════════════════════════════════════════╝\n',
+              )
             } else if (message.type === 'screen_ready') {
+              console.log(`
+╔════════════════════════════════════════════════════════════════════════════╗
+║                     ✅ SCREEN READY (FINAL)                                ║
+╚════════════════════════════════════════════════════════════════════════════╝
+              `)
+              console.log('Screen Ready Details:', {
+                screenId: message.data.screen_id,
+                codeLength: message.data.ui_code?.length || 0,
+                hasVariationSpace: !!message.data.variation_space,
+                timestamp: new Date().toISOString(),
+              })
+              console.log('\nFirst 500 chars of final code:')
+              console.log(message.data.ui_code?.substring(0, 500))
+              console.log('\nLast 500 chars of final code:')
+              console.log(
+                message.data.ui_code?.substring(
+                  message.data.ui_code.length - 500,
+                ),
+              )
+              console.log('\n🔧 Calling callbacks.onScreenReady...')
+
               callbacks.onScreenReady?.(
                 message.data.screen_id,
                 message.data.ui_code,
                 message.data.variation_space,
+              )
+
+              console.log('✅ callbacks.onScreenReady completed')
+              console.log(
+                '╚════════════════════════════════════════════════════════════════════════════╝\n',
               )
             } else if (message.type === 'screen_error') {
               callbacks.onScreenError?.(

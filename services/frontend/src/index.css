@@ -46,3 +46,11 @@ body {
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out;
 }
+
+.screen-container {
+  transition: opacity 150ms ease-in-out;
+}
+
+.screen-container.updating {
+  opacity: 0.95;
+}

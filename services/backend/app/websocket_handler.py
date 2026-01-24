@@ -31,6 +31,8 @@ from app.wireframe_processor import process_redesign_references, prepare_wirefra
 # Import rethink processor for rethink mode
 from app.rethink_processor import RethinkProcessor
 
+# Import progressive streaming
+from app.progressive_streaming import generate_screen_ui_progressive
 
 async def send_progress(websocket: WebSocket, stage: str, message: str, data: Dict[str, Any] = None):
     """Send progress update to client"""
@@ -897,34 +899,18 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
                                 }
                             })
                 
-                screen_response = await llm.call_claude(
+                # Use progressive streaming with checkpoints
+                result = await generate_screen_ui_progressive(
+                    screen=screen,
+                    screen_index=screen_index,
+                    llm=llm,
+                    websocket=websocket,
                     prompt_name=prompt_name,
-                    user_message=screen_content
+                    screen_content=screen_content,
+                    device_info=device_info
                 )
                 
-                ui_code = screen_response["text"].strip()
-                
-                # Strip markdown code fences
-                if ui_code.startswith("```jsx") or ui_code.startswith("```javascript") or ui_code.startswith("```tsx"):
-                    first_newline = ui_code.find('\n')
-                    if first_newline != -1:
-                        ui_code = ui_code[first_newline + 1:]
-                elif ui_code.startswith("```"):
-                    ui_code = ui_code[3:]
-                if ui_code.endswith("```"):
-                    ui_code = ui_code[:-3]
-                ui_code = ui_code.strip()
-                
-                # Send screen completion immediately
-                await websocket.send_json({
-                    "type": "screen_ready",
-                    "data": {
-                        "screen_id": screen['screen_id'],
-                        "ui_code": ui_code
-                    }
-                })
-                
-                return {"screen_id": screen['screen_id'], "ui_code": ui_code}
+                return result
             
             except Exception as e:
                 await websocket.send_json({
