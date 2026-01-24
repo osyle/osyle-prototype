@@ -85,7 +85,7 @@ export default function Editor() {
 
   // Right panel tab state
   const [activeRightTab, setActiveRightTab] = useState<
-    'explore' | 'refine' | 'iterate'
+    'explore' | 'refine' | 'reflect'
   >('explore')
 
   // Generation state

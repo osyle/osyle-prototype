@@ -44,7 +44,7 @@ export default function ConversationBar({
 
     setMessages([...messages, newMessage])
     setInputText('')
-    
+
     // TODO: Send to backend via WebSocket
     // For now, just a placeholder AI response
     setTimeout(() => {
@@ -110,12 +110,16 @@ export default function ConversationBar({
               }}
             >
               <div className="flex items-center justify-between mb-2">
-                <div className="text-xs font-semibold" style={{ color: '#3B3B3B' }}>
-                  Recent Conversation
+                <div
+                  className="text-xs font-semibold"
+                  style={{ color: '#3B3B3B' }}
+                >
+                  Conversation so far
                 </div>
                 <button
                   onClick={() => setIsExpanded(false)}
-                  className="text-xs" style={{ color: '#929397' }}
+                  className="text-xs"
+                  style={{ color: '#929397' }}
                 >
                   Collapse
                 </button>
@@ -129,7 +133,8 @@ export default function ConversationBar({
                   <div
                     className="rounded-lg px-4 py-2 max-w-[70%]"
                     style={{
-                      backgroundColor: msg.type === 'user' ? '#F0F7FF' : '#F7F5F3',
+                      backgroundColor:
+                        msg.type === 'user' ? '#F0F7FF' : '#F7F5F3',
                     }}
                   >
                     <div className="text-xs mb-1" style={{ color: '#929397' }}>
@@ -158,7 +163,7 @@ export default function ConversationBar({
                   value={inputText}
                   onChange={e => setInputText(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask AI to iterate..."
+                  placeholder="Ask AI to self-reflect..."
                   className="w-full bg-transparent border-none outline-none text-sm pr-10"
                   style={{ color: '#3B3B3B' }}
                 />

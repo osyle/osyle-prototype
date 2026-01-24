@@ -22,9 +22,9 @@ import ParametricControls from './ParametricControls'
 interface RightPanelProps {
   isCollapsed: boolean
   onCollapse: () => void
-  activeTab: 'explore' | 'refine' | 'iterate'
+  activeTab: 'explore' | 'refine' | 'reflect'
   // eslint-disable-next-line no-unused-vars
-  setActiveTab: (tab: 'explore' | 'refine' | 'iterate') => void
+  setActiveTab: (tab: 'explore' | 'refine' | 'reflect') => void
   userInfo: {
     name: string
     email: string
@@ -179,7 +179,7 @@ export default function RightPanel({
     setEditedDescription('')
   }
 
-  // AI Suggestions state (NEW - for Iterate tab redesign)
+  // AI Suggestions state (NEW - for Reflect tab redesign)
   const [suggestions] = useState<AISuggestion[]>([
     {
       id: '1',
@@ -212,7 +212,7 @@ export default function RightPanel({
 
   const [dismissedSuggestions, setDismissedSuggestions] = useState<string[]>([])
 
-  // Conversation state (NEW - for Iterate tab redesign)
+  // Conversation state (NEW - for Reflect tab redesign)
   const [conversation] = useState<ConversationMessage[]>([
     {
       id: '1',
@@ -315,15 +315,15 @@ export default function RightPanel({
                     Refine
                   </button>
                   <button
-                    onClick={() => setActiveTab('iterate')}
+                    onClick={() => setActiveTab('reflect')}
                     className="px-3 py-2 text-xs font-medium transition-colors border-b-2"
                     style={{
-                      color: activeTab === 'iterate' ? '#3B3B3B' : '#929397',
+                      color: activeTab === 'reflect' ? '#3B3B3B' : '#929397',
                       borderColor:
-                        activeTab === 'iterate' ? '#3B3B3B' : 'transparent',
+                        activeTab === 'reflect' ? '#3B3B3B' : 'transparent',
                     }}
                   >
-                    Iterate
+                    Reflect
                   </button>
                 </div>
 
@@ -833,8 +833,8 @@ export default function RightPanel({
                 </div>
               )}
 
-              {/* Tab Content - Iterate (REDESIGNED) */}
-              {activeTab === 'iterate' && (
+              {/* Tab Content - Reflect (REDESIGNED) */}
+              {activeTab === 'reflect' && (
                 <div className="flex-1 flex flex-col overflow-hidden">
                   {/* AI Suggestions Section */}
                   <div
