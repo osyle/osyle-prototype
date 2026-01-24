@@ -22,6 +22,7 @@ import {
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AddInspirationModal from '../components/AddInspirationModal'
+import CodeViewer from '../components/CodeViewer'
 import DeviceFrame from '../components/DeviceFrame'
 import DynamicReactRenderer from '../components/DynamicReactRenderer'
 import FlowConnections from '../components/FlowConnections'
@@ -162,9 +163,10 @@ export default function Editor() {
     }
   }, [selectedScreenId, rendering_mode, selectedScreen])
 
-  // 4 tabs - Video pitch and Presentation disabled for now
+  // 5 tabs - Video pitch and Presentation disabled for now
   const tabs = [
     { name: 'Concept', enabled: true },
+    { name: 'Code', enabled: true },
     { name: 'Prototype', enabled: true },
     { name: 'Video pitch', enabled: false },
     { name: 'Presentation', enabled: false },
@@ -1313,8 +1315,47 @@ export default function Editor() {
           </div>
         </div>
 
-        {/* Canvas Container - Different for Concept vs Prototype */}
-        {activeTab === 'Prototype' &&
+        {/* Canvas Container - Different for Concept vs Code vs Prototype */}
+        {activeTab === 'Code' ? (
+          // Code mode - styled container matching Prototype tab
+          <div
+            className="fixed"
+            style={{
+              top: '80px',
+              bottom: '100px',
+              left: '80px',
+              right: isRightPanelCollapsed ? '80px' : 'calc(28% + 40px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {/* Wrapper to make box 20% narrower */}
+            <div
+              style={{
+                width: '80%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  backgroundColor: '#1F1F20',
+                  borderRadius: '24px',
+                  overflow: 'hidden',
+                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+                  border: '1px solid rgba(255, 255, 255, 0.05)',
+                }}
+              >
+                <CodeViewer flow={flowGraph} />
+              </div>
+            </div>
+          </div>
+        ) : activeTab === 'Prototype' &&
         generationStage === 'complete' &&
         flowGraph ? (
           // Prototype mode - dark box container with light background
