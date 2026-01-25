@@ -34,6 +34,9 @@ from app.rethink_processor import RethinkProcessor
 # Import progressive streaming
 from app.progressive_streaming import generate_screen_ui_progressive
 
+from app.feedback_router import FeedbackRouter
+from app.feedback_applier import FeedbackApplier
+
 async def send_progress(websocket: WebSocket, stage: str, message: str, data: Dict[str, Any] = None):
     """Send progress update to client"""
     await websocket.send_json({
@@ -1131,6 +1134,291 @@ def _convert_dtr_to_dtm(dtr: Dict[str, Any], taste_id: str, owner_id: str) -> Di
     return minimal_dtm
 
 
+async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id: str):
+    """
+    Handle iterate-ui WebSocket request
+    
+    Flow:
+    1. Route feedback to determine which screens need editing
+    2. For each screen, apply feedback and generate updated code
+    3. Save new version
+    4. Send completion message
+    """
+    try:
+        project_id = data.get("project_id")
+        user_feedback = data.get("user_feedback")
+        conversation_history = data.get("conversation_history", [])
+        
+        if not project_id or not user_feedback:
+            await send_error(websocket, "Missing project_id or user_feedback")
+            return
+        
+        # Get project
+        await send_progress(websocket, "init", "Loading project...")
+        project = db.get_project(project_id)
+        
+        if not project:
+            await send_error(websocket, "Project not found")
+            return
+        
+        # Get current flow graph
+        flow_graph = project.get("flow_graph", {})
+        if not flow_graph or not flow_graph.get("screens"):
+            await send_error(websocket, "No flow graph found. Generate initial design first.")
+            return
+        
+        # Get current version
+        current_version = project.get("metadata", {}).get("flow_version", 1)
+        
+        # Initialize services
+        llm = get_llm_service()
+        router = FeedbackRouter(llm)
+        applier = FeedbackApplier(llm)
+        
+        # Step 1: Route feedback
+        await send_progress(websocket, "routing", "Analyzing your feedback...")
+        
+        # Build flow summary for router
+        flow_summary = [
+            {
+                "screen_id": screen["screen_id"],
+                "name": screen.get("name", "Untitled"),
+                "description": screen.get("description", "")
+            }
+            for screen in flow_graph["screens"]
+        ]
+        
+        routing_result = await router.route_feedback(
+            user_feedback=user_feedback,
+            conversation_history=conversation_history,
+            flow_summary=flow_summary
+        )
+        
+        # Check if conversation only
+        if routing_result.get("conversation_only", False):
+            # No regeneration needed, just send response
+            await websocket.send_json({
+                "type": "conversation_response",
+                "data": {
+                    "response": routing_result.get("response", "I'm not sure what you'd like me to change. Could you be more specific?")
+                }
+            })
+            await send_complete(websocket, {
+                "status": "conversation_only",
+                "response": routing_result.get("response", "")
+            })
+            return
+        
+        # Get screens to edit
+        screens_to_edit = routing_result.get("screens_to_edit", [])
+        
+        if not screens_to_edit or len(screens_to_edit) == 0:
+            await send_error(websocket, "No screens identified for editing")
+            return
+        
+        # Notify frontend about routing completion
+        await websocket.send_json({
+            "type": "feedback_routing_complete",
+            "data": {
+                "screens_to_edit": [s["screen_id"] for s in screens_to_edit],
+                "reasoning": routing_result.get("reasoning", "")
+            }
+        })
+        
+        # Load DTM for code generation
+        taste_id = project.get("selected_taste_id")
+        dtm = None
+        
+        if taste_id:
+            try:
+                dtm = storage.get_taste_dtm(user_id, taste_id)
+            except:
+                print("Warning: Could not load DTM, will use minimal defaults")
+        
+        if not dtm:
+            # Use minimal DTM
+            dtm = {
+                "designer_systems": {
+                    "spacing": {"default": 8},
+                    "typography": {"common_sizes": [14, 16, 18, 24, 32]},
+                    "color_system": {"common_palette": ["#1A1A2E", "#6C63FF", "#FFFFFF"]},
+                    "form_language": {"common_radii": [4, 8, 16]}
+                }
+            }
+        
+        # Get device info
+        device_info = project.get("device_info", {
+            "platform": "web",
+            "screen": {"width": 1440, "height": 900}
+        })
+        
+        # Step 2: Apply feedback to each screen
+        updated_screens = []
+        
+        for idx, screen_edit in enumerate(screens_to_edit):
+            screen_id = screen_edit["screen_id"]
+            contextualized_feedback = screen_edit["contextualized_feedback"]
+            
+            # Find the screen in flow graph
+            screen = next((s for s in flow_graph["screens"] if s["screen_id"] == screen_id), None)
+            
+            if not screen:
+                print(f"Warning: Screen {screen_id} not found in flow graph")
+                continue
+            
+            screen_name = screen.get("name", "Untitled")
+            
+            # Notify start of screen iteration
+            await websocket.send_json({
+                "type": "screen_iteration_start",
+                "data": {
+                    "screen_id": screen_id,
+                    "screen_name": screen_name,
+                    "current_index": idx + 1,
+                    "total_screens": len(screens_to_edit)
+                }
+            })
+            
+            # Get current code
+            current_code = screen.get("ui_code", "")
+            
+            if not current_code:
+                print(f"Warning: Screen {screen_id} has no code")
+                continue
+            
+            # Build flow context
+            flow_context = {
+                "screen_id": screen_id,
+                "screen_name": screen_name,
+                "position_in_flow": next(
+                    (i + 1 for i, s in enumerate(flow_graph["screens"]) if s["screen_id"] == screen_id),
+                    1
+                ),
+                "total_screens": len(flow_graph["screens"]),
+                "outgoing_transitions": [
+                    t for t in flow_graph.get("transitions", [])
+                    if t.get("from_screen_id") == screen_id
+                ]
+            }
+            
+            # Apply feedback and stream updates
+            conversation_chunks = []
+            code_chunks = []
+            delimiter_detected = False
+            
+            async for chunk_data in applier.apply_feedback(
+                current_code=current_code,
+                contextualized_feedback=contextualized_feedback,
+                dtm=dtm,
+                flow_context=flow_context,
+                device_info=device_info
+            ):
+                chunk_type = chunk_data.get("type")
+                
+                if chunk_type == "conversation":
+                    # Stream conversation chunk to frontend
+                    chunk_text = chunk_data.get("chunk", "")
+                    conversation_chunks.append(chunk_text)
+                    
+                    await websocket.send_json({
+                        "type": "screen_conversation_chunk",
+                        "data": {
+                            "screen_id": screen_id,
+                            "chunk": chunk_text
+                        }
+                    })
+                
+                elif chunk_type == "delimiter_detected":
+                    # Delimiter found, notify frontend to show "generating" state
+                    delimiter_detected = True
+                    
+                    await websocket.send_json({
+                        "type": "screen_generating",
+                        "data": {
+                            "screen_id": screen_id,
+                            "message": "Generating updated code..."
+                        }
+                    })
+                
+                elif chunk_type == "code":
+                    # Accumulate code chunks (don't send to frontend yet)
+                    code_chunks.append(chunk_data.get("chunk", ""))
+                
+                elif chunk_type == "complete":
+                    # Final complete response
+                    full_conversation = chunk_data.get("conversation", "")
+                    full_code = chunk_data.get("code", "")
+                    
+                    # Update screen in flow graph
+                    screen["ui_code"] = full_code
+                    
+                    # Send updated screen to frontend
+                    await websocket.send_json({
+                        "type": "screen_updated",
+                        "data": {
+                            "screen_id": screen_id,
+                            "ui_code": full_code,
+                            "conversation": full_conversation
+                        }
+                    })
+                    
+                    updated_screens.append({
+                        "screen_id": screen_id,
+                        "screen_name": screen_name
+                    })
+        
+        # Step 3: Generate final summary
+        await send_progress(websocket, "summarizing", "Finalizing changes...")
+        
+        # Build summary message
+        screen_names = [s["screen_name"] for s in updated_screens]
+        if len(screen_names) == 1:
+            summary = f"Updated the {screen_names[0]} screen based on your feedback."
+        elif len(screen_names) == 2:
+            summary = f"Updated the {screen_names[0]} and {screen_names[1]} screens."
+        else:
+            summary = f"Updated {len(screen_names)} screens: {', '.join(screen_names[:-1])}, and {screen_names[-1]}."
+        
+        # Step 4: Save new version
+        await send_progress(websocket, "saving", "Saving new version...")
+        
+        new_version = current_version + 1
+        
+        # Convert floats to Decimals for DynamoDB
+        flow_graph_for_db = convert_floats_to_decimals(flow_graph)
+        
+        # Save to S3
+        storage.put_project_flow(user_id, project_id, flow_graph, version=new_version)
+        
+        # Update DynamoDB
+        metadata = project.get("metadata", {})
+        metadata["flow_version"] = new_version
+        db.update_project(project_id, metadata=metadata)
+        db.update_project_flow_graph(project_id, flow_graph_for_db)
+        
+        # Step 5: Send completion
+        await websocket.send_json({
+            "type": "iteration_complete",
+            "data": {
+                "summary": summary,
+                "screens_updated": [s["screen_id"] for s in updated_screens],
+                "new_version": new_version
+            }
+        })
+        
+        await send_complete(websocket, {
+            "status": "success",
+            "flow_graph": flow_graph,
+            "version": new_version,
+            "screens_updated": len(updated_screens)
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        await send_error(websocket, str(e))
+
+
 async def handle_websocket(websocket: WebSocket, user_id: str):
     """Main WebSocket handler"""
     await websocket.accept()
@@ -1148,6 +1436,8 @@ async def handle_websocket(websocket: WebSocket, user_id: str):
                 await handle_generate_ui(websocket, data, user_id)
             elif action == "generate-flow":
                 await handle_generate_flow(websocket, data, user_id)
+            elif action == "iterate-ui":
+                await handle_iterate_ui(websocket, data, user_id)
             else:
                 await send_error(websocket, f"Unknown action: {action}")
                 

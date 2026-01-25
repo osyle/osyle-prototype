@@ -1,7 +1,7 @@
-import { Zap, Palette, Sparkles, Send, ChevronUp } from 'lucide-react'
-import React, { useState } from 'react'
+import { Zap, Palette, Sparkles, Send, ChevronUp, Loader2 } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
 
-interface Message {
+export interface Message {
   id: string
   type: 'user' | 'ai'
   content: string
@@ -10,52 +10,43 @@ interface Message {
 
 interface ConversationBarProps {
   isRightPanelCollapsed: boolean
+  messages: Message[]
+  // eslint-disable-next-line no-unused-vars
+  onSendMessage: (message: string) => void
+  isProcessing: boolean
+  processingStatus?: string
 }
 
 export default function ConversationBar({
   isRightPanelCollapsed,
+  messages,
+  onSendMessage,
+  isProcessing,
+  processingStatus = 'Processing...',
 }: ConversationBarProps) {
   const [inputText, setInputText] = useState('')
   const [isExpanded, setIsExpanded] = useState(false)
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      type: 'user',
-      content: 'Make spacing more generous',
-      timestamp: new Date(Date.now() - 5 * 60 * 1000),
-    },
-    {
-      id: '2',
-      type: 'ai',
-      content: 'Updated 12 spacing values from 8px to 16px',
-      timestamp: new Date(Date.now() - 5 * 60 * 1000),
-    },
-  ])
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (isExpanded) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages, isExpanded])
+
+  // Auto-expand when processing starts
+  useEffect(() => {
+    if (isProcessing && !isExpanded) {
+      setIsExpanded(true)
+    }
+  }, [isProcessing])
 
   const handleSend = () => {
-    if (!inputText.trim()) return
+    if (!inputText.trim() || isProcessing) return
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      type: 'user',
-      content: inputText,
-      timestamp: new Date(),
-    }
-
-    setMessages([...messages, newMessage])
+    onSendMessage(inputText)
     setInputText('')
-
-    // TODO: Send to backend via WebSocket
-    // For now, just a placeholder AI response
-    setTimeout(() => {
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'ai',
-        content: 'Processing your request...',
-        timestamp: new Date(),
-      }
-      setMessages(prev => [...prev, aiMessage])
-    }, 500)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -65,16 +56,13 @@ export default function ConversationBar({
     }
   }
 
-  // Get last 2-3 messages for preview
-  const recentMessages = messages.slice(-3)
-
   return (
     <>
       {/* Expanded Overlay */}
       {isExpanded && (
         <div
           className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 transition-opacity duration-300"
-          onClick={() => setIsExpanded(false)}
+          onClick={() => !isProcessing && setIsExpanded(false)}
         />
       )}
 
@@ -104,7 +92,7 @@ export default function ConversationBar({
           {/* Expanded Message History */}
           {isExpanded && (
             <div
-              className="px-6 pt-6 pb-4 max-h-[300px] overflow-y-auto space-y-3"
+              className="px-6 pt-6 pb-4 max-h-[400px] overflow-y-auto space-y-3"
               style={{
                 borderBottom: '1px solid #E8E1DD',
               }}
@@ -114,42 +102,84 @@ export default function ConversationBar({
                   className="text-xs font-semibold"
                   style={{ color: '#3B3B3B' }}
                 >
-                  Conversation so far
+                  Conversation
                 </div>
-                <button
-                  onClick={() => setIsExpanded(false)}
-                  className="text-xs"
-                  style={{ color: '#929397' }}
-                >
-                  Collapse
-                </button>
+                {!isProcessing && (
+                  <button
+                    onClick={() => setIsExpanded(false)}
+                    className="text-xs"
+                    style={{ color: '#929397' }}
+                  >
+                    Collapse
+                  </button>
+                )}
               </div>
 
-              {recentMessages.map(msg => (
+              {messages.length === 0 ? (
                 <div
-                  key={msg.id}
-                  className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className="text-sm text-center py-8"
+                  style={{ color: '#929397' }}
                 >
-                  <div
-                    className="rounded-lg px-4 py-2 max-w-[70%]"
-                    style={{
-                      backgroundColor:
-                        msg.type === 'user' ? '#F0F7FF' : '#F7F5F3',
-                    }}
-                  >
-                    <div className="text-xs mb-1" style={{ color: '#929397' }}>
-                      {msg.type === 'user' ? 'You' : 'AI'} •{' '}
-                      {msg.timestamp.toLocaleTimeString('en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                      })}
-                    </div>
-                    <div className="text-sm" style={{ color: '#3B3B3B' }}>
-                      {msg.content}
-                    </div>
-                  </div>
+                  Start a conversation to iterate on your design...
                 </div>
-              ))}
+              ) : (
+                <>
+                  {messages.map(msg => (
+                    <div
+                      key={msg.id}
+                      className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className="rounded-lg px-4 py-2 max-w-[70%]"
+                        style={{
+                          backgroundColor:
+                            msg.type === 'user' ? '#F0F7FF' : '#F7F5F3',
+                        }}
+                      >
+                        <div
+                          className="text-xs mb-1"
+                          style={{ color: '#929397' }}
+                        >
+                          {msg.type === 'user' ? 'You' : 'AI'} •{' '}
+                          {msg.timestamp.toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}
+                        </div>
+                        <div
+                          className="text-sm whitespace-pre-wrap"
+                          style={{ color: '#3B3B3B' }}
+                        >
+                          {msg.content}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Processing indicator */}
+                  {isProcessing && (
+                    <div className="flex justify-start">
+                      <div
+                        className="rounded-lg px-4 py-3 max-w-[70%]"
+                        style={{ backgroundColor: '#FFF9E6' }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Loader2
+                            size={16}
+                            className="animate-spin"
+                            style={{ color: '#F5C563' }}
+                          />
+                          <div className="text-sm" style={{ color: '#92400E' }}>
+                            {processingStatus}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div ref={messagesEndRef} />
+                </>
+              )}
             </div>
           )}
 
@@ -163,11 +193,16 @@ export default function ConversationBar({
                   value={inputText}
                   onChange={e => setInputText(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask AI to self-reflect..."
-                  className="w-full bg-transparent border-none outline-none text-sm pr-10"
+                  disabled={isProcessing}
+                  placeholder={
+                    isProcessing
+                      ? 'Processing...'
+                      : "Describe what you'd like to change..."
+                  }
+                  className="w-full bg-transparent border-none outline-none text-sm pr-10 disabled:opacity-50"
                   style={{ color: '#3B3B3B' }}
                 />
-                {!isExpanded && messages.length > 0 && (
+                {!isExpanded && messages.length > 0 && !isProcessing && (
                   <button
                     onClick={() => setIsExpanded(true)}
                     className="absolute right-0 top-1/2 -translate-y-1/2 p-1.5 rounded hover:bg-gray-100 transition-colors"
@@ -181,8 +216,9 @@ export default function ConversationBar({
               {/* Quick Action Buttons */}
               <div className="flex items-center gap-2">
                 <button
-                  className="p-2 rounded-lg hover:bg-gray-50 transition-all group relative"
+                  className="p-2 rounded-lg hover:bg-gray-50 transition-all group relative disabled:opacity-50"
                   title="Quick fixes"
+                  disabled={isProcessing}
                 >
                   <Zap size={16} style={{ color: '#3B3B3B' }} />
                   <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
@@ -191,8 +227,9 @@ export default function ConversationBar({
                 </button>
 
                 <button
-                  className="p-2 rounded-lg hover:bg-gray-50 transition-all group relative"
+                  className="p-2 rounded-lg hover:bg-gray-50 transition-all group relative disabled:opacity-50"
                   title="Adjust theme"
+                  disabled={isProcessing}
                 >
                   <Palette size={16} style={{ color: '#3B3B3B' }} />
                   <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
@@ -201,8 +238,9 @@ export default function ConversationBar({
                 </button>
 
                 <button
-                  className="p-2 rounded-lg hover:bg-gray-50 transition-all group relative"
+                  className="p-2 rounded-lg hover:bg-gray-50 transition-all group relative disabled:opacity-50"
                   title="Polish design"
+                  disabled={isProcessing}
                 >
                   <Sparkles size={16} style={{ color: '#3B3B3B' }} />
                   <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
@@ -213,16 +251,22 @@ export default function ConversationBar({
                 {/* Send Button */}
                 <button
                   onClick={handleSend}
-                  disabled={!inputText.trim()}
+                  disabled={!inputText.trim() || isProcessing}
                   className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105"
                   style={{
-                    background: inputText.trim()
-                      ? 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)'
-                      : '#F7F5F3',
-                    color: inputText.trim() ? '#FFFFFF' : '#929397',
+                    background:
+                      inputText.trim() && !isProcessing
+                        ? 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)'
+                        : '#F7F5F3',
+                    color:
+                      inputText.trim() && !isProcessing ? '#FFFFFF' : '#929397',
                   }}
                 >
-                  <Send size={16} />
+                  {isProcessing ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <Send size={16} />
+                  )}
                   Send
                 </button>
               </div>

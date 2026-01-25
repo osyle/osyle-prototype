@@ -24,6 +24,10 @@ import RightPanel from '../components/RightPanel'
 import VersionHistory from '../components/VersionHistory'
 import { useDeviceContext } from '../hooks/useDeviceContext'
 import api from '../services/api'
+import {
+  iterateUIWebSocket,
+  type Message,
+} from '../services/iterationWebSocket'
 import { type FlowGraph } from '../types/home.types'
 import type {
   ParameterValues,
@@ -124,6 +128,15 @@ export default function Editor() {
   const [currentFlowVersion, setCurrentFlowVersion] = useState<number>(1)
   const [viewingVersion, setViewingVersion] = useState<number | null>(null)
   const [isReverting, setIsReverting] = useState(false)
+
+  const [conversationMessages, setConversationMessages] = useState<Message[]>(
+    [],
+  )
+  const [isIterating, setIsIterating] = useState(false)
+  const [iterationStatus, setIterationStatus] = useState('')
+  const [currentIteratingScreenId, setCurrentIteratingScreenId] = useState<
+    string | null
+  >(null)
 
   // Initialize parameter values from variation_space when screen changes
   useEffect(() => {
@@ -857,6 +870,7 @@ export default function Editor() {
             {flowGraph.screens.map(screen => {
               const position = positions[screen.screen_id] || { x: 0, y: 0 }
               const isEntry = screen.screen_type === 'entry'
+              const isIterating = currentIteratingScreenId === screen.screen_id
 
               return (
                 <div
@@ -889,6 +903,87 @@ export default function Editor() {
                     >
                       START
                     </div>
+                  )}
+
+                  {/* Spotlight effect when screen is being updated */}
+                  {isIterating && (
+                    <>
+                      {/* Pulsing glow border */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          pointerEvents: 'none',
+                          zIndex: 50,
+                          borderRadius:
+                            device_info.platform === 'phone' ? '48px' : '12px',
+                          boxShadow:
+                            '0 0 0 4px rgba(102, 126, 234, 0.5), 0 0 40px rgba(102, 126, 234, 0.4), 0 0 80px rgba(102, 126, 234, 0.2)',
+                          border: '3px solid #667EEA',
+                          animation: 'spotlight-pulse 2s ease-in-out infinite',
+                        }}
+                      />
+
+                      {/* Updating badge */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '-40px',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          zIndex: 50,
+                          padding: '8px 20px',
+                          borderRadius: '20px',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          background:
+                            'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+                          color: '#FFFFFF',
+                          boxShadow: '0 4px 16px rgba(102, 126, 234, 0.5)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          animation: 'badge-float 2s ease-in-out infinite',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            backgroundColor: '#FFFFFF',
+                            animation: 'badge-pulse 1s ease-in-out infinite',
+                          }}
+                        />
+                        ✨ Updating...
+                      </div>
+
+                      {/* Shimmer sweep effect */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          pointerEvents: 'none',
+                          zIndex: 40,
+                          overflow: 'hidden',
+                          borderRadius:
+                            device_info.platform === 'phone' ? '48px' : '12px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: '-100%',
+                            width: '100%',
+                            height: '100%',
+                            background:
+                              'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
+                            animation: 'shimmer-sweep 3s ease-in-out infinite',
+                          }}
+                        />
+                      </div>
+                    </>
                   )}
 
                   <DeviceFrame>
@@ -1025,16 +1120,207 @@ export default function Editor() {
     return null
   }
 
+  /**
+   * Handle sending a message in the conversation
+   */
+  const handleSendMessage = async (userMessage: string) => {
+    if (!flowGraph || !flowGraph.screens || flowGraph.screens.length === 0) {
+      console.error('No flow graph available for iteration')
+      return
+    }
+
+    // Get current project ID from localStorage
+    const currentProject = localStorage.getItem('current_project')
+    if (!currentProject) {
+      console.error('No current project found')
+      return
+    }
+
+    const project = JSON.parse(currentProject)
+    const projectId = project.project_id
+
+    // Add user message to conversation
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      type: 'user',
+      content: userMessage,
+      timestamp: new Date(),
+    }
+
+    setConversationMessages(prev => [...prev, userMsg])
+    setIsIterating(true)
+    setIterationStatus('Analyzing your feedback...')
+
+    // Track the current AI message being built
+    let currentAIMessageId = (Date.now() + 1).toString()
+    let currentAIContent = ''
+
+    try {
+      await iterateUIWebSocket(projectId, userMessage, conversationMessages, {
+        onRoutingStart: () => {
+          setIterationStatus('Thinking...')
+        },
+
+        onRoutingComplete: data => {
+          console.log('Routing complete:', data)
+          if (data.screens_to_edit.length > 0) {
+            setIterationStatus(
+              `Updating ${data.screens_to_edit.length} screen${data.screens_to_edit.length > 1 ? 's' : ''}...`,
+            )
+          }
+        },
+
+        onScreenIterationStart: data => {
+          console.log('Screen iteration start:', data)
+          setCurrentIteratingScreenId(data.screen_id)
+          setIterationStatus(
+            `Updating ${data.screen_name} (${data.current_index}/${data.total_screens})...`,
+          )
+
+          // Start a new AI message for this screen
+          currentAIMessageId = `${Date.now()}-${data.screen_id}`
+          currentAIContent = ''
+        },
+
+        onScreenConversationChunk: data => {
+          // Stream conversation text from AI
+          currentAIContent += data.chunk
+
+          // Update or add AI message
+          setConversationMessages(prev => {
+            const existingIndex = prev.findIndex(
+              m => m.id === currentAIMessageId,
+            )
+
+            if (existingIndex >= 0) {
+              // Update existing message
+              const updated = [...prev]
+              updated[existingIndex] = {
+                ...updated[existingIndex],
+                content: currentAIContent,
+              }
+              return updated
+            } else {
+              // Add new AI message
+              return [
+                ...prev,
+                {
+                  id: currentAIMessageId,
+                  type: 'ai',
+                  content: currentAIContent,
+                  timestamp: new Date(),
+                },
+              ]
+            }
+          })
+        },
+
+        onScreenGenerating: data => {
+          console.log('Screen generating:', data)
+          setIterationStatus(`Making changes to ${data.screen_id}...`)
+        },
+
+        onScreenUpdated: data => {
+          console.log('Screen updated:', data.screen_id)
+
+          // Update the flow graph with new code
+          setFlowGraph(prevFlow => {
+            if (!prevFlow) return prevFlow
+
+            const updatedScreens = prevFlow.screens.map(screen => {
+              if (screen.screen_id === data.screen_id) {
+                return {
+                  ...screen,
+                  ui_code: data.ui_code,
+                }
+              }
+              return screen
+            })
+
+            return {
+              ...prevFlow,
+              screens: updatedScreens,
+            }
+          })
+
+          setCurrentIteratingScreenId(null)
+        },
+
+        onIterationComplete: data => {
+          console.log('Iteration complete:', data)
+
+          // Add final summary message
+          const summaryMsg: Message = {
+            id: `${Date.now()}-summary`,
+            type: 'ai',
+            content: data.summary,
+            timestamp: new Date(),
+          }
+
+          setConversationMessages(prev => [...prev, summaryMsg])
+
+          // Update version
+          setCurrentFlowVersion(data.new_version)
+
+          setIterationStatus('')
+          setIsIterating(false)
+          setCurrentIteratingScreenId(null)
+        },
+
+        onConversationResponse: data => {
+          // Handle conversation-only responses (no regeneration)
+          const aiMsg: Message = {
+            id: (Date.now() + 1).toString(),
+            type: 'ai',
+            content: data.response,
+            timestamp: new Date(),
+          }
+
+          setConversationMessages(prev => [...prev, aiMsg])
+
+          setIterationStatus('')
+          setIsIterating(false)
+        },
+
+        onError: error => {
+          console.error('Iteration error:', error)
+
+          // Add error message to conversation
+          const errorMsg: Message = {
+            id: (Date.now() + 1).toString(),
+            type: 'ai',
+            content: `Sorry, I encountered an error: ${error}`,
+            timestamp: new Date(),
+          }
+
+          setConversationMessages(prev => [...prev, errorMsg])
+
+          setIterationStatus('')
+          setIsIterating(false)
+          setCurrentIteratingScreenId(null)
+        },
+      })
+    } catch (error) {
+      console.error('Failed to iterate:', error)
+
+      // Add error message to conversation
+      const errorMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'ai',
+        content: 'Sorry, something went wrong. Please try again.',
+        timestamp: new Date(),
+      }
+
+      setConversationMessages(prev => [...prev, errorMsg])
+
+      setIterationStatus('')
+      setIsIterating(false)
+      setCurrentIteratingScreenId(null)
+    }
+  }
+
   return (
     <>
-      <style>
-        {`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}
-      </style>
       <div
         className="relative h-screen w-screen overflow-hidden"
         style={{
@@ -1409,7 +1695,13 @@ export default function Editor() {
         )}
 
         {/* Conversation Bar */}
-        <ConversationBar isRightPanelCollapsed={isRightPanelCollapsed} />
+        <ConversationBar
+          isRightPanelCollapsed={isRightPanelCollapsed}
+          messages={conversationMessages}
+          onSendMessage={handleSendMessage}
+          isProcessing={isIterating}
+          processingStatus={iterationStatus}
+        />
 
         {/* Right Panel */}
         <RightPanel
