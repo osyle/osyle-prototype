@@ -324,6 +324,14 @@ export default function Editor() {
         )
       }
 
+      // ✅ FIX: Update localStorage with the new flow_graph and version
+      project.flow_graph = result.flow_graph
+      if (!project.metadata) {
+        project.metadata = {}
+      }
+      project.metadata.flow_version = result.new_version
+      localStorage.setItem('current_project', JSON.stringify(project))
+
       alert(
         `Successfully reverted to version ${version}. Now viewing version ${result.new_version}.`,
       )
@@ -544,38 +552,47 @@ export default function Editor() {
         return
       }
 
-      // Check if flow_graph already exists
-      if (project.flow_graph && project.flow_graph.screens?.length > 0) {
-        console.log('✅ Loaded existing flow graph from project')
-        setFlowGraph(project.flow_graph)
-        setGenerationStage('complete')
-
-        // Load version info
-        await loadVersionInfo()
-
-        // ✅ NEW: Load conversation for current version
-        const currentVersion = project.metadata?.flow_version || 1
-        await loadConversationFromBackend(project.project_id, currentVersion)
-
-        return
-      }
-
-      // Try to load from S3
+      // ✅ FIX: Always try to load from S3 first to get the latest version
+      // Don't trust localStorage as it might be stale after revert
       try {
         const flowData = await api.llm.getFlow(project.project_id)
-        console.log('✅ Loaded existing flow from S3')
+        console.log('✅ Loaded latest flow from S3')
         setFlowGraph(flowData.flow_graph)
         setGenerationStage('complete')
 
         // Load version info
         await loadVersionInfo()
 
-        // ✅ NEW: Load conversation for this version
+        // ✅ Load conversation for this version
         await loadConversationFromBackend(project.project_id, flowData.version)
+
+        // ✅ Update localStorage with latest version
+        project.flow_graph = flowData.flow_graph
+        if (!project.metadata) {
+          project.metadata = {}
+        }
+        project.metadata.flow_version = flowData.version
+        localStorage.setItem('current_project', JSON.stringify(project))
 
         return
       } catch (err) {
-        console.log('No existing flow found, will generate new one:', err)
+        console.log('No existing flow found in S3, checking localStorage:', err)
+      }
+
+      // Fallback: Check if flow_graph exists in localStorage (for offline/edge cases)
+      if (project.flow_graph && project.flow_graph.screens?.length > 0) {
+        console.log('⚠️ Using flow graph from localStorage (S3 failed)')
+        setFlowGraph(project.flow_graph)
+        setGenerationStage('complete')
+
+        // Load version info
+        await loadVersionInfo()
+
+        // ✅ Load conversation for current version
+        const currentVersion = project.metadata?.flow_version || 1
+        await loadConversationFromBackend(project.project_id, currentVersion)
+
+        return
       }
 
       // No existing flow - generate new one
@@ -734,8 +751,12 @@ export default function Editor() {
           setCurrentFlowVersion(result.version)
           setViewingVersion(null)
 
-          // Update project in localStorage
+          // Update project in localStorage with flow_graph and version
           project.flow_graph = result.flow_graph
+          if (!project.metadata) {
+            project.metadata = {}
+          }
+          project.metadata.flow_version = result.version
           localStorage.setItem('current_project', JSON.stringify(project))
         },
         onError: error => {
@@ -1386,9 +1407,18 @@ export default function Editor() {
             try {
               const project = JSON.parse(currentProject)
               project.flow_graph = result['flow_graph'] // Update with final flow_graph from backend
+
+              // ✅ FIX: Also update version number in metadata
+              if (result['version']) {
+                if (!project.metadata) {
+                  project.metadata = {}
+                }
+                project.metadata.flow_version = result['version']
+              }
+
               localStorage.setItem('current_project', JSON.stringify(project))
               console.log(
-                '✅ Updated localStorage with flow_graph after iteration',
+                `✅ Updated localStorage with flow_graph and version ${result['version']} after iteration`,
               )
             } catch (err) {
               console.error('Failed to update localStorage:', err)
