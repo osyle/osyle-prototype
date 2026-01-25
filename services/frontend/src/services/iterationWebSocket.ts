@@ -3,6 +3,7 @@
  * Handles iterate-ui action with feedback loop
  */
 import { fetchAuthSession } from 'aws-amplify/auth'
+import type { Annotation } from '../lib/Agentator/types'
 
 const WS_BASE_URL =
   import.meta.env['VITE_WS_URL'] ||
@@ -18,6 +19,7 @@ export interface Message {
   content: string
   timestamp: Date
   screen?: string
+  annotations?: Record<string, Annotation[]> // Store annotations with message
 }
 
 export interface IterationCallbacks {
@@ -92,6 +94,7 @@ export function iterateUIWebSocket(
   projectId: string,
   userFeedback: string,
   conversationHistory: Message[],
+  annotations: Record<string, unknown[]>, // NEW: annotations by screen_name
   callbacks: IterationCallbacks,
 ): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
@@ -130,6 +133,7 @@ export function iterateUIWebSocket(
                 project_id: projectId,
                 user_feedback: userFeedback,
                 conversation_history: history,
+                annotations: annotations, // NEW: Send annotations
                 user_id: userId,
               },
             }),

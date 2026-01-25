@@ -2,7 +2,7 @@
 Feedback Applier - Generates updated UI code based on contextualized feedback
 Uses Prompt B (heavy code generator)
 """
-from typing import Dict, Any, AsyncGenerator
+from typing import List, Dict, Any, AsyncGenerator
 
 
 class FeedbackApplier:
@@ -21,7 +21,8 @@ class FeedbackApplier:
         contextualized_feedback: str,
         dtm: Dict[str, Any],
         flow_context: Dict[str, Any],
-        device_info: Dict[str, Any]
+        device_info: Dict[str, Any],
+        annotations: List[Dict[str, Any]] = None  # NEW: annotations for this screen
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Apply feedback to screen code and generate updates (streaming)
@@ -38,6 +39,7 @@ class FeedbackApplier:
             dtm: Designer Taste Model
             flow_context: Flow context (transitions, etc.)
             device_info: Device platform and dimensions
+            annotations: List of annotation objects for this screen (NEW)
         """
         screen_id = flow_context.get("screen_id", "unknown")
         screen_name = flow_context.get("screen_name", "Unknown")
@@ -51,7 +53,8 @@ class FeedbackApplier:
                 contextualized_feedback=contextualized_feedback,
                 dtm=dtm,
                 flow_context=flow_context,
-                device_info=device_info
+                device_info=device_info,
+                annotations=annotations  # NEW: Pass annotations
             )
             
             delimiter_found = False
@@ -154,7 +157,8 @@ class FeedbackApplier:
         contextualized_feedback: str,
         dtm: Dict[str, Any],
         flow_context: Dict[str, Any],
-        device_info: Dict[str, Any]
+        device_info: Dict[str, Any],
+        annotations: List[Dict[str, Any]] = None  # NEW: annotations parameter
     ) -> str:
         """Build the user message with all context"""
         
@@ -172,6 +176,43 @@ class FeedbackApplier:
         parts.append("## Feedback for This Screen\n")
         parts.append(contextualized_feedback)
         parts.append("\n\n")
+        
+        # NEW: Annotations section
+        if annotations and len(annotations) > 0:
+            parts.append("## Visual Annotations\n")
+            parts.append(f"The user added {len(annotations)} annotation(s) on this screen:\n\n")
+            
+            for idx, ann in enumerate(annotations, 1):
+                parts.append(f"**{idx}. {ann.get('element', 'Element')}**\n")
+                
+                # Element path (helps locate element in code)
+                if ann.get('elementPath'):
+                    parts.append(f"   - Path: `{ann['elementPath']}`\n")
+                
+                # Element details for targeting
+                if ann.get('tagName'):
+                    parts.append(f"   - Tag: `<{ann['tagName'].lower()}>`\n")
+                
+                if ann.get('cssClasses'):
+                    parts.append(f"   - Classes: `{ann['cssClasses']}`\n")
+                
+                if ann.get('textContent'):
+                    parts.append(f"   - Text: \"{ann['textContent']}\"\n")
+                
+                if ann.get('selectedText'):
+                    parts.append(f"   - Selected text: \"{ann['selectedText']}\"\n")
+                
+                if ann.get('elementIndex') is not None:
+                    ordinal = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
+                    idx_num = ann['elementIndex']
+                    ord_str = ordinal[idx_num] if idx_num < len(ordinal) else f"{idx_num + 1}th"
+                    parts.append(f"   - Occurrence: {ord_str}\n")
+                
+                # The actual feedback
+                parts.append(f"   - **Feedback:** {ann.get('comment', 'No comment')}\n\n")
+            
+            parts.append("Use the path, text content, and element details to precisely locate these elements in the code above. ")
+            parts.append("Apply the annotation feedback surgically to each element.\n\n")
         
         # DTM (condensed)
         parts.append("## Designer Taste Model (DTM)\n")

@@ -19,6 +19,7 @@ export interface Message {
   content: string
   timestamp: Date
   screen?: string
+  annotations?: Record<string, Annotation[]> // Store annotations with message
 }
 
 interface ConversationBarProps {
@@ -44,6 +45,7 @@ export default function ConversationBar({
   const [inputText, setInputText] = useState('')
   const [isExpanded, setIsExpanded] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const sentAnnotationsRef = useRef<Set<string>>(new Set()) // Track screens with sent annotations
 
   // Get Agentator global state
   const {
@@ -58,6 +60,17 @@ export default function ConversationBar({
   } = useAgentatorGlobal()
 
   const totalAnnotations = getTotalAnnotationCount()
+
+  // Clear sent annotations when processing completes successfully
+  useEffect(() => {
+    if (!isProcessing && sentAnnotationsRef.current.size > 0) {
+      // Iteration completed - clear the annotations we sent
+      sentAnnotationsRef.current.forEach(screenName => {
+        clearAnnotations(screenName)
+      })
+      sentAnnotationsRef.current.clear()
+    }
+  }, [isProcessing, clearAnnotations])
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -80,6 +93,14 @@ export default function ConversationBar({
     // If there are annotations, include them
     if (totalAnnotations > 0) {
       const annotationsData = getAnnotationsForConversation()
+
+      // Track which screens have annotations so we can clear them later
+      Object.keys(annotationsData).forEach(screenName => {
+        if (annotationsData[screenName].length > 0) {
+          sentAnnotationsRef.current.add(screenName)
+        }
+      })
+
       onSendMessage(
         inputText.trim() || 'Please apply these annotations',
         annotationsData,
@@ -440,7 +461,7 @@ export default function ConversationBar({
                     (!inputText.trim() && totalAnnotations === 0) ||
                     isProcessing
                   }
-                  className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105"
+                  className="relative px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105"
                   style={{
                     background:
                       (inputText.trim() || totalAnnotations > 0) &&
@@ -457,7 +478,20 @@ export default function ConversationBar({
                   {isProcessing ? (
                     <Loader2 size={16} className="animate-spin" />
                   ) : (
-                    <Send size={16} />
+                    <>
+                      <Send size={16} />
+                      {totalAnnotations > 0 && (
+                        <span
+                          className="absolute -top-1 -right-1 h-4 w-4 rounded-full flex items-center justify-center text-[10px] font-bold"
+                          style={{
+                            backgroundColor: '#FF3B30',
+                            color: '#FFFFFF',
+                          }}
+                        >
+                          {totalAnnotations > 9 ? '9+' : totalAnnotations}
+                        </span>
+                      )}
+                    </>
                   )}
                   Send
                 </button>

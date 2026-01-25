@@ -23,8 +23,9 @@ import PrototypeRunner from '../components/PrototypeRunner'
 import RightPanel from '../components/RightPanel'
 import VersionHistory from '../components/VersionHistory'
 import { useDeviceContext } from '../hooks/useDeviceContext'
-import { Agentator, AgentatorGlobalProvider } from '../lib/Agentator'
 import type { Annotation } from '../lib/Agentator'
+import { Agentator, AgentatorGlobalProvider } from '../lib/Agentator'
+
 import api from '../services/api'
 import {
   iterateUIWebSocket,
@@ -91,7 +92,7 @@ export default function Editor() {
 
   // Right panel tab state
   const [activeRightTab, setActiveRightTab] = useState<
-    'explore' | 'refine' | 'reflect'
+    'explore' | 'refine' | 'annotate' | 'reflect'
   >('explore')
 
   // Generation state
@@ -1308,16 +1309,18 @@ export default function Editor() {
     // Log annotations if provided
     if (annotations && Object.keys(annotations).length > 0) {
       console.log('📝 Sending with annotations:', annotations)
-      // TODO: Will be integrated with iterate-ui WebSocket later
-      // For now, we're just logging them so you can see the data structure
     }
 
-    // Add user message to conversation
+    // Add user message to conversation WITH annotations
     const userMsg: Message = {
       id: Date.now().toString(),
       type: 'user',
       content: userMessage,
       timestamp: new Date(),
+      annotations:
+        annotations && Object.keys(annotations).length > 0
+          ? annotations
+          : undefined,
     }
 
     setConversationMessages(prev => [...prev, userMsg])
@@ -1330,202 +1333,237 @@ export default function Editor() {
     let currentScreenName = ''
 
     try {
-      await iterateUIWebSocket(projectId, userMessage, conversationMessages, {
-        onRoutingStart: () => {
-          setIterationStatus('Thinking...')
-        },
+      await iterateUIWebSocket(
+        projectId,
+        userMessage,
+        conversationMessages,
+        annotations || {},
+        {
+          onRoutingStart: () => {
+            setIterationStatus('Thinking...')
+          },
 
-        onRoutingComplete: data => {
-          console.log('Routing complete:', data)
-          if (data.screens_to_edit.length > 0) {
-            setIterationStatus(
-              `Updating ${data.screens_to_edit.length} screen${data.screens_to_edit.length > 1 ? 's' : ''}...`,
-            )
-          }
-        },
-
-        onScreenIterationStart: data => {
-          console.log('Screen iteration start:', data)
-          setCurrentIteratingScreenId(data.screen_id)
-          setIterationStatus(
-            `Updating ${data.screen_name} (${data.current_index}/${data.total_screens})...`,
-          )
-
-          // Start a new AI message for this screen
-          currentAIMessageId = `${Date.now()}-${data.screen_id}`
-          currentAIContent = ''
-          currentScreenName = data.screen_name
-        },
-
-        onScreenConversationChunk: data => {
-          // Stream conversation text from AI
-          currentAIContent += data.chunk
-
-          // Update or add AI message
-          setConversationMessages(prev => {
-            const existingIndex = prev.findIndex(
-              m => m.id === currentAIMessageId,
-            )
-
-            if (existingIndex >= 0) {
-              // Update existing message
-              const updated = [...prev]
-              updated[existingIndex] = {
-                ...updated[existingIndex],
-                content: currentAIContent,
-              }
-              return updated
-            } else {
-              // Add new AI message
-              return [
-                ...prev,
-                {
-                  id: currentAIMessageId,
-                  type: 'ai',
-                  content: currentAIContent,
-                  timestamp: new Date(),
-                  screen: currentScreenName,
-                },
-              ]
+          onRoutingComplete: (data: {
+            screens_to_edit: string[]
+            reasoning: string
+          }) => {
+            console.log('Routing complete:', data)
+            if (data.screens_to_edit.length > 0) {
+              setIterationStatus(
+                `Updating ${data.screens_to_edit.length} screen${data.screens_to_edit.length > 1 ? 's' : ''}...`,
+              )
             }
-          })
-        },
+          },
 
-        onScreenGenerating: data => {
-          console.log('Screen generating:', data)
-          // ✅ FIX: Use data.screen_name from the message
-          setIterationStatus(`Making changes to ${data.screen_name}...`)
-        },
+          onScreenIterationStart: (data: {
+            screen_id: string
+            screen_name: string
+            current_index: number
+            total_screens: number
+          }) => {
+            console.log('Screen iteration start:', data)
+            setCurrentIteratingScreenId(data.screen_id)
+            setIterationStatus(
+              `Updating ${data.screen_name} (${data.current_index}/${data.total_screens})...`,
+            )
 
-        onScreenUpdated: data => {
-          console.log('Screen updated:', data.screen_id)
+            // Start a new AI message for this screen
+            currentAIMessageId = `${Date.now()}-${data.screen_id}`
+            currentAIContent = ''
+            currentScreenName = data.screen_name
+          },
 
-          // Update the flow graph with new code
-          setFlowGraph(prevFlow => {
-            if (!prevFlow) return prevFlow
+          onScreenConversationChunk: (data: {
+            screen_id: string
+            chunk: string
+          }) => {
+            // Stream conversation text from AI
+            currentAIContent += data.chunk
 
-            const updatedScreens = prevFlow.screens.map(screen => {
-              if (screen.screen_id === data.screen_id) {
-                return {
-                  ...screen,
-                  ui_code: data.ui_code,
+            // Update or add AI message
+            setConversationMessages(prev => {
+              const existingIndex = prev.findIndex(
+                m => m.id === currentAIMessageId,
+              )
+
+              if (existingIndex >= 0) {
+                // Update existing message
+                const updated = [...prev]
+                updated[existingIndex] = {
+                  ...updated[existingIndex],
+                  content: currentAIContent,
                 }
+                return updated
+              } else {
+                // Add new AI message
+                return [
+                  ...prev,
+                  {
+                    id: currentAIMessageId,
+                    type: 'ai' as const,
+                    content: currentAIContent,
+                    timestamp: new Date(),
+                    screen: currentScreenName,
+                  },
+                ]
               }
-              return screen
+            })
+          },
+
+          onScreenGenerating: (data: {
+            screen_id: string
+            screen_name: string
+            message: string
+          }) => {
+            console.log('Screen generating:', data)
+            // ✅ FIX: Use data.screen_name from the message
+            setIterationStatus(`Making changes to ${data.screen_name}...`)
+          },
+
+          onScreenUpdated: (data: {
+            screen_id: string
+            ui_code: string
+            conversation?: string
+          }) => {
+            console.log('Screen updated:', data.screen_id)
+
+            // Update the flow graph with new code
+            setFlowGraph(prevFlow => {
+              if (!prevFlow) return prevFlow
+
+              const updatedScreens = prevFlow.screens.map(screen => {
+                if (screen.screen_id === data.screen_id) {
+                  return {
+                    ...screen,
+                    ui_code: data.ui_code,
+                  }
+                }
+                return screen
+              })
+
+              return {
+                ...prevFlow,
+                screens: updatedScreens,
+              }
             })
 
-            return {
-              ...prevFlow,
-              screens: updatedScreens,
+            setCurrentIteratingScreenId(null)
+          },
+
+          onIterationComplete: (data: {
+            summary: string
+            screens_updated: string[]
+            new_version: number
+          }) => {
+            console.log('Iteration complete:', data)
+
+            // Add final summary message
+            const summaryMsg: Message = {
+              id: `${Date.now()}-summary`,
+              type: 'ai' as const,
+              content: data.summary,
+              timestamp: new Date(),
             }
-          })
 
-          setCurrentIteratingScreenId(null)
-        },
+            setConversationMessages(prev => [...prev, summaryMsg])
 
-        onIterationComplete: data => {
-          console.log('Iteration complete:', data)
+            // Update version
+            setCurrentFlowVersion(data.new_version)
 
-          // Add final summary message
-          const summaryMsg: Message = {
-            id: `${Date.now()}-summary`,
-            type: 'ai',
-            content: data.summary,
-            timestamp: new Date(),
-          }
+            // Refresh available versions list
+            loadVersionInfo()
 
-          setConversationMessages(prev => [...prev, summaryMsg])
+            setIterationStatus('')
+            setIsIterating(false)
+            setCurrentIteratingScreenId(null)
+          },
 
-          // Update version
-          setCurrentFlowVersion(data.new_version)
+          onConversationResponse: (data: { response: string }) => {
+            // Handle conversation-only responses (no regeneration)
+            const aiMsg: Message = {
+              id: (Date.now() + 1).toString(),
+              type: 'ai' as const,
+              content: data.response,
+              timestamp: new Date(),
+            }
 
-          // Refresh available versions list
-          loadVersionInfo()
+            setConversationMessages(prev => [...prev, aiMsg])
 
-          setIterationStatus('')
-          setIsIterating(false)
-          setCurrentIteratingScreenId(null)
-        },
+            setIterationStatus('')
+            setIsIterating(false)
+          },
 
-        onConversationResponse: data => {
-          // Handle conversation-only responses (no regeneration)
-          const aiMsg: Message = {
-            id: (Date.now() + 1).toString(),
-            type: 'ai',
-            content: data.response,
-            timestamp: new Date(),
-          }
+          onComplete: (result: {
+            status: string
+            flow_graph?: Record<string, unknown>
+            version?: number
+            screens_updated?: number
+            [key: string]: unknown
+          }) => {
+            // ✅ FIX: This runs AFTER iteration_complete and has the full updated flow_graph
+            console.log(
+              'WebSocket complete, updating localStorage with final flow_graph',
+            )
 
-          setConversationMessages(prev => [...prev, aiMsg])
+            const currentProject = localStorage.getItem('current_project')
+            if (currentProject && result['flow_graph']) {
+              try {
+                const project = JSON.parse(currentProject)
+                project.flow_graph = result['flow_graph'] // Update with final flow_graph from backend
 
-          setIterationStatus('')
-          setIsIterating(false)
-        },
-
-        onComplete: result => {
-          // ✅ FIX: This runs AFTER iteration_complete and has the full updated flow_graph
-          console.log(
-            'WebSocket complete, updating localStorage with final flow_graph',
-          )
-
-          const currentProject = localStorage.getItem('current_project')
-          if (currentProject && result['flow_graph']) {
-            try {
-              const project = JSON.parse(currentProject)
-              project.flow_graph = result['flow_graph'] // Update with final flow_graph from backend
-
-              // ✅ FIX: Also update version number in metadata
-              if (result['version']) {
-                if (!project.metadata) {
-                  project.metadata = {}
+                // ✅ FIX: Also update version number in metadata
+                if (result['version']) {
+                  if (!project.metadata) {
+                    project.metadata = {}
+                  }
+                  project.metadata.flow_version = result['version']
                 }
-                project.metadata.flow_version = result['version']
+
+                localStorage.setItem('current_project', JSON.stringify(project))
+                console.log(
+                  `✅ Updated localStorage with flow_graph and version ${result['version']} after iteration`,
+                )
+              } catch (err) {
+                console.error('Failed to update localStorage:', err)
               }
-
-              localStorage.setItem('current_project', JSON.stringify(project))
-              console.log(
-                `✅ Updated localStorage with flow_graph and version ${result['version']} after iteration`,
-              )
-            } catch (err) {
-              console.error('Failed to update localStorage:', err)
             }
-          }
 
-          // ✅ NEW: Save conversation to backend for this version
-          if (result['version'] && conversationMessages.length > 0) {
-            saveConversationToBackend(
-              projectId,
-              conversationMessages,
-              result['version'],
-            ).catch(err => console.error('Failed to save conversation:', err))
-          }
+            // ✅ NEW: Save conversation to backend for this version
+            if (result['version'] && conversationMessages.length > 0) {
+              saveConversationToBackend(
+                projectId,
+                conversationMessages,
+                result['version'],
+              ).catch(err => console.error('Failed to save conversation:', err))
+            }
+          },
+
+          onError: (error: string) => {
+            console.error('Iteration error:', error)
+
+            // Add error message to conversation
+            const errorMsg: Message = {
+              id: (Date.now() + 1).toString(),
+              type: 'ai' as const,
+              content: `Sorry, I encountered an error: ${error}`,
+              timestamp: new Date(),
+            }
+
+            setConversationMessages(prev => [...prev, errorMsg])
+
+            setIterationStatus('')
+            setIsIterating(false)
+            setCurrentIteratingScreenId(null)
+          },
         },
-
-        onError: error => {
-          console.error('Iteration error:', error)
-
-          // Add error message to conversation
-          const errorMsg: Message = {
-            id: (Date.now() + 1).toString(),
-            type: 'ai',
-            content: `Sorry, I encountered an error: ${error}`,
-            timestamp: new Date(),
-          }
-
-          setConversationMessages(prev => [...prev, errorMsg])
-
-          setIterationStatus('')
-          setIsIterating(false)
-          setCurrentIteratingScreenId(null)
-        },
-      })
+      )
     } catch (error) {
       console.error('Failed to iterate:', error)
 
       // Add error message to conversation
       const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
-        type: 'ai',
+        type: 'ai' as const,
         content: 'Sorry, something went wrong. Please try again.',
         timestamp: new Date(),
       }

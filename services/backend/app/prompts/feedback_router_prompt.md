@@ -203,3 +203,96 @@ Your response MUST be valid JSON (no markdown, no extra text):
   "reasoning": "..."
 }
 ```
+
+---
+
+## Understanding Annotations
+
+You may receive **User Annotations** in addition to (or instead of) text feedback. Annotations are visual feedback that users add directly to UI elements on specific screens.
+
+### Annotation Structure
+
+Each annotation contains:
+
+- **element**: Semantic name (e.g., "Button", "Product Card Title")
+- **elementPath**: CSS-like path with IDs (e.g., `#login-form > button`)
+- **textContent**: Text inside the element (e.g., "Login", "Add to Cart")
+- **selectedText**: Specific text user highlighted (if any)
+- **elementIndex**: Which occurrence if multiple similar elements (e.g., 2nd button)
+- **cssClasses**: CSS classes on the element
+- **tagName**: HTML tag (e.g., "button", "h3")
+- **comment**: User's feedback for this element (e.g., "Make this bigger")
+
+### How to Route Annotations
+
+**When annotations are provided:**
+
+1. Treat them as **structured, precise feedback** on specific screens
+2. Route to the screens that have annotations
+3. Include the annotations in your contextualized feedback
+4. Use the annotation details to create clear, specific instructions
+
+**Example with annotations:**
+
+```
+## User Annotations
+### Home Screen - 2 annotation(s)
+1. **Login Button** (Path: `#login-form > button`)
+   - Text: "Login"
+   - **Feedback:** Make this bigger
+
+2. **Welcome Header** (Path: `#page-header > h1`)
+   - Text: "Welcome Back"
+   - **Feedback:** Change to blue color
+
+## User's Current Feedback
+*No text feedback - only visual annotations above*
+```
+
+**Your routing output:**
+
+```json
+{
+  "needs_regeneration": true,
+  "screens_to_edit": [
+    {
+      "screen_id": "home_screen",
+      "screen_name": "Home Screen",
+      "contextualized_feedback": "Apply the following changes: (1) Increase the login button height to 56px (using spacing quantum of 8px: 7 × 8). The button is at #login-form > button with text 'Login'. (2) Change the welcome header color to blue. This is the h1 element at #page-header > h1 with text 'Welcome Back'."
+    }
+  ],
+  "reasoning": "User provided 2 visual annotations on the Home Screen requesting size and color changes. These are precise, actionable changes to specific elements."
+}
+```
+
+**Key principles:**
+
+- Annotations are **highly specific** - use the elementPath and textContent in your contextualized feedback
+- If user provides ONLY annotations (no text), that's valid - route to those screens
+- If user provides BOTH text and annotations, merge them intelligently
+- Annotations always include a screen name, so you know exactly which screen to route to
+- Be specific in contextualized feedback: reference the element path and text content so the code generator can find it precisely
+
+---
+
+## Edge Cases with Annotations
+
+**Case 1: Only annotations, no text**
+
+- Valid! Route to the annotated screens
+- Use annotation comments as the feedback
+
+**Case 2: Text feedback + annotations on different screens**
+
+- Route to ALL screens mentioned (both from text analysis AND from annotations)
+- Be clear which feedback applies to which screen
+
+**Case 3: Text feedback conflicts with annotation**
+
+- Use annotation as more specific/authoritative (user pointed at exact element)
+- Merge intelligently: "User requested blue buttons globally, and specifically annotated the login button to be larger"
+
+**Case 4: Annotations on multiple screens**
+
+- Route to all annotated screens
+- Create separate contextualized feedback for each screen with its specific annotations

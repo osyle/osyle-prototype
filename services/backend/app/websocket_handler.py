@@ -1147,11 +1147,17 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
     """
     try:
         project_id = data.get("project_id")
-        user_feedback = data.get("user_feedback")
+        user_feedback = data.get("user_feedback", "")  # Can be empty if only annotations
         conversation_history = data.get("conversation_history", [])
+        annotations = data.get("annotations", {})  # NEW: Dict of {screen_name: [annotations]}
         
-        if not project_id or not user_feedback:
-            await send_error(websocket, "Missing project_id or user_feedback")
+        if not project_id:
+            await send_error(websocket, "Missing project_id")
+            return
+        
+        # Must have either feedback text OR annotations
+        if not user_feedback and not annotations:
+            await send_error(websocket, "Missing user_feedback or annotations")
             return
         
         # Get project
@@ -1189,10 +1195,17 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
             for screen in flow_graph["screens"]
         ]
         
+        # Map screen names to screen IDs for annotations
+        screen_name_to_id = {
+            screen.get("name", "Untitled"): screen["screen_id"]
+            for screen in flow_graph["screens"]
+        }
+        
         routing_result = await router.route_feedback(
             user_feedback=user_feedback,
             conversation_history=conversation_history,
-            flow_summary=flow_summary
+            flow_summary=flow_summary,
+            annotations=annotations  # NEW: Pass annotations
         )
         
         # Check if conversation only
@@ -1258,7 +1271,9 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
         
         for idx, screen_edit in enumerate(screens_to_edit):
             screen_id = screen_edit["screen_id"]
+            screen_name = screen_edit.get("screen_name", "Untitled")  # Router should include this
             contextualized_feedback = screen_edit["contextualized_feedback"]
+            screen_annotations = screen_edit.get("annotations", [])  # NEW: Get annotations for this screen
             
             # Find the screen in flow graph
             screen = next((s for s in flow_graph["screens"] if s["screen_id"] == screen_id), None)
@@ -1267,7 +1282,9 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
                 print(f"Warning: Screen {screen_id} not found in flow graph")
                 continue
             
-            screen_name = screen.get("name", "Untitled")
+            # Update screen_name from flow graph if not set
+            if screen_name == "Untitled":
+                screen_name = screen.get("name", "Untitled")
             
             # Notify start of screen iteration
             await websocket.send_json({
@@ -1312,7 +1329,8 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
                 contextualized_feedback=contextualized_feedback,
                 dtm=dtm,
                 flow_context=flow_context,
-                device_info=device_info
+                device_info=device_info,
+                annotations=screen_annotations  # NEW: Pass annotations
             ):
                 chunk_type = chunk_data.get("type")
                 
