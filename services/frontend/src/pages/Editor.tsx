@@ -1154,6 +1154,7 @@ export default function Editor() {
     // Track the current AI message being built
     let currentAIMessageId = (Date.now() + 1).toString()
     let currentAIContent = ''
+    let currentScreenName = ''
 
     try {
       await iterateUIWebSocket(projectId, userMessage, conversationMessages, {
@@ -1180,6 +1181,7 @@ export default function Editor() {
           // Start a new AI message for this screen
           currentAIMessageId = `${Date.now()}-${data.screen_id}`
           currentAIContent = ''
+          currentScreenName = data.screen_name
         },
 
         onScreenConversationChunk: data => {
@@ -1209,6 +1211,7 @@ export default function Editor() {
                   type: 'ai',
                   content: currentAIContent,
                   timestamp: new Date(),
+                  screen: currentScreenName,
                 },
               ]
             }

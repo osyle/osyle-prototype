@@ -6,6 +6,7 @@ export interface Message {
   type: 'user' | 'ai'
   content: string
   timestamp: Date
+  screen?: string
 }
 
 interface ConversationBarProps {
@@ -137,14 +138,24 @@ export default function ConversationBar({
                         }}
                       >
                         <div
-                          className="text-xs mb-1"
+                          className="text-xs mb-1 flex items-center justify-between gap-2"
                           style={{ color: '#929397' }}
                         >
-                          {msg.type === 'user' ? 'You' : 'AI'} •{' '}
-                          {msg.timestamp.toLocaleTimeString('en-US', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })}
+                          <span>
+                            {msg.type === 'user' ? 'You' : 'AI'} •{' '}
+                            {msg.timestamp.toLocaleTimeString('en-US', {
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          {msg.type === 'ai' && msg.screen && (
+                            <span
+                              className="font-semibold"
+                              style={{ color: '#667EEA' }}
+                            >
+                              {msg.screen}
+                            </span>
+                          )}
                         </div>
                         <div
                           className="text-sm whitespace-pre-wrap"

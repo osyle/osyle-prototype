@@ -17,6 +17,7 @@ export interface Message {
   type: 'user' | 'ai'
   content: string
   timestamp: Date
+  screen?: string
 }
 
 export interface IterationCallbacks {
