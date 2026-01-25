@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   X,
   FileJson,
+  Trash2,
 } from 'lucide-react'
 import React, { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -892,6 +893,46 @@ export default function Home() {
       console.error('Failed to load project:', err)
       setIsLoadingProject(false)
       alert('Failed to open project. Please try again.')
+    }
+  }
+
+  const handleDeleteProject = async (
+    project: ProjectDisplay,
+    e: React.MouseEvent,
+  ) => {
+    e.stopPropagation()
+
+    if (
+      !confirm(
+        `Are you sure you want to delete "${project.name}"? This action cannot be undone.`,
+      )
+    ) {
+      return
+    }
+
+    try {
+      await api.projects.delete(project.project_id)
+
+      // Remove from local state
+      setProjects(prev => prev.filter(p => p.project_id !== project.project_id))
+
+      // If this was the current project in localStorage, clear it
+      const currentProject = localStorage.getItem('current_project')
+      if (currentProject) {
+        try {
+          const parsed = JSON.parse(currentProject)
+          if (parsed.project_id === project.project_id) {
+            localStorage.removeItem('current_project')
+          }
+        } catch {
+          // Ignore parsing errors
+        }
+      }
+
+      console.log(`Successfully deleted project: ${project.name}`)
+    } catch (err) {
+      console.error('Failed to delete project:', err)
+      alert(err instanceof Error ? err.message : 'Failed to delete project')
     }
   }
 
@@ -2213,6 +2254,19 @@ export default function Home() {
                           title="View raw JSON"
                         >
                           <FileJson size={18} />
+                        </button>
+
+                        {/* Delete Button */}
+                        <button
+                          onClick={e => handleDeleteProject(project, e)}
+                          className="ml-2 p-2 rounded-lg transition-all hover:scale-110"
+                          style={{
+                            backgroundColor: '#FEE2E2',
+                            color: '#991B1B',
+                          }}
+                          title="Delete project"
+                        >
+                          <Trash2 size={18} />
                         </button>
                       </div>
                     </div>
