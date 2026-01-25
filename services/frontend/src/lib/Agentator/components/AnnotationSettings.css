@@ -13,8 +13,12 @@
 }
 
 @keyframes overlay-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .settings-panel {
@@ -164,7 +168,9 @@
 
 .color-option.active {
   border-color: #fff;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 0 4px rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    0 0 0 4px rgba(255, 255, 255, 0.2);
 }
 
 .setting-toggle {
@@ -175,7 +181,7 @@
   user-select: none;
 }
 
-.setting-toggle input[type="checkbox"] {
+.setting-toggle input[type='checkbox'] {
   width: 44px;
   height: 24px;
   appearance: none;
@@ -187,7 +193,7 @@
   transition: all 0.2s ease;
 }
 
-.setting-toggle input[type="checkbox"]::before {
+.setting-toggle input[type='checkbox']::before {
   content: '';
   position: absolute;
   width: 18px;
@@ -199,12 +205,12 @@
   transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.setting-toggle input[type="checkbox"]:checked {
+.setting-toggle input[type='checkbox']:checked {
   background: #3c82f7;
   border-color: #3c82f7;
 }
 
-.setting-toggle input[type="checkbox"]:checked::before {
+.setting-toggle input[type='checkbox']:checked::before {
   background: #fff;
   left: 22px;
 }

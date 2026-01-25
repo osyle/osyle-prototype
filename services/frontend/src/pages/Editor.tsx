@@ -23,6 +23,8 @@ import PrototypeRunner from '../components/PrototypeRunner'
 import RightPanel from '../components/RightPanel'
 import VersionHistory from '../components/VersionHistory'
 import { useDeviceContext } from '../hooks/useDeviceContext'
+import { Agentator, AgentatorGlobalProvider } from '../lib/Agentator'
+import type { Annotation } from '../lib/Agentator'
 import api from '../services/api'
 import {
   iterateUIWebSocket,
@@ -972,7 +974,6 @@ export default function Editor() {
                     position: 'absolute',
                     left: position.x,
                     top: position.y,
-                    pointerEvents: 'none',
                   }}
                 >
                   {/* START badge for entry screen */}
@@ -1080,113 +1081,118 @@ export default function Editor() {
                   )}
 
                   <DeviceFrame>
-                    {(screen as ScreenWithLoadingState).ui_loading ? (
-                      // Loading state with spinner
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: '#F9FAFB',
-                          flexDirection: 'column',
-                          gap: '16px',
-                        }}
-                      >
+                    <Agentator
+                      screenId={screen.screen_id}
+                      screenName={screen.name}
+                    >
+                      {(screen as ScreenWithLoadingState).ui_loading ? (
+                        // Loading state with spinner
                         <div
                           style={{
-                            width: '48px',
-                            height: '48px',
-                            border: '4px solid #E5E7EB',
-                            borderTop: '4px solid #3B82F6',
-                            borderRadius: '50%',
-                            animation: 'spin 1s linear infinite',
-                          }}
-                        />
-                        <div
-                          style={{
-                            fontSize: '13px',
-                            color: '#9CA3AF',
-                            fontWeight: 500,
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: '#F9FAFB',
+                            flexDirection: 'column',
+                            gap: '16px',
                           }}
                         >
-                          Generating...
-                        </div>
-                      </div>
-                    ) : (screen as ScreenWithLoadingState).ui_error ? (
-                      // Error state
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: '#FEF2F2',
-                          padding: '20px',
-                          textAlign: 'center',
-                        }}
-                      >
-                        <div>
-                          <div
-                            style={{ fontSize: '32px', marginBottom: '8px' }}
-                          >
-                            ⚠️
-                          </div>
                           <div
                             style={{
-                              fontSize: '14px',
-                              color: '#DC2626',
-                              fontWeight: 600,
+                              width: '48px',
+                              height: '48px',
+                              border: '4px solid #E5E7EB',
+                              borderTop: '4px solid #3B82F6',
+                              borderRadius: '50%',
+                              animation: 'spin 1s linear infinite',
+                            }}
+                          />
+                          <div
+                            style={{
+                              fontSize: '13px',
+                              color: '#9CA3AF',
+                              fontWeight: 500,
                             }}
                           >
-                            Generation Failed
+                            Generating...
                           </div>
                         </div>
-                      </div>
-                    ) : screen.ui_code ||
-                      screenCheckpoints[screen.screen_id] ? (
-                      <>
-                        <DynamicReactRenderer
-                          jsxCode={
-                            screenCheckpoints[screen.screen_id] ||
-                            screen.ui_code ||
-                            ''
-                          }
-                          propsToInject={{
-                            onTransition: () => {},
-                            // Pass parameters for parametric mode
-                            ...(rendering_mode === 'parametric' &&
-                            selectedScreenId === screen.screen_id
-                              ? { parameters: parameterValues }
-                              : {}),
+                      ) : (screen as ScreenWithLoadingState).ui_error ? (
+                        // Error state
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: '#FEF2F2',
+                            padding: '20px',
+                            textAlign: 'center',
                           }}
-                        />
-                        {screenCheckpoints[screen.screen_id] && (
-                          <div
-                            style={{
-                              position: 'absolute',
-                              top: '8px',
-                              left: '8px',
-                              background: 'rgba(59, 130, 246, 0.9)',
-                              color: 'white',
-                              padding: '4px 12px',
-                              borderRadius: '12px',
-                              fontSize: '11px',
-                              fontWeight: '600',
-                              zIndex: 100,
-                            }}
-                          >
-                            ⚡ Streaming...
+                        >
+                          <div>
+                            <div
+                              style={{ fontSize: '32px', marginBottom: '8px' }}
+                            >
+                              ⚠️
+                            </div>
+                            <div
+                              style={{
+                                fontSize: '14px',
+                                color: '#DC2626',
+                                fontWeight: 600,
+                              }}
+                            >
+                              Generation Failed
+                            </div>
                           </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <div className="text-gray-400">Loading...</div>
-                      </div>
-                    )}
+                        </div>
+                      ) : screen.ui_code ||
+                        screenCheckpoints[screen.screen_id] ? (
+                        <>
+                          <DynamicReactRenderer
+                            jsxCode={
+                              screenCheckpoints[screen.screen_id] ||
+                              screen.ui_code ||
+                              ''
+                            }
+                            propsToInject={{
+                              onTransition: () => {},
+                              // Pass parameters for parametric mode
+                              ...(rendering_mode === 'parametric' &&
+                              selectedScreenId === screen.screen_id
+                                ? { parameters: parameterValues }
+                                : {}),
+                            }}
+                          />
+                          {screenCheckpoints[screen.screen_id] && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                top: '8px',
+                                left: '8px',
+                                background: 'rgba(59, 130, 246, 0.9)',
+                                color: 'white',
+                                padding: '4px 12px',
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: '600',
+                                zIndex: 100,
+                              }}
+                            >
+                              ⚡ Streaming...
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <div className="text-gray-400">Loading...</div>
+                        </div>
+                      )}
+                    </Agentator>
                   </DeviceFrame>
                   <div
                     style={{
@@ -1280,7 +1286,10 @@ export default function Editor() {
   /**
    * Handle sending a message in the conversation
    */
-  const handleSendMessage = async (userMessage: string) => {
+  const handleSendMessage = async (
+    userMessage: string,
+    annotations?: Record<string, Annotation[]>,
+  ) => {
     if (!flowGraph || !flowGraph.screens || flowGraph.screens.length === 0) {
       console.error('No flow graph available for iteration')
       return
@@ -1295,6 +1304,13 @@ export default function Editor() {
 
     const project = JSON.parse(currentProject)
     const projectId = project.project_id
+
+    // Log annotations if provided
+    if (annotations && Object.keys(annotations).length > 0) {
+      console.log('📝 Sending with annotations:', annotations)
+      // TODO: Will be integrated with iterate-ui WebSocket later
+      // For now, we're just logging them so you can see the data structure
+    }
 
     // Add user message to conversation
     const userMsg: Message = {
@@ -1523,543 +1539,544 @@ export default function Editor() {
   }
 
   return (
-    <>
-      <div
-        className="relative h-screen w-screen overflow-hidden"
-        style={{
-          backgroundColor: '#EDEBE9',
-          fontFamily: "'Inter', -apple-system, sans-serif",
-        }}
-      >
-        {/* Back Button */}
-        {(generationStage === 'complete' || generationStage === 'error') && (
-          <button
-            onClick={handleBackToHome}
-            className="fixed top-6 left-6 w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 z-50"
-            style={{
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            }}
-          >
-            <ArrowLeft size={20} style={{ color: '#3B3B3B' }} />
-          </button>
-        )}
-
-        {/* Flow Navigator */}
-        {flowGraph && generationStage === 'complete' && (
-          <div className="fixed top-24 left-6 z-50">
+    <AgentatorGlobalProvider>
+      <>
+        <div
+          className="relative h-screen w-screen overflow-hidden"
+          style={{
+            backgroundColor: '#EDEBE9',
+            fontFamily: "'Inter', -apple-system, sans-serif",
+          }}
+        >
+          {/* Back Button */}
+          {(generationStage === 'complete' || generationStage === 'error') && (
             <button
-              onClick={() => setIsFlowNavigatorOpen(!isFlowNavigatorOpen)}
-              className="w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 mb-2"
+              onClick={handleBackToHome}
+              className="fixed top-6 left-6 w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 z-50"
               style={{
                 backgroundColor: '#FFFFFF',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
               }}
             >
-              <List size={20} style={{ color: '#3B3B3B' }} />
+              <ArrowLeft size={20} style={{ color: '#3B3B3B' }} />
             </button>
+          )}
 
-            {isFlowNavigatorOpen && (
-              <div
-                className="rounded-2xl p-4 max-h-96 overflow-y-auto"
+          {/* Flow Navigator */}
+          {flowGraph && generationStage === 'complete' && (
+            <div className="fixed top-24 left-6 z-50">
+              <button
+                onClick={() => setIsFlowNavigatorOpen(!isFlowNavigatorOpen)}
+                className="w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 mb-2"
                 style={{
                   backgroundColor: '#FFFFFF',
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-                  width: '240px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                 }}
               >
+                <List size={20} style={{ color: '#3B3B3B' }} />
+              </button>
+
+              {isFlowNavigatorOpen && (
                 <div
-                  className="text-xs font-semibold mb-3"
-                  style={{ color: '#929397' }}
+                  className="rounded-2xl p-4 max-h-96 overflow-y-auto"
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                    width: '240px',
+                  }}
                 >
-                  FLOW SCREENS ({flowGraph.screens.length})
-                </div>
-                {flowGraph.screens.map((screen, index) => (
-                  <button
-                    key={screen.screen_id}
-                    onClick={() => {
-                      setSelectedScreenId(screen.screen_id)
-                      centerScreen(screen.screen_id, true)
-                      setIsFlowNavigatorOpen(false)
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-lg mb-1 transition-all hover:scale-[1.02]"
-                    style={{
-                      backgroundColor:
-                        selectedScreenId === screen.screen_id
-                          ? '#F0F7FF'
-                          : 'transparent',
-                      color: '#3B3B3B',
-                      border:
-                        selectedScreenId === screen.screen_id
-                          ? '1px solid #3B82F6'
-                          : '1px solid transparent',
-                    }}
+                  <div
+                    className="text-xs font-semibold mb-3"
+                    style={{ color: '#929397' }}
                   >
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-6 h-6 rounded flex items-center justify-center text-xs font-semibold"
-                        style={{
-                          backgroundColor:
-                            screen.screen_type === 'entry'
-                              ? '#10B981'
-                              : screen.screen_type === 'success'
-                                ? '#3B82F6'
-                                : '#E5E7EB',
-                          color:
-                            screen.screen_type === 'entry' ||
-                            screen.screen_type === 'success'
-                              ? '#FFFFFF'
-                              : '#6B7280',
-                        }}
-                      >
-                        {screen.screen_type === 'entry' ? '→' : index + 1}
+                    FLOW SCREENS ({flowGraph.screens.length})
+                  </div>
+                  {flowGraph.screens.map((screen, index) => (
+                    <button
+                      key={screen.screen_id}
+                      onClick={() => {
+                        setSelectedScreenId(screen.screen_id)
+                        centerScreen(screen.screen_id, true)
+                        setIsFlowNavigatorOpen(false)
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-lg mb-1 transition-all hover:scale-[1.02]"
+                      style={{
+                        backgroundColor:
+                          selectedScreenId === screen.screen_id
+                            ? '#F0F7FF'
+                            : 'transparent',
+                        color: '#3B3B3B',
+                        border:
+                          selectedScreenId === screen.screen_id
+                            ? '1px solid #3B82F6'
+                            : '1px solid transparent',
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-6 h-6 rounded flex items-center justify-center text-xs font-semibold"
+                          style={{
+                            backgroundColor:
+                              screen.screen_type === 'entry'
+                                ? '#10B981'
+                                : screen.screen_type === 'success'
+                                  ? '#3B82F6'
+                                  : '#E5E7EB',
+                            color:
+                              screen.screen_type === 'entry' ||
+                              screen.screen_type === 'success'
+                                ? '#FFFFFF'
+                                : '#6B7280',
+                          }}
+                        >
+                          {screen.screen_type === 'entry' ? '→' : index + 1}
+                        </div>
+                        <div className="flex-1 text-sm font-medium">
+                          {screen.name}
+                        </div>
                       </div>
-                      <div className="flex-1 text-sm font-medium">
-                        {screen.name}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Left Side Menu */}
-        <div className="fixed left-6 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-40">
-          <button
-            className="rounded-lg flex items-center justify-center transition-all hover:scale-105"
-            style={{
-              width: '56px',
-              height: '40px',
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            }}
-          >
-            <div className="flex flex-col gap-1">
-              <div
-                style={{
-                  width: '20px',
-                  height: '2px',
-                  backgroundColor: '#929397',
-                }}
-              />
-              <div
-                style={{
-                  width: '20px',
-                  height: '2px',
-                  backgroundColor: '#929397',
-                }}
-              />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          </button>
+          )}
 
-          {inspirationImages.slice(-3).map(image => (
+          {/* Left Side Menu */}
+          <div className="fixed left-6 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-40">
             <button
-              key={image.key}
-              className="rounded-xl transition-all hover:scale-105"
+              className="rounded-lg flex items-center justify-center transition-all hover:scale-105"
+              style={{
+                width: '56px',
+                height: '40px',
+                backgroundColor: '#FFFFFF',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              }}
+            >
+              <div className="flex flex-col gap-1">
+                <div
+                  style={{
+                    width: '20px',
+                    height: '2px',
+                    backgroundColor: '#929397',
+                  }}
+                />
+                <div
+                  style={{
+                    width: '20px',
+                    height: '2px',
+                    backgroundColor: '#929397',
+                  }}
+                />
+              </div>
+            </button>
+
+            {inspirationImages.slice(-3).map(image => (
+              <button
+                key={image.key}
+                className="rounded-xl transition-all hover:scale-105"
+                style={{
+                  width: '56px',
+                  height: '56px',
+                  backgroundColor: '#FFFFFF',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  overflow: 'hidden',
+                }}
+                title={image.filename}
+              >
+                <img
+                  src={image.url}
+                  alt={image.filename}
+                  className="w-full h-full object-cover"
+                />
+              </button>
+            ))}
+
+            <button
+              onClick={() => setIsAddInspirationModalOpen(true)}
+              className="rounded-xl flex items-center justify-center transition-all hover:scale-105"
               style={{
                 width: '56px',
                 height: '56px',
                 backgroundColor: '#FFFFFF',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                overflow: 'hidden',
               }}
-              title={image.filename}
+              title="Add inspiration images"
             >
-              <img
-                src={image.url}
-                alt={image.filename}
-                className="w-full h-full object-cover"
-              />
+              <Plus size={24} style={{ color: '#929397' }} />
             </button>
-          ))}
 
-          <button
-            onClick={() => setIsAddInspirationModalOpen(true)}
-            className="rounded-xl flex items-center justify-center transition-all hover:scale-105"
-            style={{
-              width: '56px',
-              height: '56px',
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            }}
-            title="Add inspiration images"
-          >
-            <Plus size={24} style={{ color: '#929397' }} />
-          </button>
-
-          {/* Version History - RESTORED! */}
-          {generationStage === 'complete' && currentFlowVersion > 0 && (
-            <div className="mt-4">
-              <VersionHistory
-                currentVersion={currentFlowVersion}
-                availableVersions={availableVersions}
-                onVersionSelect={handleVersionSelect}
-                onRevert={handleRevertVersion}
-                onDelete={handleDeleteVersion}
-                isReverting={isReverting}
-                isDeleting={isDeleting}
-                viewingVersion={viewingVersion}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Tab Navigation */}
-        <div
-          className="fixed top-6 transition-all duration-300 z-40"
-          style={{
-            left: '80px',
-            right: isRightPanelCollapsed ? '80px' : 'calc(28% + 40px)',
-            display: 'flex',
-            justifyContent: 'center',
-          }}
-        >
-          <div
-            className="flex items-center gap-1 rounded-full px-2 py-1.5"
-            style={{
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-              border: '1px solid rgba(0, 0, 0, 0.05)',
-            }}
-          >
-            {tabs.map(tab => (
-              <button
-                key={tab.name}
-                onClick={() => tab.enabled && setActiveTab(tab.name)}
-                disabled={!tab.enabled}
-                className="px-6 py-2 rounded-full transition-all duration-300 text-sm font-medium relative group"
-                style={{
-                  backgroundColor:
-                    activeTab === tab.name ? '#F4F4F4' : 'transparent',
-                  color:
-                    activeTab === tab.name
-                      ? '#1F1F20'
-                      : tab.enabled
-                        ? '#6B7280'
-                        : '#D1D5DB',
-                  cursor: tab.enabled ? 'pointer' : 'not-allowed',
-                  opacity: tab.enabled ? 1 : 0.6,
-                }}
-              >
-                {tab.name}
-                {!tab.enabled && (
-                  <span className="ml-2 text-xs opacity-50">🔒</span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Canvas Container - Different for Concept vs Code vs Prototype */}
-        {activeTab === 'Code' ? (
-          // Code mode - styled container matching Prototype tab
-          <div
-            className="fixed"
-            style={{
-              top: '80px',
-              bottom: '100px',
-              left: '80px',
-              right: isRightPanelCollapsed ? '80px' : 'calc(28% + 40px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {/* Wrapper to make box 20% narrower */}
-            <div
-              style={{
-                width: '80%',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <div
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  backgroundColor: '#1F1F20',
-                  borderRadius: '24px',
-                  overflow: 'hidden',
-                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-                  border: '1px solid rgba(255, 255, 255, 0.05)',
-                }}
-              >
-                <CodeViewer flow={flowGraph} />
+            {/* Version History - RESTORED! */}
+            {generationStage === 'complete' && currentFlowVersion > 0 && (
+              <div className="mt-4">
+                <VersionHistory
+                  currentVersion={currentFlowVersion}
+                  availableVersions={availableVersions}
+                  onVersionSelect={handleVersionSelect}
+                  onRevert={handleRevertVersion}
+                  onDelete={handleDeleteVersion}
+                  isReverting={isReverting}
+                  isDeleting={isDeleting}
+                  viewingVersion={viewingVersion}
+                />
               </div>
-            </div>
+            )}
           </div>
-        ) : activeTab === 'Prototype' &&
-          generationStage === 'complete' &&
-          flowGraph ? (
-          // Prototype mode - dark box container with light background
+
+          {/* Tab Navigation */}
           <div
-            className="fixed"
+            className="fixed top-6 transition-all duration-300 z-40"
             style={{
-              top: '80px',
-              bottom: '100px',
               left: '80px',
               right: isRightPanelCollapsed ? '80px' : 'calc(28% + 40px)',
               display: 'flex',
-              alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            {/* Fullscreen button */}
-            <button
-              onClick={() => setIsFullscreenPrototype(true)}
-              className="absolute top-6 right-6 z-10 w-12 h-12 rounded-xl flex items-center justify-center transition-all hover:scale-105"
+            <div
+              className="flex items-center gap-1 rounded-full px-2 py-1.5"
               style={{
                 backgroundColor: '#FFFFFF',
-                boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
-              }}
-              title="Enter fullscreen mode"
-            >
-              <Maximize2 size={20} style={{ color: '#3B3B3B' }} />
-            </button>
-
-            {/* Wrapper to make box 20% narrower */}
-            <div
-              style={{
-                width: '80%',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                border: '1px solid rgba(0, 0, 0, 0.05)',
               }}
             >
-              <div
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  backgroundColor: '#1F1F20',
-                  borderRadius: '24px',
-                  overflow: 'hidden',
-                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-                  border: '1px solid rgba(255, 255, 255, 0.05)',
-                }}
-              >
-                <PrototypeCanvas
-                  deviceWidth={
-                    device_info.platform === 'phone'
-                      ? device_info.screen.width + 24 // Total width including DeviceFrame bezel
-                      : device_info.screen.width
-                  }
-                  deviceHeight={
-                    device_info.platform === 'phone'
-                      ? device_info.screen.height + 48 // Total height including DeviceFrame bezel
-                      : device_info.screen.height + 40 // Total height including browser chrome
-                  }
+              {tabs.map(tab => (
+                <button
+                  key={tab.name}
+                  onClick={() => tab.enabled && setActiveTab(tab.name)}
+                  disabled={!tab.enabled}
+                  className="px-6 py-2 rounded-full transition-all duration-300 text-sm font-medium relative group"
+                  style={{
+                    backgroundColor:
+                      activeTab === tab.name ? '#F4F4F4' : 'transparent',
+                    color:
+                      activeTab === tab.name
+                        ? '#1F1F20'
+                        : tab.enabled
+                          ? '#6B7280'
+                          : '#D1D5DB',
+                    cursor: tab.enabled ? 'pointer' : 'not-allowed',
+                    opacity: tab.enabled ? 1 : 0.6,
+                  }}
                 >
-                  {renderDeviceContent()}
-                </PrototypeCanvas>
-              </div>
+                  {tab.name}
+                  {!tab.enabled && (
+                    <span className="ml-2 text-xs opacity-50">🔒</span>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
-        ) : (
-          // Concept mode - infinite canvas with dark background
-          <InfiniteCanvas
-            ref={canvasRef}
-            width={
-              flowGraph && generationStage === 'complete'
-                ? (() => {
-                    const positions = calculateFlowLayout(flowGraph)
-                    const deviceWidth =
-                      device_info.platform === 'phone'
-                        ? device_info.screen.width + 24
-                        : device_info.screen.width
-                    return (
-                      Math.max(...Object.values(positions).map(p => p.x), 0) +
-                      deviceWidth +
-                      deviceWidth * 0.6
-                    ) // Match HORIZONTAL_GAP
-                  })()
-                : device_info.screen.width
-            }
-            height={
-              flowGraph && generationStage === 'complete'
-                ? (() => {
-                    const positions = calculateFlowLayout(flowGraph)
-                    const yValues = Object.values(positions).map(p => p.y)
-                    const minY = Math.min(...yValues, 0)
-                    const maxY = Math.max(...yValues, 0)
-                    const deviceHeight =
-                      device_info.platform === 'phone'
-                        ? device_info.screen.height + 48
-                        : device_info.screen.height + 40
-                    return maxY - minY + deviceHeight + deviceHeight * 0.5 // Match VERTICAL_GAP
-                  })()
-                : device_info.screen.height
-            }
-            skipAutoCenter={Object.keys(screenCheckpoints).length > 0}
-          >
-            {renderDeviceContent()}
-          </InfiniteCanvas>
-        )}
 
-        {/* Conversation Bar */}
-        <ConversationBar
-          isRightPanelCollapsed={isRightPanelCollapsed}
-          messages={conversationMessages}
-          onSendMessage={handleSendMessage}
-          isProcessing={isIterating}
-          processingStatus={iterationStatus}
-        />
-
-        {/* Right Panel */}
-        <RightPanel
-          isCollapsed={isRightPanelCollapsed}
-          onCollapse={() => setIsRightPanelCollapsed(true)}
-          activeTab={activeRightTab}
-          setActiveTab={setActiveRightTab}
-          userInfo={userInfo}
-          onSignOut={handleSignOut}
-          flowGraph={flowGraph}
-          setFlowGraph={setFlowGraph}
-          selectedScreen={selectedScreen}
-          parameterValues={parameterValues}
-          setParameterValues={setParameterValues}
-          renderingMode={rendering_mode}
-        />
-
-        {isRightPanelCollapsed && (
-          <button
-            onClick={() => setIsRightPanelCollapsed(false)}
-            className="fixed bottom-1/6 right-0 -translate-y-1/2 w-10 h-16 rounded-l-xl flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg z-50 group"
-            style={{
-              backgroundColor: '#FFFFFF',
-              boxShadow: '-4px 4px 12px rgba(0,0,0,0.12)',
-            }}
-          >
-            <ChevronDown
-              size={20}
-              style={{
-                color: '#3B3B3B',
-                transform: 'rotate(90deg)',
-              }}
-              className="group-hover:scale-110 transition-transform"
-            />
-          </button>
-        )}
-
-        {/* Initializing Overlay */}
-        {generationStage === 'idle' && (
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center"
-            style={{
-              backgroundColor: 'rgba(237, 235, 233, 0.8)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-            }}
-          >
+          {/* Canvas Container - Different for Concept vs Code vs Prototype */}
+          {activeTab === 'Code' ? (
+            // Code mode - styled container matching Prototype tab
             <div
-              className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-in fade-in duration-500"
+              className="fixed"
               style={{
-                backgroundColor: '#FFFFFF',
-                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
-                maxWidth: '420px',
-                width: '90%',
+                top: '80px',
+                bottom: '100px',
+                left: '80px',
+                right: isRightPanelCollapsed ? '80px' : 'calc(28% + 40px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              {/* Animated Loading Icon - Expanding Ripples */}
-              <div className="relative w-32 h-32 flex items-center justify-center">
-                {/* Center Icon */}
-                <div className="absolute inset-0 flex items-center justify-center z-10">
-                  <div
-                    className="w-16 h-16 rounded-full flex items-center justify-center"
-                    style={{
-                      background:
-                        'linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)',
-                      boxShadow: '0 8px 32px rgba(245, 158, 11, 0.5)',
-                    }}
-                  >
-                    <Sparkles size={28} style={{ color: '#FFFFFF' }} />
-                  </div>
+              {/* Wrapper to make box 20% narrower */}
+              <div
+                style={{
+                  width: '80%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    backgroundColor: '#1F1F20',
+                    borderRadius: '24px',
+                    overflow: 'hidden',
+                    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                  }}
+                >
+                  <CodeViewer flow={flowGraph} />
                 </div>
+              </div>
+            </div>
+          ) : activeTab === 'Prototype' &&
+            generationStage === 'complete' &&
+            flowGraph ? (
+            // Prototype mode - dark box container with light background
+            <div
+              className="fixed"
+              style={{
+                top: '80px',
+                bottom: '100px',
+                left: '80px',
+                right: isRightPanelCollapsed ? '80px' : 'calc(28% + 40px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {/* Fullscreen button */}
+              <button
+                onClick={() => setIsFullscreenPrototype(true)}
+                className="absolute top-6 right-6 z-10 w-12 h-12 rounded-xl flex items-center justify-center transition-all hover:scale-105"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+                }}
+                title="Enter fullscreen mode"
+              >
+                <Maximize2 size={20} style={{ color: '#3B3B3B' }} />
+              </button>
 
-                {/* Expanding Ripples */}
-                {[0, 1, 2, 3].map(i => (
-                  <div
-                    key={i}
-                    className="absolute inset-0 rounded-full"
-                    style={{
-                      border: '3px solid',
-                      borderColor: i % 2 === 0 ? '#F59E0B' : '#EF4444',
-                      opacity: 0,
-                      animation: `ripple 3s ease-out infinite`,
-                      animationDelay: `${i * 0.75}s`,
-                    }}
-                  />
-                ))}
-
-                {/* Rotating Particles */}
-                {[0, 1, 2, 3, 4, 5].map(i => (
-                  <div
-                    key={`particle-${i}`}
-                    className="absolute"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      animation: `rotate-particles 4s linear infinite`,
-                      animationDelay: `${i * 0.2}s`,
-                    }}
+              {/* Wrapper to make box 20% narrower */}
+              <div
+                style={{
+                  width: '80%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    backgroundColor: '#1F1F20',
+                    borderRadius: '24px',
+                    overflow: 'hidden',
+                    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                  }}
+                >
+                  <PrototypeCanvas
+                    deviceWidth={
+                      device_info.platform === 'phone'
+                        ? device_info.screen.width + 24 // Total width including DeviceFrame bezel
+                        : device_info.screen.width
+                    }
+                    deviceHeight={
+                      device_info.platform === 'phone'
+                        ? device_info.screen.height + 48 // Total height including DeviceFrame bezel
+                        : device_info.screen.height + 40 // Total height including browser chrome
+                    }
                   >
+                    {renderDeviceContent()}
+                  </PrototypeCanvas>
+                </div>
+              </div>
+            </div>
+          ) : (
+            // Concept mode - infinite canvas with dark background
+            <InfiniteCanvas
+              ref={canvasRef}
+              width={
+                flowGraph && generationStage === 'complete'
+                  ? (() => {
+                      const positions = calculateFlowLayout(flowGraph)
+                      const deviceWidth =
+                        device_info.platform === 'phone'
+                          ? device_info.screen.width + 24
+                          : device_info.screen.width
+                      return (
+                        Math.max(...Object.values(positions).map(p => p.x), 0) +
+                        deviceWidth +
+                        deviceWidth * 0.6
+                      ) // Match HORIZONTAL_GAP
+                    })()
+                  : device_info.screen.width
+              }
+              height={
+                flowGraph && generationStage === 'complete'
+                  ? (() => {
+                      const positions = calculateFlowLayout(flowGraph)
+                      const yValues = Object.values(positions).map(p => p.y)
+                      const minY = Math.min(...yValues, 0)
+                      const maxY = Math.max(...yValues, 0)
+                      const deviceHeight =
+                        device_info.platform === 'phone'
+                          ? device_info.screen.height + 48
+                          : device_info.screen.height + 40
+                      return maxY - minY + deviceHeight + deviceHeight * 0.5 // Match VERTICAL_GAP
+                    })()
+                  : device_info.screen.height
+              }
+              skipAutoCenter={Object.keys(screenCheckpoints).length > 0}
+            >
+              {renderDeviceContent()}
+            </InfiniteCanvas>
+          )}
+
+          {/* Conversation Bar */}
+          <ConversationBar
+            isRightPanelCollapsed={isRightPanelCollapsed}
+            messages={conversationMessages}
+            onSendMessage={handleSendMessage}
+            isProcessing={isIterating}
+            processingStatus={iterationStatus}
+          />
+
+          {/* Right Panel */}
+          <RightPanel
+            isCollapsed={isRightPanelCollapsed}
+            onCollapse={() => setIsRightPanelCollapsed(true)}
+            activeTab={activeRightTab}
+            setActiveTab={setActiveRightTab}
+            userInfo={userInfo}
+            onSignOut={handleSignOut}
+            flowGraph={flowGraph}
+            setFlowGraph={setFlowGraph}
+            selectedScreen={selectedScreen}
+            parameterValues={parameterValues}
+            setParameterValues={setParameterValues}
+            renderingMode={rendering_mode}
+          />
+
+          {isRightPanelCollapsed && (
+            <button
+              onClick={() => setIsRightPanelCollapsed(false)}
+              className="fixed bottom-1/6 right-0 -translate-y-1/2 w-10 h-16 rounded-l-xl flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg z-50 group"
+              style={{
+                backgroundColor: '#FFFFFF',
+                boxShadow: '-4px 4px 12px rgba(0,0,0,0.12)',
+              }}
+            >
+              <ChevronDown
+                size={20}
+                style={{
+                  color: '#3B3B3B',
+                  transform: 'rotate(90deg)',
+                }}
+                className="group-hover:scale-110 transition-transform"
+              />
+            </button>
+          )}
+
+          {/* Initializing Overlay */}
+          {generationStage === 'idle' && (
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center"
+              style={{
+                backgroundColor: 'rgba(237, 235, 233, 0.8)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+              }}
+            >
+              <div
+                className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-in fade-in duration-500"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+                  maxWidth: '420px',
+                  width: '90%',
+                }}
+              >
+                {/* Animated Loading Icon - Expanding Ripples */}
+                <div className="relative w-32 h-32 flex items-center justify-center">
+                  {/* Center Icon */}
+                  <div className="absolute inset-0 flex items-center justify-center z-10">
                     <div
-                      className="absolute w-2 h-2 rounded-full"
+                      className="w-16 h-16 rounded-full flex items-center justify-center"
                       style={{
                         background:
-                          i % 3 === 0
-                            ? 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)'
-                            : i % 3 === 1
-                              ? 'linear-gradient(135deg, #FB923C 0%, #F97316 100%)'
-                              : 'linear-gradient(135deg, #FCA5A5 0%, #EF4444 100%)',
-                        boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)',
-                        top: '0',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
+                          'linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)',
+                        boxShadow: '0 8px 32px rgba(245, 158, 11, 0.5)',
+                      }}
+                    >
+                      <Sparkles size={28} style={{ color: '#FFFFFF' }} />
+                    </div>
+                  </div>
+
+                  {/* Expanding Ripples */}
+                  {[0, 1, 2, 3].map(i => (
+                    <div
+                      key={i}
+                      className="absolute inset-0 rounded-full"
+                      style={{
+                        border: '3px solid',
+                        borderColor: i % 2 === 0 ? '#F59E0B' : '#EF4444',
+                        opacity: 0,
+                        animation: `ripple 3s ease-out infinite`,
+                        animationDelay: `${i * 0.75}s`,
                       }}
                     />
-                  </div>
-                ))}
-              </div>
+                  ))}
 
-              {/* Loading Text */}
-              <div className="text-center">
-                <h3
-                  className="text-xl font-semibold mb-2"
-                  style={{ color: '#1F1F20' }}
-                >
-                  Initializing...
-                </h3>
-                <p
-                  className="text-sm leading-relaxed"
-                  style={{ color: '#929397' }}
-                >
-                  Setting up your workspace
-                </p>
-              </div>
+                  {/* Rotating Particles */}
+                  {[0, 1, 2, 3, 4, 5].map(i => (
+                    <div
+                      key={`particle-${i}`}
+                      className="absolute"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        animation: `rotate-particles 4s linear infinite`,
+                        animationDelay: `${i * 0.2}s`,
+                      }}
+                    >
+                      <div
+                        className="absolute w-2 h-2 rounded-full"
+                        style={{
+                          background:
+                            i % 3 === 0
+                              ? 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)'
+                              : i % 3 === 1
+                                ? 'linear-gradient(135deg, #FB923C 0%, #F97316 100%)'
+                                : 'linear-gradient(135deg, #FCA5A5 0%, #EF4444 100%)',
+                          boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)',
+                          top: '0',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
 
-              {/* Pulsing Bar Indicator */}
-              <div className="w-full flex items-center gap-1.5">
-                {[0, 1, 2, 3, 4].map(i => (
-                  <div
-                    key={i}
-                    className="flex-1 h-1.5 rounded-full"
-                    style={{
-                      background:
-                        'linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)',
-                      animation: 'pulse-bar 1.5s ease-in-out infinite',
-                      animationDelay: `${i * 0.15}s`,
-                    }}
-                  />
-                ))}
-              </div>
+                {/* Loading Text */}
+                <div className="text-center">
+                  <h3
+                    className="text-xl font-semibold mb-2"
+                    style={{ color: '#1F1F20' }}
+                  >
+                    Initializing...
+                  </h3>
+                  <p
+                    className="text-sm leading-relaxed"
+                    style={{ color: '#929397' }}
+                  >
+                    Setting up your workspace
+                  </p>
+                </div>
 
-              {/* Animation Styles */}
-              <style>{`
+                {/* Pulsing Bar Indicator */}
+                <div className="w-full flex items-center gap-1.5">
+                  {[0, 1, 2, 3, 4].map(i => (
+                    <div
+                      key={i}
+                      className="flex-1 h-1.5 rounded-full"
+                      style={{
+                        background:
+                          'linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)',
+                        animation: 'pulse-bar 1.5s ease-in-out infinite',
+                        animationDelay: `${i * 0.15}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {/* Animation Styles */}
+                <style>{`
               @keyframes ripple {
                 0% {
                   transform: scale(0.5);
@@ -2101,408 +2118,408 @@ export default function Editor() {
                 animation: fade-in 0.5s ease-out;
               }
             `}</style>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Multi-Stage Generation Overlay */}
-        {generationStage === 'generating' && (
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center"
-            style={{
-              backgroundColor: 'rgba(237, 235, 233, 0.8)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-            }}
-          >
-            {/* Stage 1: Analyzing Intent */}
-            {rethinkStage === 'analyzing' && (
-              <div
-                key="analyzing"
-                className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
-                  maxWidth: '420px',
-                  width: '90%',
-                }}
-              >
-                <div className="relative w-32 h-32 flex items-center justify-center">
-                  {/* Center Magnifying Glass */}
-                  <div
-                    className="absolute inset-0 flex items-center justify-center"
-                    style={{
-                      animation: 'pulse-slow 3s ease-in-out infinite',
-                    }}
-                  >
+          {/* Multi-Stage Generation Overlay */}
+          {generationStage === 'generating' && (
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center"
+              style={{
+                backgroundColor: 'rgba(237, 235, 233, 0.8)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+              }}
+            >
+              {/* Stage 1: Analyzing Intent */}
+              {rethinkStage === 'analyzing' && (
+                <div
+                  key="analyzing"
+                  className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+                    maxWidth: '420px',
+                    width: '90%',
+                  }}
+                >
+                  <div className="relative w-32 h-32 flex items-center justify-center">
+                    {/* Center Magnifying Glass */}
                     <div
-                      className="w-20 h-20 rounded-full flex items-center justify-center"
+                      className="absolute inset-0 flex items-center justify-center"
                       style={{
-                        background:
-                          'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
-                        boxShadow: '0 8px 32px rgba(79, 172, 254, 0.4)',
-                      }}
-                    >
-                      <svg
-                        width="40"
-                        height="40"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="white"
-                        strokeWidth="2.5"
-                      >
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <path d="m21 21-4.35-4.35"></path>
-                      </svg>
-                    </div>
-                  </div>
-
-                  {/* Scanning Rays */}
-                  {[0, 1, 2].map(i => (
-                    <div
-                      key={i}
-                      className="absolute inset-0"
-                      style={{
-                        animation: `scan-ray 2s ease-in-out infinite`,
-                        animationDelay: `${i * 0.6}s`,
+                        animation: 'pulse-slow 3s ease-in-out infinite',
                       }}
                     >
                       <div
-                        className="absolute w-full h-0.5"
+                        className="w-20 h-20 rounded-full flex items-center justify-center"
                         style={{
                           background:
-                            'linear-gradient(90deg, transparent, #4FACFE, transparent)',
-                          top: '50%',
-                          left: '0',
+                            'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
+                          boxShadow: '0 8px 32px rgba(79, 172, 254, 0.4)',
                         }}
-                      />
-                    </div>
-                  ))}
-
-                  {/* Pulsing Rings */}
-                  {[0, 1].map(i => (
-                    <div
-                      key={i}
-                      className="absolute inset-0"
-                      style={{
-                        border: '2px solid #4FACFE',
-                        borderRadius: '50%',
-                        animation: `ping 2s cubic-bezier(0, 0, 0.2, 1) infinite`,
-                        animationDelay: `${i * 1}s`,
-                      }}
-                    />
-                  ))}
-                </div>
-
-                <div className="text-center">
-                  <h3
-                    className="text-xl font-semibold mb-2"
-                    style={{ color: '#1F1F20' }}
-                  >
-                    Analyzing design intent
-                  </h3>
-                  <p
-                    className="text-sm leading-relaxed"
-                    style={{ color: '#929397' }}
-                  >
-                    Questioning assumptions and understanding user needs...
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {[0, 1, 2].map(i => (
-                    <div
-                      key={i}
-                      className="w-2 h-2 rounded-full"
-                      style={{
-                        background:
-                          'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
-                        animation: 'bounce 1.4s ease-in-out infinite',
-                        animationDelay: `${i * 0.2}s`,
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Stage 2: Deriving Principles */}
-            {rethinkStage === 'principles' && (
-              <div
-                key="principles"
-                className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
-                  maxWidth: '420px',
-                  width: '90%',
-                }}
-              >
-                <div className="relative w-32 h-32 flex items-center justify-center">
-                  {/* Center Foundation */}
-                  <div
-                    className="absolute inset-0 flex items-center justify-center"
-                    style={{
-                      animation: 'pulse-slow 3s ease-in-out infinite',
-                    }}
-                  >
-                    <div
-                      className="w-20 h-20 rounded-full flex items-center justify-center"
-                      style={{
-                        background:
-                          'linear-gradient(135deg, #A18AFF 0%, #6E56CF 100%)',
-                        boxShadow: '0 8px 32px rgba(161, 138, 255, 0.4)',
-                      }}
-                    >
-                      <svg
-                        width="40"
-                        height="40"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="white"
-                        strokeWidth="2.5"
                       >
-                        <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-                        <path d="M2 17l10 5 10-5"></path>
-                        <path d="M2 12l10 5 10-5"></path>
-                      </svg>
+                        <svg
+                          width="40"
+                          height="40"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="white"
+                          strokeWidth="2.5"
+                        >
+                          <circle cx="11" cy="11" r="8"></circle>
+                          <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Stacking Blocks */}
-                  {[0, 1, 2, 3].map(i => (
-                    <div
-                      key={i}
-                      className="absolute"
-                      style={{
-                        animation: `stack-up 2.5s ease-out infinite`,
-                        animationDelay: `${i * 0.3}s`,
-                        top: `${60 - i * 12}px`,
-                        left: '50%',
-                      }}
-                    >
+                    {/* Scanning Rays */}
+                    {[0, 1, 2].map(i => (
                       <div
-                        className="w-8 h-8 rounded-lg"
+                        key={i}
+                        className="absolute inset-0"
                         style={{
-                          background:
-                            i % 2 === 0
-                              ? 'linear-gradient(135deg, #FFD6A5 0%, #FFAB73 100%)'
-                              : 'linear-gradient(135deg, #A18AFF 0%, #6E56CF 100%)',
-                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                          transform: 'translateX(-50%)',
+                          animation: `scan-ray 2s ease-in-out infinite`,
+                          animationDelay: `${i * 0.6}s`,
                         }}
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                <div className="text-center">
-                  <h3
-                    className="text-xl font-semibold mb-2"
-                    style={{ color: '#1F1F20' }}
-                  >
-                    Deriving core principles
-                  </h3>
-                  <p
-                    className="text-sm leading-relaxed"
-                    style={{ color: '#929397' }}
-                  >
-                    Building UX foundations from first principles...
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {[0, 1, 2].map(i => (
-                    <div
-                      key={i}
-                      className="w-2 h-2 rounded-full"
-                      style={{
-                        background:
-                          'linear-gradient(135deg, #A18AFF 0%, #6E56CF 100%)',
-                        animation: 'bounce 1.4s ease-in-out infinite',
-                        animationDelay: `${i * 0.2}s`,
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Stage 3: Exploring Directions */}
-            {rethinkStage === 'exploring' && (
-              <div
-                key="exploring"
-                className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
-                  maxWidth: '420px',
-                  width: '90%',
-                }}
-              >
-                <div className="relative w-32 h-32 flex items-center justify-center">
-                  {/* Center Node */}
-                  <div
-                    className="absolute inset-0 flex items-center justify-center"
-                    style={{
-                      animation: 'pulse-slow 3s ease-in-out infinite',
-                    }}
-                  >
-                    <div
-                      className="w-16 h-16 rounded-full flex items-center justify-center"
-                      style={{
-                        background:
-                          'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)',
-                        boxShadow: '0 8px 32px rgba(240, 147, 251, 0.4)',
-                      }}
-                    >
-                      <svg
-                        width="32"
-                        height="32"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="white"
-                        strokeWidth="2.5"
                       >
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="12" y1="8" x2="12" y2="16"></line>
-                        <line x1="8" y1="12" x2="16" y2="12"></line>
-                      </svg>
-                    </div>
-                  </div>
-
-                  {/* Branching Lines & Nodes */}
-                  {[0, 1, 2, 3, 4, 5].map(i => {
-                    const angle = i * 60 * (Math.PI / 180)
-                    const x = Math.cos(angle) * 56
-                    const y = Math.sin(angle) * 56
-                    return (
-                      <div key={i}>
-                        {/* Line */}
                         <div
-                          className="absolute"
-                          style={{
-                            width: '60px',
-                            height: '2px',
-                            background: `linear-gradient(90deg, #F093FB, ${
-                              i % 3 === 0
-                                ? '#4FACFE'
-                                : i % 3 === 1
-                                  ? '#10B981'
-                                  : '#F59E0B'
-                            })`,
-                            top: '50%',
-                            left: '50%',
-                            transform: `translate(-50%, -50%) rotate(${i * 60}deg)`,
-                            transformOrigin: 'left center',
-                            animation: `branch-grow 2s ease-out infinite`,
-                            animationDelay: `${i * 0.15}s`,
-                          }}
-                        />
-                        {/* End Node */}
-                        <div
-                          className="absolute w-3 h-3 rounded-full"
+                          className="absolute w-full h-0.5"
                           style={{
                             background:
-                              i % 3 === 0
-                                ? '#4FACFE'
-                                : i % 3 === 1
-                                  ? '#10B981'
-                                  : '#F59E0B',
-                            top: `calc(50% + ${y}px)`,
-                            left: `calc(50% + ${x}px)`,
-                            transform: 'translate(-50%, -50%)',
-                            animation: `pop-in 2s ease-out infinite`,
-                            animationDelay: `${i * 0.15 + 0.5}s`,
+                              'linear-gradient(90deg, transparent, #4FACFE, transparent)',
+                            top: '50%',
+                            left: '0',
                           }}
                         />
                       </div>
-                    )
-                  })}
-                </div>
+                    ))}
 
-                <div className="text-center">
-                  <h3
-                    className="text-xl font-semibold mb-2"
-                    style={{ color: '#1F1F20' }}
-                  >
-                    Exploring strategic directions
-                  </h3>
-                  <p
-                    className="text-sm leading-relaxed"
-                    style={{ color: '#929397' }}
-                  >
-                    Generating multiple design approaches...
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {[0, 1, 2].map(i => (
-                    <div
-                      key={i}
-                      className="w-2 h-2 rounded-full"
-                      style={{
-                        background:
-                          'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)',
-                        animation: 'bounce 1.4s ease-in-out infinite',
-                        animationDelay: `${i * 0.2}s`,
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Stage 4: Synthesizing Design */}
-            {rethinkStage === 'synthesizing' && (
-              <div
-                key="synthesizing"
-                className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
-                  maxWidth: '420px',
-                  width: '90%',
-                }}
-              >
-                <div className="relative w-32 h-32 flex items-center justify-center">
-                  {/* Center Merged Icon */}
-                  <div
-                    className="absolute inset-0 flex items-center justify-center"
-                    style={{
-                      animation: 'pulse-slow 3s ease-in-out infinite',
-                    }}
-                  >
-                    <div
-                      className="w-20 h-20 rounded-full flex items-center justify-center"
-                      style={{
-                        background:
-                          'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                        boxShadow: '0 8px 32px rgba(16, 185, 129, 0.4)',
-                      }}
-                    >
-                      <Sparkles size={36} style={{ color: '#FFFFFF' }} />
-                    </div>
-                  </div>
-
-                  {/* Converging Particles */}
-                  {[0, 1, 2, 3, 4, 5, 6, 7].map(i => {
-                    const angle = i * 45 * (Math.PI / 180)
-                    const startX = Math.cos(angle) * 60
-                    const startY = Math.sin(angle) * 60
-                    return (
+                    {/* Pulsing Rings */}
+                    {[0, 1].map(i => (
                       <div
                         key={i}
-                        className="absolute w-3 h-3 rounded-full"
+                        className="absolute inset-0"
+                        style={{
+                          border: '2px solid #4FACFE',
+                          borderRadius: '50%',
+                          animation: `ping 2s cubic-bezier(0, 0, 0.2, 1) infinite`,
+                          animationDelay: `${i * 1}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="text-center">
+                    <h3
+                      className="text-xl font-semibold mb-2"
+                      style={{ color: '#1F1F20' }}
+                    >
+                      Analyzing design intent
+                    </h3>
+                    <p
+                      className="text-sm leading-relaxed"
+                      style={{ color: '#929397' }}
+                    >
+                      Questioning assumptions and understanding user needs...
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {[0, 1, 2].map(i => (
+                      <div
+                        key={i}
+                        className="w-2 h-2 rounded-full"
                         style={{
                           background:
-                            i % 2 === 0
-                              ? 'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)'
-                              : 'linear-gradient(135deg, #FFD6A5 0%, #FFAB73 100%)',
-                          animation: `converge-${i} 2s ease-in-out infinite`,
+                            'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
+                          animation: 'bounce 1.4s ease-in-out infinite',
+                          animationDelay: `${i * 0.2}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Stage 2: Deriving Principles */}
+              {rethinkStage === 'principles' && (
+                <div
+                  key="principles"
+                  className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+                    maxWidth: '420px',
+                    width: '90%',
+                  }}
+                >
+                  <div className="relative w-32 h-32 flex items-center justify-center">
+                    {/* Center Foundation */}
+                    <div
+                      className="absolute inset-0 flex items-center justify-center"
+                      style={{
+                        animation: 'pulse-slow 3s ease-in-out infinite',
+                      }}
+                    >
+                      <div
+                        className="w-20 h-20 rounded-full flex items-center justify-center"
+                        style={{
+                          background:
+                            'linear-gradient(135deg, #A18AFF 0%, #6E56CF 100%)',
+                          boxShadow: '0 8px 32px rgba(161, 138, 255, 0.4)',
                         }}
                       >
-                        <style>{`
+                        <svg
+                          width="40"
+                          height="40"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="white"
+                          strokeWidth="2.5"
+                        >
+                          <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                          <path d="M2 17l10 5 10-5"></path>
+                          <path d="M2 12l10 5 10-5"></path>
+                        </svg>
+                      </div>
+                    </div>
+
+                    {/* Stacking Blocks */}
+                    {[0, 1, 2, 3].map(i => (
+                      <div
+                        key={i}
+                        className="absolute"
+                        style={{
+                          animation: `stack-up 2.5s ease-out infinite`,
+                          animationDelay: `${i * 0.3}s`,
+                          top: `${60 - i * 12}px`,
+                          left: '50%',
+                        }}
+                      >
+                        <div
+                          className="w-8 h-8 rounded-lg"
+                          style={{
+                            background:
+                              i % 2 === 0
+                                ? 'linear-gradient(135deg, #FFD6A5 0%, #FFAB73 100%)'
+                                : 'linear-gradient(135deg, #A18AFF 0%, #6E56CF 100%)',
+                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                            transform: 'translateX(-50%)',
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="text-center">
+                    <h3
+                      className="text-xl font-semibold mb-2"
+                      style={{ color: '#1F1F20' }}
+                    >
+                      Deriving core principles
+                    </h3>
+                    <p
+                      className="text-sm leading-relaxed"
+                      style={{ color: '#929397' }}
+                    >
+                      Building UX foundations from first principles...
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {[0, 1, 2].map(i => (
+                      <div
+                        key={i}
+                        className="w-2 h-2 rounded-full"
+                        style={{
+                          background:
+                            'linear-gradient(135deg, #A18AFF 0%, #6E56CF 100%)',
+                          animation: 'bounce 1.4s ease-in-out infinite',
+                          animationDelay: `${i * 0.2}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Stage 3: Exploring Directions */}
+              {rethinkStage === 'exploring' && (
+                <div
+                  key="exploring"
+                  className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+                    maxWidth: '420px',
+                    width: '90%',
+                  }}
+                >
+                  <div className="relative w-32 h-32 flex items-center justify-center">
+                    {/* Center Node */}
+                    <div
+                      className="absolute inset-0 flex items-center justify-center"
+                      style={{
+                        animation: 'pulse-slow 3s ease-in-out infinite',
+                      }}
+                    >
+                      <div
+                        className="w-16 h-16 rounded-full flex items-center justify-center"
+                        style={{
+                          background:
+                            'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)',
+                          boxShadow: '0 8px 32px rgba(240, 147, 251, 0.4)',
+                        }}
+                      >
+                        <svg
+                          width="32"
+                          height="32"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="white"
+                          strokeWidth="2.5"
+                        >
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <line x1="12" y1="8" x2="12" y2="16"></line>
+                          <line x1="8" y1="12" x2="16" y2="12"></line>
+                        </svg>
+                      </div>
+                    </div>
+
+                    {/* Branching Lines & Nodes */}
+                    {[0, 1, 2, 3, 4, 5].map(i => {
+                      const angle = i * 60 * (Math.PI / 180)
+                      const x = Math.cos(angle) * 56
+                      const y = Math.sin(angle) * 56
+                      return (
+                        <div key={i}>
+                          {/* Line */}
+                          <div
+                            className="absolute"
+                            style={{
+                              width: '60px',
+                              height: '2px',
+                              background: `linear-gradient(90deg, #F093FB, ${
+                                i % 3 === 0
+                                  ? '#4FACFE'
+                                  : i % 3 === 1
+                                    ? '#10B981'
+                                    : '#F59E0B'
+                              })`,
+                              top: '50%',
+                              left: '50%',
+                              transform: `translate(-50%, -50%) rotate(${i * 60}deg)`,
+                              transformOrigin: 'left center',
+                              animation: `branch-grow 2s ease-out infinite`,
+                              animationDelay: `${i * 0.15}s`,
+                            }}
+                          />
+                          {/* End Node */}
+                          <div
+                            className="absolute w-3 h-3 rounded-full"
+                            style={{
+                              background:
+                                i % 3 === 0
+                                  ? '#4FACFE'
+                                  : i % 3 === 1
+                                    ? '#10B981'
+                                    : '#F59E0B',
+                              top: `calc(50% + ${y}px)`,
+                              left: `calc(50% + ${x}px)`,
+                              transform: 'translate(-50%, -50%)',
+                              animation: `pop-in 2s ease-out infinite`,
+                              animationDelay: `${i * 0.15 + 0.5}s`,
+                            }}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  <div className="text-center">
+                    <h3
+                      className="text-xl font-semibold mb-2"
+                      style={{ color: '#1F1F20' }}
+                    >
+                      Exploring strategic directions
+                    </h3>
+                    <p
+                      className="text-sm leading-relaxed"
+                      style={{ color: '#929397' }}
+                    >
+                      Generating multiple design approaches...
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {[0, 1, 2].map(i => (
+                      <div
+                        key={i}
+                        className="w-2 h-2 rounded-full"
+                        style={{
+                          background:
+                            'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)',
+                          animation: 'bounce 1.4s ease-in-out infinite',
+                          animationDelay: `${i * 0.2}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Stage 4: Synthesizing Design */}
+              {rethinkStage === 'synthesizing' && (
+                <div
+                  key="synthesizing"
+                  className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+                    maxWidth: '420px',
+                    width: '90%',
+                  }}
+                >
+                  <div className="relative w-32 h-32 flex items-center justify-center">
+                    {/* Center Merged Icon */}
+                    <div
+                      className="absolute inset-0 flex items-center justify-center"
+                      style={{
+                        animation: 'pulse-slow 3s ease-in-out infinite',
+                      }}
+                    >
+                      <div
+                        className="w-20 h-20 rounded-full flex items-center justify-center"
+                        style={{
+                          background:
+                            'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                          boxShadow: '0 8px 32px rgba(16, 185, 129, 0.4)',
+                        }}
+                      >
+                        <Sparkles size={36} style={{ color: '#FFFFFF' }} />
+                      </div>
+                    </div>
+
+                    {/* Converging Particles */}
+                    {[0, 1, 2, 3, 4, 5, 6, 7].map(i => {
+                      const angle = i * 45 * (Math.PI / 180)
+                      const startX = Math.cos(angle) * 60
+                      const startY = Math.sin(angle) * 60
+                      return (
+                        <div
+                          key={i}
+                          className="absolute w-3 h-3 rounded-full"
+                          style={{
+                            background:
+                              i % 2 === 0
+                                ? 'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)'
+                                : 'linear-gradient(135deg, #FFD6A5 0%, #FFAB73 100%)',
+                            animation: `converge-${i} 2s ease-in-out infinite`,
+                          }}
+                        >
+                          <style>{`
                           @keyframes converge-${i} {
                             0% {
                               transform: translate(${startX}px, ${startY}px) scale(1);
@@ -2518,169 +2535,169 @@ export default function Editor() {
                             }
                           }
                         `}</style>
-                      </div>
-                    )
-                  })}
+                        </div>
+                      )
+                    })}
 
-                  {/* Merging Rings */}
-                  {[0, 1, 2].map(i => (
-                    <div
-                      key={`ring-${i}`}
-                      className="absolute inset-0"
-                      style={{
-                        border: '2px solid #10B981',
-                        borderRadius: '50%',
-                        animation: `merge-ring 2s ease-in-out infinite`,
-                        animationDelay: `${i * 0.3}s`,
-                      }}
-                    />
-                  ))}
-                </div>
-
-                <div className="text-center">
-                  <h3
-                    className="text-xl font-semibold mb-2"
-                    style={{ color: '#1F1F20' }}
-                  >
-                    Synthesizing optimal design
-                  </h3>
-                  <p
-                    className="text-sm leading-relaxed"
-                    style={{ color: '#929397' }}
-                  >
-                    Combining the best elements into a cohesive solution...
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {[0, 1, 2].map(i => (
-                    <div
-                      key={i}
-                      className="w-2 h-2 rounded-full"
-                      style={{
-                        background:
-                          'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                        animation: 'bounce 1.4s ease-in-out infinite',
-                        animationDelay: `${i * 0.2}s`,
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Stage 5: Flow & Screens (Combined) */}
-            {(rethinkStage === 'flow' ||
-              rethinkStage === 'screens' ||
-              rethinkStage === null) && (
-              <div
-                key="flow"
-                className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
-                  maxWidth: '420px',
-                  width: '90%',
-                }}
-              >
-                <div className="relative w-32 h-32 flex items-center justify-center">
-                  <div
-                    className="absolute inset-0 flex items-center justify-center"
-                    style={{
-                      animation: 'pulse 2s ease-in-out infinite',
-                    }}
-                  >
-                    <div
-                      className="w-16 h-16 rounded-full flex items-center justify-center"
-                      style={{
-                        background:
-                          'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
-                        boxShadow: '0 8px 32px rgba(102, 126, 234, 0.4)',
-                      }}
-                    >
-                      <Sparkles size={28} style={{ color: '#FFFFFF' }} />
-                    </div>
+                    {/* Merging Rings */}
+                    {[0, 1, 2].map(i => (
+                      <div
+                        key={`ring-${i}`}
+                        className="absolute inset-0"
+                        style={{
+                          border: '2px solid #10B981',
+                          borderRadius: '50%',
+                          animation: `merge-ring 2s ease-in-out infinite`,
+                          animationDelay: `${i * 0.3}s`,
+                        }}
+                      />
+                    ))}
                   </div>
 
-                  {[0, 1, 2, 3].map(i => (
+                  <div className="text-center">
+                    <h3
+                      className="text-xl font-semibold mb-2"
+                      style={{ color: '#1F1F20' }}
+                    >
+                      Synthesizing optimal design
+                    </h3>
+                    <p
+                      className="text-sm leading-relaxed"
+                      style={{ color: '#929397' }}
+                    >
+                      Combining the best elements into a cohesive solution...
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {[0, 1, 2].map(i => (
+                      <div
+                        key={i}
+                        className="w-2 h-2 rounded-full"
+                        style={{
+                          background:
+                            'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                          animation: 'bounce 1.4s ease-in-out infinite',
+                          animationDelay: `${i * 0.2}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Stage 5: Flow & Screens (Combined) */}
+              {(rethinkStage === 'flow' ||
+                rethinkStage === 'screens' ||
+                rethinkStage === null) && (
+                <div
+                  key="flow"
+                  className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+                    maxWidth: '420px',
+                    width: '90%',
+                  }}
+                >
+                  <div className="relative w-32 h-32 flex items-center justify-center">
                     <div
-                      key={i}
-                      className="absolute inset-0"
+                      className="absolute inset-0 flex items-center justify-center"
                       style={{
-                        animation: `orbit 3s linear infinite`,
-                        animationDelay: `${i * 0.75}s`,
+                        animation: 'pulse 2s ease-in-out infinite',
                       }}
                     >
                       <div
-                        className="absolute w-4 h-4 rounded-full"
+                        className="w-16 h-16 rounded-full flex items-center justify-center"
                         style={{
                           background:
-                            i % 2 === 0
-                              ? 'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)'
-                              : 'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
-                          boxShadow:
-                            i % 2 === 0
-                              ? '0 4px 12px rgba(245, 87, 108, 0.5)'
-                              : '0 4px 12px rgba(0, 242, 254, 0.5)',
-                          top: '0',
-                          left: '50%',
-                          transform: 'translateX(-50%)',
+                            'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+                          boxShadow: '0 8px 32px rgba(102, 126, 234, 0.4)',
                         }}
-                      />
+                      >
+                        <Sparkles size={28} style={{ color: '#FFFFFF' }} />
+                      </div>
                     </div>
-                  ))}
 
-                  <div
-                    className="absolute inset-4"
-                    style={{
-                      border: '2px solid transparent',
-                      borderTopColor: '#667EEA',
-                      borderRightColor: '#667EEA',
-                      borderRadius: '50%',
-                      animation: 'spin 4s linear infinite',
-                      opacity: 0.3,
-                    }}
-                  />
-                </div>
+                    {[0, 1, 2, 3].map(i => (
+                      <div
+                        key={i}
+                        className="absolute inset-0"
+                        style={{
+                          animation: `orbit 3s linear infinite`,
+                          animationDelay: `${i * 0.75}s`,
+                        }}
+                      >
+                        <div
+                          className="absolute w-4 h-4 rounded-full"
+                          style={{
+                            background:
+                              i % 2 === 0
+                                ? 'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)'
+                                : 'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
+                            boxShadow:
+                              i % 2 === 0
+                                ? '0 4px 12px rgba(245, 87, 108, 0.5)'
+                                : '0 4px 12px rgba(0, 242, 254, 0.5)',
+                            top: '0',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                          }}
+                        />
+                      </div>
+                    ))}
 
-                <div className="text-center">
-                  <h3
-                    className="text-xl font-semibold mb-2"
-                    style={{ color: '#1F1F20' }}
-                  >
-                    {rethinkStage === 'flow'
-                      ? 'Architecting flow'
-                      : 'Generating screens'}
-                  </h3>
-                  <p
-                    className="text-sm leading-relaxed"
-                    style={{ color: '#929397' }}
-                  >
-                    {rethinkStage === 'flow'
-                      ? 'Creating flow structure and screen transitions...'
-                      : 'Bringing your design to life with beautiful UI...'}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {[0, 1, 2].map(i => (
                     <div
-                      key={i}
-                      className="w-2 h-2 rounded-full"
+                      className="absolute inset-4"
                       style={{
-                        background:
-                          'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
-                        animation: 'bounce 1.4s ease-in-out infinite',
-                        animationDelay: `${i * 0.2}s`,
+                        border: '2px solid transparent',
+                        borderTopColor: '#667EEA',
+                        borderRightColor: '#667EEA',
+                        borderRadius: '50%',
+                        animation: 'spin 4s linear infinite',
+                        opacity: 0.3,
                       }}
                     />
-                  ))}
-                </div>
-              </div>
-            )}
+                  </div>
 
-            {/* Animation Styles */}
-            <style>{`
+                  <div className="text-center">
+                    <h3
+                      className="text-xl font-semibold mb-2"
+                      style={{ color: '#1F1F20' }}
+                    >
+                      {rethinkStage === 'flow'
+                        ? 'Architecting flow'
+                        : 'Generating screens'}
+                    </h3>
+                    <p
+                      className="text-sm leading-relaxed"
+                      style={{ color: '#929397' }}
+                    >
+                      {rethinkStage === 'flow'
+                        ? 'Creating flow structure and screen transitions...'
+                        : 'Bringing your design to life with beautiful UI...'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {[0, 1, 2].map(i => (
+                      <div
+                        key={i}
+                        className="w-2 h-2 rounded-full"
+                        style={{
+                          background:
+                            'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+                          animation: 'bounce 1.4s ease-in-out infinite',
+                          animationDelay: `${i * 0.2}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Animation Styles */}
+              <style>{`
               @keyframes orbit {
                 0% { transform: rotate(0deg); }
                 100% { transform: rotate(360deg); }
@@ -2808,150 +2825,151 @@ export default function Editor() {
                 animation: modal-in 0.5s ease-out;
               }
             `}</style>
-          </div>
-        )}
+            </div>
+          )}
 
-        <AddInspirationModal
-          isOpen={isAddInspirationModalOpen}
-          onClose={() => setIsAddInspirationModalOpen(false)}
-          onConfirm={handleAddInspiration}
-          isLoading={isAddingInspiration}
-          maxImages={5}
-          currentCount={inspirationImages.length}
-        />
+          <AddInspirationModal
+            isOpen={isAddInspirationModalOpen}
+            onClose={() => setIsAddInspirationModalOpen(false)}
+            onConfirm={handleAddInspiration}
+            isLoading={isAddingInspiration}
+            maxImages={5}
+            currentCount={inspirationImages.length}
+          />
 
-        {/* Fullscreen Prototype Mode */}
-        {isFullscreenPrototype && activeTab === 'Prototype' && flowGraph && (
-          <div
-            className="fixed inset-0 z-[200]"
-            style={{
-              backgroundColor: 'rgba(0, 0, 0, 0.95)',
-              backdropFilter: 'blur(20px)',
-              WebkitBackdropFilter: 'blur(20px)',
-            }}
-          >
-            {/* Exit Fullscreen Button */}
-            <button
-              onClick={() => setIsFullscreenPrototype(false)}
-              className="absolute top-8 right-8 z-10 w-14 h-14 rounded-full flex items-center justify-center transition-all hover:scale-110 group"
+          {/* Fullscreen Prototype Mode */}
+          {isFullscreenPrototype && activeTab === 'Prototype' && flowGraph && (
+            <div
+              className="fixed inset-0 z-[200]"
               style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                backdropFilter: 'blur(10px)',
-                WebkitBackdropFilter: 'blur(10px)',
+                backgroundColor: 'rgba(0, 0, 0, 0.95)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
               }}
-              title="Exit fullscreen"
             >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="transition-transform group-hover:rotate-90"
-              >
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-
-            {/* Scaled Device Container */}
-            <div className="w-full h-full flex items-center justify-center p-12">
-              <div
+              {/* Exit Fullscreen Button */}
+              <button
+                onClick={() => setIsFullscreenPrototype(false)}
+                className="absolute top-8 right-8 z-10 w-14 h-14 rounded-full flex items-center justify-center transition-all hover:scale-110 group"
                 style={{
-                  maxWidth: '100%',
-                  maxHeight: '100%',
-                  aspectRatio:
-                    device_info.platform === 'phone'
-                      ? `${device_info.screen.width + 24} / ${device_info.screen.height + 48}`
-                      : `${device_info.screen.width} / ${device_info.screen.height + 40}`,
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  backdropFilter: 'blur(10px)',
+                  WebkitBackdropFilter: 'blur(10px)',
                 }}
+                title="Exit fullscreen"
               >
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="transition-transform group-hover:rotate-90"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+
+              {/* Scaled Device Container */}
+              <div className="w-full h-full flex items-center justify-center p-12">
                 <div
                   style={{
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    aspectRatio:
+                      device_info.platform === 'phone'
+                        ? `${device_info.screen.width + 24} / ${device_info.screen.height + 48}`
+                        : `${device_info.screen.width} / ${device_info.screen.height + 40}`,
                     width: '100%',
                     height: '100%',
-                    maxWidth:
-                      device_info.platform === 'phone'
-                        ? `${device_info.screen.width + 24}px`
-                        : `${device_info.screen.width}px`,
-                    maxHeight:
-                      device_info.platform === 'phone'
-                        ? `${device_info.screen.height + 48}px`
-                        : `${device_info.screen.height + 40}px`,
-                    transform: 'scale(var(--scale))',
-                    transformOrigin: 'center center',
-                  }}
-                  ref={el => {
-                    if (!el) return
-
-                    // Calculate scale to fit within viewport
-                    const container = el.parentElement
-                    if (!container) return
-
-                    const deviceWidth =
-                      device_info.platform === 'phone'
-                        ? device_info.screen.width + 24
-                        : device_info.screen.width
-                    const deviceHeight =
-                      device_info.platform === 'phone'
-                        ? device_info.screen.height + 48
-                        : device_info.screen.height + 40
-
-                    const scaleX = container.clientWidth / deviceWidth
-                    const scaleY = container.clientHeight / deviceHeight
-                    const scale = Math.min(scaleX, scaleY, 1.5) // Cap at 1.5x for very large screens
-
-                    el.style.setProperty('--scale', scale.toString())
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                 >
-                  <DeviceFrame>
-                    <div
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        paddingTop:
-                          device_info.platform === 'phone' ? '28px' : '0',
-                        paddingBottom:
-                          device_info.platform === 'phone' ? '16px' : '0',
-                        boxSizing: 'border-box',
-                        overflow: 'auto',
-                      }}
-                    >
-                      <PrototypeRunner
-                        flow={flowGraph}
-                        deviceInfo={device_info}
-                      />
-                    </div>
-                  </DeviceFrame>
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      maxWidth:
+                        device_info.platform === 'phone'
+                          ? `${device_info.screen.width + 24}px`
+                          : `${device_info.screen.width}px`,
+                      maxHeight:
+                        device_info.platform === 'phone'
+                          ? `${device_info.screen.height + 48}px`
+                          : `${device_info.screen.height + 40}px`,
+                      transform: 'scale(var(--scale))',
+                      transformOrigin: 'center center',
+                    }}
+                    ref={el => {
+                      if (!el) return
+
+                      // Calculate scale to fit within viewport
+                      const container = el.parentElement
+                      if (!container) return
+
+                      const deviceWidth =
+                        device_info.platform === 'phone'
+                          ? device_info.screen.width + 24
+                          : device_info.screen.width
+                      const deviceHeight =
+                        device_info.platform === 'phone'
+                          ? device_info.screen.height + 48
+                          : device_info.screen.height + 40
+
+                      const scaleX = container.clientWidth / deviceWidth
+                      const scaleY = container.clientHeight / deviceHeight
+                      const scale = Math.min(scaleX, scaleY, 1.5) // Cap at 1.5x for very large screens
+
+                      el.style.setProperty('--scale', scale.toString())
+                    }}
+                  >
+                    <DeviceFrame>
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          paddingTop:
+                            device_info.platform === 'phone' ? '28px' : '0',
+                          paddingBottom:
+                            device_info.platform === 'phone' ? '16px' : '0',
+                          boxSizing: 'border-box',
+                          overflow: 'auto',
+                        }}
+                      >
+                        <PrototypeRunner
+                          flow={flowGraph}
+                          deviceInfo={device_info}
+                        />
+                      </div>
+                    </DeviceFrame>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Fullscreen Mode Indicator */}
-            <div
-              className="absolute bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-xs font-medium"
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                color: 'rgba(255, 255, 255, 0.7)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                backdropFilter: 'blur(10px)',
-                WebkitBackdropFilter: 'blur(10px)',
-              }}
-            >
-              Press ESC or click ✕ to exit fullscreen
+              {/* Fullscreen Mode Indicator */}
+              <div
+                className="absolute bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-xs font-medium"
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  backdropFilter: 'blur(10px)',
+                  WebkitBackdropFilter: 'blur(10px)',
+                }}
+              >
+                Press ESC or click ✕ to exit fullscreen
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-    </>
+          )}
+        </div>
+      </>
+    </AgentatorGlobalProvider>
   )
 }

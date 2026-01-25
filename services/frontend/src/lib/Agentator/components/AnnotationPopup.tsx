@@ -1,19 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react'
 
 interface AnnotationPopupProps {
-  element: string;
-  selectedText?: string;
-  placeholder: string;
-  initialValue?: string;
-  submitLabel?: string;
-  onSubmit: (comment: string) => void;
-  onCancel: () => void;
-  accentColor: string;
+  element: string
+  selectedText?: string
+  placeholder: string
+  initialValue?: string
+  submitLabel?: string
+  // eslint-disable-next-line no-unused-vars
+  onSubmit: (comment: string) => void
+  onCancel: () => void
+  accentColor: string
   position: {
-    x: number;        // percentage
-    y: number;        // pixels from top
-    canvasWidth: number;
-  };
+    x: number // percentage
+    y: number // pixels from top
+    canvasWidth: number
+  }
 }
 
 export const AnnotationPopup: React.FC<AnnotationPopupProps> = ({
@@ -25,50 +26,50 @@ export const AnnotationPopup: React.FC<AnnotationPopupProps> = ({
   onSubmit,
   onCancel,
   accentColor,
-  position
+  position,
 }) => {
-  const [comment, setComment] = useState(initialValue);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
+  const [comment, setComment] = useState(initialValue)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    textareaRef.current?.focus();
-  }, []);
+    textareaRef.current?.focus()
+  }, [])
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault()
     if (comment.trim()) {
-      onSubmit(comment.trim());
+      onSubmit(comment.trim())
     }
-  };
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
+      e.preventDefault()
       if (comment.trim()) {
-        onSubmit(comment.trim());
+        onSubmit(comment.trim())
       }
     } else if (e.key === 'Escape') {
-      e.preventDefault();
-      onCancel();
+      e.preventDefault()
+      onCancel()
     }
-  };
+  }
 
   // Calculate position
-  const left = (position.x / 100) * position.canvasWidth;
-  const POPUP_WIDTH = 320;
-  const POPUP_HEIGHT = 220;
-  
+  const left = (position.x / 100) * position.canvasWidth
+  const POPUP_WIDTH = 320
+  const POPUP_HEIGHT = 220
+
   // Adjust horizontal position if would go off screen
-  let adjustedLeft = left - POPUP_WIDTH / 2; // Center on marker
-  if (adjustedLeft < 10) adjustedLeft = 10;
+  let adjustedLeft = left - POPUP_WIDTH / 2 // Center on marker
+  if (adjustedLeft < 10) adjustedLeft = 10
   if (adjustedLeft + POPUP_WIDTH > position.canvasWidth - 10) {
-    adjustedLeft = position.canvasWidth - POPUP_WIDTH - 10;
+    adjustedLeft = position.canvasWidth - POPUP_WIDTH - 10
   }
 
   // Position above or below based on space
-  const showAbove = position.y > 300;
-  const top = showAbove ? position.y - POPUP_HEIGHT - 10 : position.y + 40;
+  const showAbove = position.y > 300
+  const top = showAbove ? position.y - POPUP_HEIGHT - 10 : position.y + 40
 
   return (
     <div
@@ -76,9 +77,9 @@ export const AnnotationPopup: React.FC<AnnotationPopupProps> = ({
       className="agentator-popup"
       style={{
         left: adjustedLeft,
-        top: top
+        top: top,
       }}
-      onClick={(e) => e.stopPropagation()}
+      onClick={e => e.stopPropagation()}
       data-annotation-ui
     >
       <div className="agentator-popup-header">
@@ -90,7 +91,7 @@ export const AnnotationPopup: React.FC<AnnotationPopupProps> = ({
 
       {selectedText && (
         <div className="agentator-popup-selected">
-          "{selectedText}"
+          &quot;{selectedText}&quot;
         </div>
       )}
 
@@ -100,7 +101,7 @@ export const AnnotationPopup: React.FC<AnnotationPopupProps> = ({
           className="agentator-popup-textarea"
           placeholder={placeholder}
           value={comment}
-          onChange={(e) => setComment(e.target.value)}
+          onChange={e => setComment(e.target.value)}
           onKeyDown={handleKeyDown}
           rows={4}
         />
@@ -123,7 +124,7 @@ export const AnnotationPopup: React.FC<AnnotationPopupProps> = ({
               disabled={!comment.trim()}
               style={{
                 backgroundColor: accentColor,
-                borderColor: accentColor
+                borderColor: accentColor,
               }}
             >
               {submitLabel}
@@ -132,5 +133,5 @@ export const AnnotationPopup: React.FC<AnnotationPopupProps> = ({
         </div>
       </form>
     </div>
-  );
-};
+  )
+}

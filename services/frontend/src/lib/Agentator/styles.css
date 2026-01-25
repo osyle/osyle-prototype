@@ -34,14 +34,19 @@
 }
 
 @keyframes agentator-pulse {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* Drag Selection */
 .agentator-drag {
   position: absolute;
-  border: 2px dashed #34C759;
+  border: 2px dashed #34c759;
   background: rgba(52, 199, 89, 0.1);
   pointer-events: none;
 }
@@ -127,8 +132,12 @@
 }
 
 @keyframes agentator-outline-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* Floating Button */
@@ -184,7 +193,7 @@
 }
 
 .agentator-main-button.active {
-  background: linear-gradient(135deg, #34C759 0%, #30D158 100%);
+  background: linear-gradient(135deg, #34c759 0%, #30d158 100%);
   box-shadow: 0 8px 24px rgba(52, 199, 89, 0.4);
 }
 
@@ -329,13 +338,13 @@
 
 /* Inspect mode button indicator */
 .agentator-main-button.inspect-mode.active {
-  background: linear-gradient(135deg, #FF9500 0%, #FF8C00 100%);
+  background: linear-gradient(135deg, #ff9500 0%, #ff8c00 100%);
   box-shadow: 0 8px 24px rgba(255, 149, 0, 0.4);
 }
 
 /* Toast */
 .agentator-toast {
-  background: #34C759;
+  background: #34c759;
   color: #fff;
   padding: 12px 20px;
   border-radius: 12px;
@@ -419,7 +428,7 @@
   padding: 12px 20px;
   background: rgba(255, 149, 0, 0.1);
   border-bottom: 1px solid rgba(255, 149, 0, 0.2);
-  color: #FF9500;
+  color: #ff9500;
   font-size: 13px;
   font-style: italic;
 }
@@ -583,7 +592,9 @@
 }
 
 .agentator-inspector-path {
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-family:
+    'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New',
+    monospace;
   font-size: 11px;
   color: #a0a0a0;
   background: rgba(255, 255, 255, 0.05);
@@ -592,22 +603,28 @@
 }
 
 .agentator-inspector-tag {
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-family:
+    'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New',
+    monospace;
   font-size: 12px;
-  color: #FF9500;
+  color: #ff9500;
 }
 
 .agentator-inspector-classes {
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-family:
+    'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New',
+    monospace;
   font-size: 11px;
-  color: #34C759;
+  color: #34c759;
   background: rgba(255, 255, 255, 0.05);
   padding: 6px 8px;
   border-radius: 4px;
 }
 
 .agentator-inspector-position {
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-family:
+    'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New',
+    monospace;
   font-size: 12px;
 }
 
@@ -634,14 +651,18 @@
 }
 
 .agentator-inspector-attr-key {
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-  color: #FF9500;
+  font-family:
+    'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New',
+    monospace;
+  color: #ff9500;
   flex-shrink: 0;
 }
 
 .agentator-inspector-attr-value {
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-  color: #34C759;
+  font-family:
+    'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New',
+    monospace;
+  color: #34c759;
   word-break: break-all;
 }
 
@@ -660,11 +681,12 @@
 }
 
 @keyframes agentator-inspect-pulse {
-  0%, 100% { 
+  0%,
+  100% {
     opacity: 0.7;
     transform: scale(1);
   }
-  50% { 
+  50% {
     opacity: 1;
     transform: scale(1.01);
   }

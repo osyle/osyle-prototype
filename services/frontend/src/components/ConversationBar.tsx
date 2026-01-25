@@ -1,5 +1,17 @@
-import { Zap, Palette, Sparkles, Send, ChevronUp, Loader2 } from 'lucide-react'
+import {
+  Zap,
+  Palette,
+  Sparkles,
+  Send,
+  ChevronUp,
+  Loader2,
+  Eye,
+  Pen,
+  XCircle,
+} from 'lucide-react'
 import React, { useState, useEffect, useRef } from 'react'
+import { useAgentatorGlobal } from '../lib/Agentator'
+import type { Annotation } from '../lib/Agentator'
 
 export interface Message {
   id: string
@@ -12,8 +24,12 @@ export interface Message {
 interface ConversationBarProps {
   isRightPanelCollapsed: boolean
   messages: Message[]
-  // eslint-disable-next-line no-unused-vars
-  onSendMessage: (message: string) => void
+  onSendMessage: (
+    // eslint-disable-next-line no-unused-vars
+    message: string,
+    // eslint-disable-next-line no-unused-vars
+    annotations?: Record<string, Annotation[]>,
+  ) => void
   isProcessing: boolean
   processingStatus?: string
 }
@@ -28,6 +44,20 @@ export default function ConversationBar({
   const [inputText, setInputText] = useState('')
   const [isExpanded, setIsExpanded] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Get Agentator global state
+  const {
+    mode,
+    isActive,
+    setMode,
+    setIsActive,
+    getTotalAnnotationCount,
+    clearAnnotations,
+    getAnnotationsForConversation,
+    annotations,
+  } = useAgentatorGlobal()
+
+  const totalAnnotations = getTotalAnnotationCount()
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -44,9 +74,20 @@ export default function ConversationBar({
   }, [isProcessing])
 
   const handleSend = () => {
-    if (!inputText.trim() || isProcessing) return
+    if (!inputText.trim() && totalAnnotations === 0) return
+    if (isProcessing) return
 
-    onSendMessage(inputText)
+    // If there are annotations, include them
+    if (totalAnnotations > 0) {
+      const annotationsData = getAnnotationsForConversation()
+      onSendMessage(
+        inputText.trim() || 'Please apply these annotations',
+        annotationsData,
+      )
+    } else {
+      onSendMessage(inputText.trim())
+    }
+
     setInputText('')
   }
 
@@ -54,6 +95,43 @@ export default function ConversationBar({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
+    }
+  }
+
+  // Toggle annotate mode
+  const handleAnnotateToggle = () => {
+    if (isActive && mode === 'annotate') {
+      // Already in annotate mode - turn off
+      setIsActive(false)
+    } else {
+      // Turn on annotate mode
+      setMode('annotate')
+      setIsActive(true)
+    }
+  }
+
+  // Toggle inspect mode
+  const handleInspectToggle = () => {
+    if (isActive && mode === 'inspect') {
+      // Already in inspect mode - turn off
+      setIsActive(false)
+    } else {
+      // Turn on inspect mode
+      setMode('inspect')
+      setIsActive(true)
+    }
+  }
+
+  // Clear all annotations
+  const handleClearAll = () => {
+    if (totalAnnotations > 0) {
+      if (
+        window.confirm(
+          `Clear all ${totalAnnotations} annotations across all screens?`,
+        )
+      ) {
+        clearAnnotations() // Clear all screens
+      }
     }
   }
 
@@ -97,7 +175,7 @@ export default function ConversationBar({
                 borderBottom: '1px solid #E8E1DD',
               }}
             >
-              {/* Fixed Header - Outside scroll container */}
+              {/* Fixed Header */}
               <div
                 className="px-6 pt-6 pb-3 flex items-center justify-between"
                 style={{
@@ -220,7 +298,9 @@ export default function ConversationBar({
                   placeholder={
                     isProcessing
                       ? 'Processing...'
-                      : "Describe what you'd like to change..."
+                      : totalAnnotations > 0
+                        ? `${totalAnnotations} annotation${totalAnnotations > 1 ? 's' : ''} ready • Add text or press Send`
+                        : "Describe what you'd like to change..."
                   }
                   className="w-full bg-transparent border-none outline-none text-sm pr-10 disabled:opacity-50"
                   style={{ color: '#3B3B3B' }}
@@ -236,15 +316,97 @@ export default function ConversationBar({
                 )}
               </div>
 
-              {/* Quick Action Buttons */}
+              {/* Agentator Control Buttons */}
               <div className="flex items-center gap-2">
+                {/* Annotate Button */}
+                <button
+                  onClick={handleAnnotateToggle}
+                  className={`p-2 rounded-lg transition-all group relative disabled:opacity-50 ${
+                    isActive && mode === 'annotate'
+                      ? 'bg-blue-500 text-white scale-105 shadow-lg'
+                      : 'hover:bg-gray-50'
+                  }`}
+                  title={
+                    isActive && mode === 'annotate'
+                      ? 'Exit annotate mode'
+                      : 'Enter annotate mode'
+                  }
+                  disabled={isProcessing}
+                >
+                  <Pen
+                    size={16}
+                    style={{
+                      color:
+                        isActive && mode === 'annotate' ? '#FFFFFF' : '#3B3B3B',
+                    }}
+                  />
+                  {totalAnnotations > 0 && (
+                    <span
+                      className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center"
+                      style={{ fontSize: '10px' }}
+                    >
+                      {totalAnnotations}
+                    </span>
+                  )}
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    {isActive && mode === 'annotate'
+                      ? 'Exit Annotate'
+                      : 'Annotate'}
+                  </span>
+                </button>
+
+                {/* Inspect Button */}
+                <button
+                  onClick={handleInspectToggle}
+                  className={`p-2 rounded-lg transition-all group relative disabled:opacity-50 ${
+                    isActive && mode === 'inspect'
+                      ? 'bg-orange-500 text-white scale-105 shadow-lg'
+                      : 'hover:bg-gray-50'
+                  }`}
+                  title={
+                    isActive && mode === 'inspect'
+                      ? 'Exit inspect mode'
+                      : 'Enter inspect mode'
+                  }
+                  disabled={isProcessing}
+                >
+                  <Eye
+                    size={16}
+                    style={{
+                      color:
+                        isActive && mode === 'inspect' ? '#FFFFFF' : '#3B3B3B',
+                    }}
+                  />
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    {isActive && mode === 'inspect'
+                      ? 'Exit Inspect'
+                      : 'Inspect'}
+                  </span>
+                </button>
+
+                {/* Clear All Button */}
+                {totalAnnotations > 0 && (
+                  <button
+                    onClick={handleClearAll}
+                    className="p-2 rounded-lg hover:bg-red-50 transition-all group relative disabled:opacity-50"
+                    title="Clear all annotations"
+                    disabled={isProcessing}
+                  >
+                    <XCircle size={16} style={{ color: '#EF4444' }} />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                      Clear All ({totalAnnotations})
+                    </span>
+                  </button>
+                )}
+
+                {/* Original Quick Action Buttons (kept for future use) */}
                 <button
                   className="p-2 rounded-lg hover:bg-gray-50 transition-all group relative disabled:opacity-50"
                   title="Quick fixes"
                   disabled={isProcessing}
                 >
                   <Zap size={16} style={{ color: '#3B3B3B' }} />
-                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
                     Quick Fix
                   </span>
                 </button>
@@ -255,7 +417,7 @@ export default function ConversationBar({
                   disabled={isProcessing}
                 >
                   <Palette size={16} style={{ color: '#3B3B3B' }} />
-                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
                     Theme
                   </span>
                 </button>
@@ -266,7 +428,7 @@ export default function ConversationBar({
                   disabled={isProcessing}
                 >
                   <Sparkles size={16} style={{ color: '#3B3B3B' }} />
-                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
                     Polish
                   </span>
                 </button>
@@ -274,15 +436,22 @@ export default function ConversationBar({
                 {/* Send Button */}
                 <button
                   onClick={handleSend}
-                  disabled={!inputText.trim() || isProcessing}
+                  disabled={
+                    (!inputText.trim() && totalAnnotations === 0) ||
+                    isProcessing
+                  }
                   className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105"
                   style={{
                     background:
-                      inputText.trim() && !isProcessing
+                      (inputText.trim() || totalAnnotations > 0) &&
+                      !isProcessing
                         ? 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)'
                         : '#F7F5F3',
                     color:
-                      inputText.trim() && !isProcessing ? '#FFFFFF' : '#929397',
+                      (inputText.trim() || totalAnnotations > 0) &&
+                      !isProcessing
+                        ? '#FFFFFF'
+                        : '#929397',
                   }}
                 >
                   {isProcessing ? (
@@ -294,6 +463,28 @@ export default function ConversationBar({
                 </button>
               </div>
             </div>
+
+            {/* Annotation count indicator */}
+            {totalAnnotations > 0 && !isExpanded && (
+              <div
+                className="mt-2 text-xs flex items-center gap-2"
+                style={{ color: '#667EEA' }}
+              >
+                <Pen size={12} />
+                {totalAnnotations} annotation{totalAnnotations > 1 ? 's' : ''}{' '}
+                across{' '}
+                {
+                  Object.keys(annotations).filter(
+                    k => annotations[k].length > 0,
+                  ).length
+                }{' '}
+                screen
+                {Object.keys(annotations).filter(k => annotations[k].length > 0)
+                  .length > 1
+                  ? 's'
+                  : ''}
+              </div>
+            )}
           </div>
         </div>
       </div>
