@@ -661,3 +661,96 @@ async def add_inspiration_images(
     )
     
     return response.get("Attributes", {})
+
+
+# ============================================================================
+# CONVERSATION ENDPOINTS
+# ============================================================================
+
+@router.get("/{project_id}/conversation")
+async def get_conversation(
+    project_id: str,
+    version: Optional[int] = None,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Get conversation history for a specific project version
+    
+    - **version**: Optional version number (defaults to current version)
+    
+    Returns:
+        List of message objects: [{"id": str, "type": "user"|"ai", "content": str, "timestamp": str, "screen": str}, ...]
+    """
+    # Check ownership
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.get("owner_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get version (default to current)
+    if version is None:
+        version = project.get("metadata", {}).get("flow_version", 1)
+    
+    # Load conversation from S3
+    conversation = storage.get_project_conversation(
+        user["user_id"],
+        project_id,
+        version
+    )
+    
+    return {
+        "conversation": conversation,
+        "version": version
+    }
+
+
+@router.post("/{project_id}/conversation")
+async def save_conversation(
+    project_id: str,
+    request: Request,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Save conversation history for a specific project version
+    
+    Request body:
+        {
+            "conversation": [...],  # Array of message objects
+            "version": 1  # Version number
+        }
+    """
+    # Check ownership
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.get("owner_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Parse request
+    data = await request.json()
+    conversation = data.get("conversation", [])
+    version = data.get("version", 1)
+    
+    # Validate conversation format
+    if not isinstance(conversation, list):
+        raise HTTPException(status_code=400, detail="Conversation must be an array")
+    
+    # Save to S3
+    try:
+        storage.put_project_conversation(
+            user["user_id"],
+            project_id,
+            conversation,
+            version
+        )
+        
+        return {
+            "status": "success",
+            "message": f"Saved conversation for version {version}",
+            "message_count": len(conversation)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save conversation: {str(e)}")

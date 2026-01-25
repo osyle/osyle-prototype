@@ -1337,6 +1337,7 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
                         "type": "screen_generating",
                         "data": {
                             "screen_id": screen_id,
+                            "screen_name": screen_name,  # ✅ ADD: Send screen_name for display
                             "message": "Generating updated code..."
                         }
                     })

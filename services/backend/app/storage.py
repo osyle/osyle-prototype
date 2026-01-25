@@ -572,6 +572,60 @@ def list_project_flow_versions(user_id: str, project_id: str) -> list:
 
 
 # ============================================================================
+# CONVERSATION VERSIONING FUNCTIONS
+# ============================================================================
+
+def get_project_conversation(user_id: str, project_id: str, version: int = 1) -> list:
+    """
+    Get conversation history from project (specific version)
+    
+    Returns:
+        List of message objects: [{"id": str, "type": "user"|"ai", "content": str, "timestamp": str, "screen": str}, ...]
+        Returns empty list if no conversation exists
+    """
+    key = f"projects/{user_id}/{project_id}/conversation_v{version}.json"
+    
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        content = response['Body'].read().decode('utf-8')
+        return json.loads(content)
+    except s3_client.exceptions.NoSuchKey:
+        # No conversation exists for this version (e.g., initial generation)
+        return []
+    except Exception as e:
+        print(f"Error getting conversation: {e}")
+        return []
+
+
+def put_project_conversation(user_id: str, project_id: str, conversation: list, version: int = 1):
+    """
+    Save conversation history to project (versioned)
+    
+    Args:
+        user_id: User ID
+        project_id: Project ID
+        conversation: List of message objects
+        version: Version number
+    """
+    key = f"projects/{user_id}/{project_id}/conversation_v{version}.json"
+    
+    try:
+        # Validate JSON serialization
+        json_str = json.dumps(conversation, indent=2)
+        
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=key,
+            Body=json_str,
+            ContentType='application/json'
+        )
+        print(f"✅ Successfully saved conversation version {version} to S3")
+    except Exception as e:
+        print(f"❌ Error saving conversation to S3: {e}")
+        raise
+
+
+# ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================
 

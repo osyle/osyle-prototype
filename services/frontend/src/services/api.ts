@@ -616,6 +616,63 @@ export const projectsAPI = {
 
     return response.json() as Promise<Project>
   },
+
+  /**
+   * Get conversation history for a project version
+   */
+  getConversation: async (
+    projectId: string,
+    version?: number,
+  ): Promise<{
+    conversation: Array<{
+      id: string
+      type: 'user' | 'ai'
+      content: string
+      timestamp: string
+      screen: string | null
+    }>
+    version: number
+  }> => {
+    const params = version !== undefined ? `?version=${version}` : ''
+    return apiRequest<{
+      conversation: Array<{
+        id: string
+        type: 'user' | 'ai'
+        content: string
+        timestamp: string
+        screen: string | null
+      }>
+      version: number
+    }>(`/api/projects/${projectId}/conversation${params}`)
+  },
+
+  /**
+   * Save conversation history for a project version
+   */
+  saveConversation: async (
+    projectId: string,
+    conversation: Array<{
+      id: string
+      type: 'user' | 'ai'
+      content: string
+      timestamp: string
+      screen: string | null
+    }>,
+    version: number,
+  ): Promise<{
+    status: string
+    message: string
+    message_count: number
+  }> => {
+    return apiRequest<{
+      status: string
+      message: string
+      message_count: number
+    }>(`/api/projects/${projectId}/conversation`, {
+      method: 'POST',
+      body: JSON.stringify({ conversation, version }),
+    })
+  },
 }
 
 // ============================================================================

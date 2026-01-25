@@ -45,7 +45,11 @@ export interface IterationCallbacks {
   }) => void
 
   // eslint-disable-next-line no-unused-vars
-  onScreenGenerating?: (data: { screen_id: string; message: string }) => void
+  onScreenGenerating?: (data: {
+    screen_id: string
+    screen_name: string
+    message: string
+  }) => void
 
   // eslint-disable-next-line no-unused-vars
   onScreenUpdated?: (data: {
@@ -72,7 +76,13 @@ export interface IterationCallbacks {
   // eslint-disable-next-line no-unused-vars
   onError?: (error: string) => void
   // eslint-disable-next-line no-unused-vars
-  onComplete?: (result: Record<string, unknown>) => void
+  onComplete?: (result: {
+    status: string
+    flow_graph?: Record<string, unknown>
+    version?: number
+    screens_updated?: number
+    [key: string]: unknown
+  }) => void
 }
 
 /**
@@ -149,7 +159,11 @@ export function iterateUIWebSocket(
                 }
               | {
                   type: 'screen_generating'
-                  data: { screen_id: string; message: string }
+                  data: {
+                    screen_id: string
+                    screen_name: string
+                    message: string
+                  }
                 }
               | {
                   type: 'screen_updated'
@@ -171,7 +185,16 @@ export function iterateUIWebSocket(
                   type: 'conversation_response'
                   data: { response: string }
                 }
-              | { type: 'complete'; result: Record<string, unknown> }
+              | {
+                  type: 'complete'
+                  result: {
+                    status: string
+                    flow_graph?: Record<string, unknown>
+                    version?: number
+                    screens_updated?: number
+                    [key: string]: unknown
+                  }
+                }
               | { type: 'error'; error: string }
 
             console.log('[Iteration WS] Message type:', message.type)

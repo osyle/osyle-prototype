@@ -277,6 +277,9 @@ export default function Editor() {
 
       setFlowGraph(versionData.flow_graph)
       setViewingVersion(version)
+
+      // ✅ NEW: Load conversation for this version
+      await loadConversationFromBackend(project.project_id, version)
     } catch (err) {
       console.error('Failed to load version:', err)
       alert(err instanceof Error ? err.message : 'Failed to load version')
@@ -307,6 +310,19 @@ export default function Editor() {
       setFlowGraph(result.flow_graph)
       setCurrentFlowVersion(result.new_version)
       setViewingVersion(null)
+
+      // ✅ NEW: Load conversation from the version we reverted to
+      // This copies the conversation to the new version
+      await loadConversationFromBackend(project.project_id, version)
+
+      // Save it as the new version's conversation
+      if (conversationMessages.length > 0) {
+        await saveConversationToBackend(
+          project.project_id,
+          conversationMessages,
+          result.new_version,
+        )
+      }
 
       alert(
         `Successfully reverted to version ${version}. Now viewing version ${result.new_version}.`,
@@ -536,6 +552,11 @@ export default function Editor() {
 
         // Load version info
         await loadVersionInfo()
+
+        // ✅ NEW: Load conversation for current version
+        const currentVersion = project.metadata?.flow_version || 1
+        await loadConversationFromBackend(project.project_id, currentVersion)
+
         return
       }
 
@@ -548,6 +569,10 @@ export default function Editor() {
 
         // Load version info
         await loadVersionInfo()
+
+        // ✅ NEW: Load conversation for this version
+        await loadConversationFromBackend(project.project_id, flowData.version)
+
         return
       } catch (err) {
         console.log('No existing flow found, will generate new one:', err)
@@ -1121,6 +1146,70 @@ export default function Editor() {
   }
 
   /**
+   * Save conversation to backend
+   */
+  const saveConversationToBackend = async (
+    projectId: string,
+    messages: Message[],
+    version: number,
+  ) => {
+    try {
+      // Convert Message[] to storable format
+      const conversation = messages.map(msg => ({
+        id: msg.id,
+        type: msg.type,
+        content: msg.content,
+        timestamp: msg.timestamp.toISOString(),
+        screen: msg.screen || null,
+      }))
+
+      await api.projects.saveConversation(projectId, conversation, version)
+      console.log(`✅ Saved conversation for version ${version}`)
+    } catch (error) {
+      console.error('Failed to save conversation:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Load conversation from backend
+   */
+  const loadConversationFromBackend = async (
+    projectId: string,
+    version?: number,
+  ) => {
+    try {
+      const result = await api.projects.getConversation(projectId, version)
+
+      // Convert stored format back to Message[]
+      const messages: Message[] = result.conversation.map(
+        (msg: {
+          id: string
+          type: 'user' | 'ai'
+          content: string
+          timestamp: string
+          screen: string | null
+        }) => ({
+          id: msg.id,
+          type: msg.type,
+          content: msg.content,
+          timestamp: new Date(msg.timestamp || Date.now()),
+          screen: msg.screen || undefined,
+        }),
+      )
+
+      setConversationMessages(messages)
+      console.log(
+        `✅ Loaded ${messages.length} messages from version ${result.version}`,
+      )
+    } catch (error) {
+      console.error('Failed to load conversation:', error)
+      // Don't throw - conversation might not exist yet (initial version)
+      setConversationMessages([])
+    }
+  }
+
+  /**
    * Handle sending a message in the conversation
    */
   const handleSendMessage = async (userMessage: string) => {
@@ -1220,7 +1309,8 @@ export default function Editor() {
 
         onScreenGenerating: data => {
           console.log('Screen generating:', data)
-          setIterationStatus(`Making changes to ${data.screen_id}...`)
+          // ✅ FIX: Use data.screen_name from the message
+          setIterationStatus(`Making changes to ${data.screen_name}...`)
         },
 
         onScreenUpdated: data => {
@@ -1286,6 +1376,7 @@ export default function Editor() {
         },
 
         onComplete: result => {
+          // ✅ FIX: This runs AFTER iteration_complete and has the full updated flow_graph
           console.log(
             'WebSocket complete, updating localStorage with final flow_graph',
           )
@@ -1302,6 +1393,15 @@ export default function Editor() {
             } catch (err) {
               console.error('Failed to update localStorage:', err)
             }
+          }
+
+          // ✅ NEW: Save conversation to backend for this version
+          if (result['version'] && conversationMessages.length > 0) {
+            saveConversationToBackend(
+              projectId,
+              conversationMessages,
+              result['version'],
+            ).catch(err => console.error('Failed to save conversation:', err))
           }
         },
 
