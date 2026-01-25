@@ -3,6 +3,7 @@
  * Handles iterate-ui action with feedback loop
  */
 import { fetchAuthSession } from 'aws-amplify/auth'
+import { frontendDebug } from '../utils/frontendDebugLogger'
 
 const WS_BASE_URL =
   import.meta.env['VITE_WS_URL'] ||
@@ -113,6 +114,17 @@ export function iterateUIWebSocket(
             content: msg.content,
           }))
 
+          // Log iteration start
+          frontendDebug.logIterationStart(projectId, userFeedback, history)
+
+          // Log WebSocket send
+          frontendDebug.logWsSend('iterate-ui', {
+            project_id: projectId,
+            user_feedback: userFeedback,
+            conversation_history: history,
+            user_id: userId,
+          })
+
           ws.send(
             JSON.stringify({
               action: 'iterate-ui',
@@ -176,6 +188,12 @@ export function iterateUIWebSocket(
 
             console.log('[Iteration WS] Message type:', message.type)
 
+            // Log all received messages
+            frontendDebug.logWsReceive(
+              message.type,
+              'data' in message ? message.data : message,
+            )
+
             if (message.type === 'progress') {
               callbacks.onProgress?.(message.stage, message.message)
 
@@ -184,16 +202,38 @@ export function iterateUIWebSocket(
                 callbacks.onRoutingStart?.()
               }
             } else if (message.type === 'feedback_routing_complete') {
+              frontendDebug.logRouterResponse(message.data)
               callbacks.onRoutingComplete?.(message.data)
             } else if (message.type === 'screen_iteration_start') {
+              frontendDebug.logScreenIterationStart(
+                message.data.screen_id,
+                message.data.screen_name,
+                message.data.current_index,
+                message.data.total_screens,
+              )
               callbacks.onScreenIterationStart?.(message.data)
             } else if (message.type === 'screen_conversation_chunk') {
+              frontendDebug.logConversationChunk(
+                message.data.screen_id,
+                message.data.chunk,
+              )
               callbacks.onScreenConversationChunk?.(message.data)
             } else if (message.type === 'screen_generating') {
+              frontendDebug.logCodeGenerationStart(message.data.screen_id)
               callbacks.onScreenGenerating?.(message.data)
             } else if (message.type === 'screen_updated') {
+              frontendDebug.logScreenUpdated(
+                message.data.screen_id,
+                message.data.ui_code,
+                message.data.conversation || '',
+              )
               callbacks.onScreenUpdated?.(message.data)
             } else if (message.type === 'iteration_complete') {
+              frontendDebug.logIterationComplete(
+                message.data.summary,
+                message.data.screens_updated,
+                message.data.new_version,
+              )
               callbacks.onIterationComplete?.(message.data)
             } else if (message.type === 'conversation_response') {
               callbacks.onConversationResponse?.(message.data)
@@ -208,11 +248,13 @@ export function iterateUIWebSocket(
             }
           } catch (err) {
             console.error('Failed to parse WebSocket message:', err)
+            frontendDebug.logError('WebSocket message parsing', err)
           }
         }
 
         ws.onerror = error => {
           console.error('WebSocket error:', error)
+          frontendDebug.logError('WebSocket connection', error)
           callbacks.onError?.('WebSocket connection error')
           reject(new Error('WebSocket connection error'))
         }

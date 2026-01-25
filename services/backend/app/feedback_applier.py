@@ -39,30 +39,35 @@ class FeedbackApplier:
             flow_context: Flow context (transitions, etc.)
             device_info: Device platform and dimensions
         """
-        
-        # Build the user message
-        user_message = self._build_user_message(
-            current_code=current_code,
-            contextualized_feedback=contextualized_feedback,
-            dtm=dtm,
-            flow_context=flow_context,
-            device_info=device_info
-        )
-        
+        screen_id = flow_context.get("screen_id", "unknown")
+        screen_name = flow_context.get("screen_name", "Unknown")
         conversation_part = []
         code_part = []
-        delimiter_found = False
-        buffer = ""
         
-        # Stream from LLM using call_claude_streaming
-        async for chunk in self.llm.call_claude_streaming(
-            prompt_name="feedback_applier_prompt",
-            user_message=user_message,
-            model="claude-sonnet",
-            max_tokens=8000,
-            temperature=0.5
-        ):
-            buffer += chunk
+        try:
+            # Build the user message
+            user_message = self._build_user_message(
+                current_code=current_code,
+                contextualized_feedback=contextualized_feedback,
+                dtm=dtm,
+                flow_context=flow_context,
+                device_info=device_info
+            )
+            
+            delimiter_found = False
+            buffer = ""
+            chunk_index = 0
+            
+            # Stream from LLM using call_claude_streaming
+            async for chunk in self.llm.call_claude_streaming(
+                prompt_name="feedback_applier_prompt",
+                user_message=user_message,
+                model="claude-sonnet",
+                max_tokens=8000,
+                temperature=0.5
+            ):
+                buffer += chunk
+                chunk_index += 1
             
             # Check for delimiter
             if not delimiter_found and "$GENERATING" in buffer:
@@ -112,31 +117,35 @@ class FeedbackApplier:
                     "type": "code",
                     "chunk": chunk
                 }
-        
-        # Send any remaining buffer
-        if buffer:
-            if not delimiter_found:
-                conversation_part.append(buffer)
-                yield {
-                    "type": "conversation",
-                    "chunk": buffer
-                }
-            else:
-                code_part.append(buffer)
-                yield {
-                    "type": "code",
-                    "chunk": buffer
-                }
-        
-        # Send complete response
-        full_conversation = "".join(conversation_part).strip()
-        full_code = "".join(code_part).strip()
-        
-        yield {
-            "type": "complete",
-            "conversation": full_conversation,
-            "code": full_code
-        }
+            
+            # Send any remaining buffer
+            if buffer:
+                if not delimiter_found:
+                    conversation_part.append(buffer)
+                    yield {
+                        "type": "conversation",
+                        "chunk": buffer
+                    }
+                else:
+                    code_part.append(buffer)
+                    yield {
+                        "type": "code",
+                        "chunk": buffer
+                    }
+            
+            # Send complete response
+            full_conversation = "".join(conversation_part).strip()
+            full_code = "".join(code_part).strip()
+            
+            yield {
+                "type": "complete",
+                "conversation": full_conversation,
+                "code": full_code
+            }
+            
+        except Exception as e:
+            print(f"Error applying feedback to {screen_name}: {e}")
+            raise
     
     def _build_user_message(
         self,

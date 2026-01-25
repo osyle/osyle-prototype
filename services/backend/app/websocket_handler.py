@@ -12,6 +12,7 @@ from typing import Dict, Any, List
 
 from app.llm import get_llm_service
 from app import db, storage
+from app.db import convert_decimals  # Import for Decimal conversion
 from app.code_based_analyzer import analyze_figma_design
 
 # NEW V2 imports
@@ -1161,8 +1162,8 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
             await send_error(websocket, "Project not found")
             return
         
-        # Get current flow graph
-        flow_graph = project.get("flow_graph", {})
+        # Get current flow graph and ensure Decimals are converted
+        flow_graph = convert_decimals(project.get("flow_graph", {}))
         if not flow_graph or not flow_graph.get("screens"):
             await send_error(websocket, "No flow graph found. Generate initial design first.")
             return
@@ -1384,16 +1385,20 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
         
         new_version = current_version + 1
         
-        # Convert floats to Decimals for DynamoDB
-        flow_graph_for_db = convert_floats_to_decimals(flow_graph)
-        
-        # Save to S3
+        # ✅ FIX: Save to S3 FIRST (before converting to Decimals)
+        # S3 requires regular Python types (float/int) for JSON serialization
         storage.put_project_flow(user_id, project_id, flow_graph, version=new_version)
         
-        # Update DynamoDB
+        # Update metadata
         metadata = project.get("metadata", {})
         metadata["flow_version"] = new_version
         db.update_project(project_id, metadata=metadata)
+        
+        # ✅ FIX: THEN convert to Decimals for DynamoDB
+        # DynamoDB requires Decimal type for numbers
+        flow_graph_for_db = convert_floats_to_decimals(flow_graph)
+        
+        # Update DynamoDB with Decimal version
         db.update_project_flow_graph(project_id, flow_graph_for_db)
         
         # Step 5: Send completion
@@ -1406,9 +1411,10 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
             }
         })
         
+        # ✅ FIX: Ensure flow_graph has no Decimals before sending to frontend
         await send_complete(websocket, {
             "status": "success",
-            "flow_graph": flow_graph,
+            "flow_graph": convert_decimals(flow_graph),
             "version": new_version,
             "screens_updated": len(updated_screens)
         })

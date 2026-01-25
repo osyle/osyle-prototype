@@ -527,14 +527,22 @@ def put_project_flow(user_id: str, project_id: str, flow_graph: dict, version: i
     key = f"projects/{user_id}/{project_id}/flow_v{version}.json"
     
     try:
+        # ✅ Validate JSON serialization (catches Decimal objects)
+        json_str = json.dumps(flow_graph, indent=2)
+        
         s3_client.put_object(
             Bucket=S3_BUCKET,
             Key=key,
-            Body=json.dumps(flow_graph, indent=2),
+            Body=json_str,
             ContentType='application/json'
         )
+        print(f"✅ Successfully saved flow version {version} to S3")
+    except TypeError as e:
+        print(f"❌ JSON serialization error (likely Decimal objects): {e}")
+        print(f"❌ flow_graph keys: {list(flow_graph.keys())}")
+        raise ValueError(f"Cannot save flow_graph: contains non-JSON-serializable objects. Did you convert Decimals to floats first?")
     except Exception as e:
-        print(f"Error saving flow: {e}")
+        print(f"❌ Error saving flow to S3: {e}")
         raise
 
 

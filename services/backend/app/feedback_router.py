@@ -39,35 +39,39 @@ class FeedbackRouter:
                 "reasoning": str
             }
         """
+        try:
+            # Build the user message with context
+            user_message = self._build_user_message(
+                user_feedback,
+                conversation_history,
+                flow_summary
+            )
+            
+            # Call LLM with feedback_router_prompt
+            result = await self.llm.call_claude(
+                prompt_name="feedback_router_prompt",
+                user_message=user_message,
+                model="claude-sonnet",
+                max_tokens=2000,
+                temperature=0.3,  # Lower temperature for more consistent routing
+                parse_json=True
+            )
+            
+            # Return parsed JSON
+            if "json" in result:
+                return result["json"]
+            else:
+                # Fallback if JSON parsing failed
+                return {
+                    "needs_regeneration": False,
+                    "conversation_only": True,
+                    "response": result.get("text", "I'm not sure what you'd like me to change."),
+                    "reasoning": "Failed to parse routing decision, defaulting to conversation"
+                }
         
-        # Build the user message with context
-        user_message = self._build_user_message(
-            user_feedback,
-            conversation_history,
-            flow_summary
-        )
-        
-        # Call LLM with feedback_router_prompt
-        result = await self.llm.call_claude(
-            prompt_name="feedback_router_prompt",
-            user_message=user_message,
-            model="claude-sonnet",
-            max_tokens=2000,
-            temperature=0.3,  # Lower temperature for more consistent routing
-            parse_json=True
-        )
-        
-        # Return parsed JSON
-        if "json" in result:
-            return result["json"]
-        else:
-            # Fallback if JSON parsing failed
-            return {
-                "needs_regeneration": False,
-                "conversation_only": True,
-                "response": result.get("text", "I'm not sure what you'd like me to change."),
-                "reasoning": "Failed to parse routing decision, defaulting to conversation"
-            }
+        except Exception as e:
+            print(f"Error routing feedback: {e}")
+            raise
     
     def _build_user_message(
         self,
