@@ -1,14 +1,4 @@
-import {
-  Zap,
-  Palette,
-  Sparkles,
-  Send,
-  ChevronUp,
-  Loader2,
-  Eye,
-  Pen,
-  XCircle,
-} from 'lucide-react'
+import { Send, ChevronUp, Loader2, Eye, Pen, XCircle } from 'lucide-react'
 import React, { useState, useEffect, useRef } from 'react'
 import { useAgentatorGlobal } from '../lib/Agentator'
 import type { Annotation } from '../lib/Agentator'
@@ -419,40 +409,6 @@ export default function ConversationBar({
                     </span>
                   </button>
                 )}
-
-                {/* Original Quick Action Buttons (kept for future use) */}
-                <button
-                  className="p-2 rounded-lg hover:bg-gray-50 transition-all group relative disabled:opacity-50"
-                  title="Quick fixes"
-                  disabled={isProcessing}
-                >
-                  <Zap size={16} style={{ color: '#3B3B3B' }} />
-                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-                    Quick Fix
-                  </span>
-                </button>
-
-                <button
-                  className="p-2 rounded-lg hover:bg-gray-50 transition-all group relative disabled:opacity-50"
-                  title="Adjust theme"
-                  disabled={isProcessing}
-                >
-                  <Palette size={16} style={{ color: '#3B3B3B' }} />
-                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-                    Theme
-                  </span>
-                </button>
-
-                <button
-                  className="p-2 rounded-lg hover:bg-gray-50 transition-all group relative disabled:opacity-50"
-                  title="Polish design"
-                  disabled={isProcessing}
-                >
-                  <Sparkles size={16} style={{ color: '#3B3B3B' }} />
-                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-                    Polish
-                  </span>
-                </button>
 
                 {/* Send Button */}
                 <button
