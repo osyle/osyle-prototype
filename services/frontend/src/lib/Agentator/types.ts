@@ -18,6 +18,8 @@ export interface Annotation {
   cssClasses?: string
   isMultiSelect?: boolean
   isFixed?: boolean
+  elementIndex?: number // Index if multiple elements share same path (e.g., 3rd button)
+  textContent?: string // Full text content of element (for LLM context)
 }
 
 export interface PendingAnnotation extends Annotation {
@@ -53,6 +55,8 @@ export interface InspectedElement {
   attributes?: Record<string, string>
   computedStyles?: Record<string, string>
   timestamp: number
+  textContent?: string // Full text content for better LLM targeting
+  elementIndex?: number // Index if multiple elements share same path
 }
 
 export type AgentatorMode = 'annotate' | 'inspect'

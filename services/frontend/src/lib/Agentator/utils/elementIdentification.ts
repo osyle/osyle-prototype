@@ -251,7 +251,44 @@ export function getRelativePosition(
 }
 
 /**
- * Get bounding box relative to container
+ * Get the cumulative transform (scale/translate) applied to an element by its parents
+ */
+function getElementTransform(element: HTMLElement): {
+  scale: number
+  translateX: number
+  translateY: number
+} {
+  let current: HTMLElement | null = element
+  let scale = 1
+  let translateX = 0
+  let translateY = 0
+
+  while (current && current !== document.body) {
+    const style = window.getComputedStyle(current)
+    const transform = style.transform
+
+    if (transform && transform !== 'none') {
+      // Parse transform matrix
+      const match = transform.match(/matrix\(([^)]+)\)/)
+      if (match) {
+        const values = match[1].split(',').map(v => parseFloat(v.trim()))
+        // matrix(scaleX, skewY, skewX, scaleY, translateX, translateY)
+        if (values.length === 6) {
+          scale *= values[0] // scaleX (assuming uniform scale)
+          translateX += values[4]
+          translateY += values[5]
+        }
+      }
+    }
+
+    current = current.parentElement
+  }
+
+  return { scale, translateX, translateY }
+}
+
+/**
+ * Get bounding box relative to container (accounting for transforms)
  */
 export function getRelativeBoundingBox(
   element: HTMLElement,
@@ -260,10 +297,48 @@ export function getRelativeBoundingBox(
   const elemRect = element.getBoundingClientRect()
   const containerRect = container.getBoundingClientRect()
 
+  // Account for parent transforms (InfiniteCanvas scale/translate)
+  const transform = getElementTransform(container)
+
   return {
-    x: elemRect.left - containerRect.left,
-    y: elemRect.top - containerRect.top,
-    width: elemRect.width,
-    height: elemRect.height,
+    x: (elemRect.left - containerRect.left) / transform.scale,
+    y: (elemRect.top - containerRect.top) / transform.scale,
+    width: elemRect.width / transform.scale,
+    height: elemRect.height / transform.scale,
   }
+}
+
+/**
+ * Get text content of element (trimmed, max 200 chars for LLM context)
+ */
+export function getElementTextContent(element: HTMLElement): string {
+  const text = element.textContent?.trim() || ''
+  return text.length > 200 ? text.slice(0, 200) + '...' : text
+}
+
+/**
+ * Get the index of this element among siblings with the same tag/class structure
+ * Useful for identifying "3rd button" or "2nd card" etc.
+ */
+export function getElementIndex(element: HTMLElement): number | undefined {
+  const parent = element.parentElement
+  if (!parent) return undefined
+
+  // Find all siblings with same tag/class structure
+  const siblings = Array.from(parent.children).filter(child => {
+    if (child === element) return true
+    if (child.tagName !== element.tagName) return false
+
+    // Check if classes match (simplified)
+    const childClasses = (child.className || '').toString().trim()
+    const elemClasses = (element.className || '').toString().trim()
+
+    return childClasses === elemClasses
+  })
+
+  // Only return index if there are multiple similar elements
+  if (siblings.length <= 1) return undefined
+
+  const index = siblings.indexOf(element)
+  return index >= 0 ? index : undefined
 }

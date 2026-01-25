@@ -11,6 +11,8 @@ import {
   getElementClasses,
   getNearbyText,
   getRelativeBoundingBox,
+  getElementTextContent,
+  getElementIndex,
 } from '../utils/elementIdentification'
 import {
   getSelectedTextInfo,
@@ -104,15 +106,33 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
     y: number
   } | null>(null)
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null)
-  const [inspectedElement, setInspectedElement] =
-    useState<InspectedElement | null>(null)
+
+  // Selected element in inspect mode (persistent highlight)
+  const [selectedInspectElement, setSelectedInspectElement] = useState<{
+    boundingBox: { x: number; y: number; width: number; height: number }
+    element: string
+  } | null>(null)
+
+  // Clear selection when mode changes
+  useEffect(() => {
+    if (mode !== 'inspect') {
+      setSelectedInspectElement(null)
+    }
+  }, [mode])
+
+  // Clear selection when isActive changes
+  useEffect(() => {
+    if (!isActive) {
+      setSelectedInspectElement(null)
+    }
+  }, [isActive])
 
   // Handle mouse move for hover
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!isActive || isDragging || pendingAnnotation || !canvasRef.current)
-        return
+      if (!isActive || pendingAnnotation || !canvasRef.current) return
 
+      // Continue hover updates during drag for visual feedback
       const canvas = canvasRef.current
       const target = e.target as HTMLElement
 
@@ -143,8 +163,16 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
           targetRect.height / transform.scale,
         ),
       })
+
+      // Update drag position during drag
+      if (isDragging && dragStart) {
+        setDragCurrent({
+          x: (e.clientX - canvasRect.left) / transform.scale,
+          y: (e.clientY - canvasRect.top) / transform.scale,
+        })
+      }
     },
-    [isActive, isDragging, pendingAnnotation],
+    [isActive, isDragging, dragStart, pendingAnnotation],
   )
 
   // Handle text selection
@@ -173,6 +201,10 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       transform.scale
     const clickY = (selectionRect.top - canvasRect.top) / transform.scale
 
+    // Get enhanced metadata
+    const textContent = getElementTextContent(container)
+    const elementIndex = getElementIndex(container)
+
     const pending: PendingAnnotation = {
       id: `temp-${Date.now()}`,
       screenId,
@@ -193,6 +225,8 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       },
       cssClasses: getElementClasses(container),
       nearbyText: getNearbyText(container),
+      textContent,
+      elementIndex,
     }
 
     setPendingAnnotation(pending)
@@ -206,12 +240,18 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       if (!isActive || isDragging || pendingAnnotation || !canvasRef.current)
         return
 
-      // Inspect mode - just select the element
+      // Inspect mode - select the element and show persistent highlight
       if (mode === 'inspect') {
         const canvas = canvasRef.current
         const target = e.target as HTMLElement
 
-        if (target.closest('[data-annotation-ui]') || target === canvas) return
+        if (target.closest('[data-annotation-ui]') || target === canvas) {
+          // Clicked on UI or canvas - clear selection
+          setSelectedInspectElement(null)
+          onInspect?.(null)
+          return
+        }
+
         if (!canvas.contains(target)) return
 
         e.stopPropagation()
@@ -233,6 +273,10 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
         if (target.getAttribute('aria-label'))
           attributes['aria-label'] = target.getAttribute('aria-label')!
 
+        // Get enhanced metadata
+        const textContent = getElementTextContent(target)
+        const elementIndex = getElementIndex(target)
+
         const inspected: InspectedElement = {
           element: identified.name,
           elementPath: identified.path,
@@ -242,9 +286,16 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
           tagName: target.tagName,
           attributes,
           timestamp: Date.now(),
+          textContent,
+          elementIndex,
         }
 
-        setInspectedElement(inspected)
+        // Store selection for persistent highlight
+        setSelectedInspectElement({
+          boundingBox,
+          element: identified.name,
+        })
+
         onInspect?.(inspected)
         return
       }
@@ -274,6 +325,10 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       const clickX = (e.clientX - canvasRect.left) / transform.scale
       const clickY = (e.clientY - canvasRect.top) / transform.scale
 
+      // Get enhanced metadata
+      const textContent = getElementTextContent(target)
+      const elementIndex = getElementIndex(target)
+
       const pending: PendingAnnotation = {
         id: `temp-${Date.now()}`,
         screenId,
@@ -288,6 +343,8 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
         boundingBox,
         cssClasses: getElementClasses(target),
         nearbyText: getNearbyText(target),
+        textContent,
+        elementIndex,
       }
 
       setPendingAnnotation(pending)
@@ -331,23 +388,6 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       }
     },
     [isActive, mode],
-  )
-
-  // Mouse move during drag
-  const handleDragMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (!isDragging || !canvasRef.current || !dragStart) return
-
-      const canvas = canvasRef.current
-      const canvasRect = canvas.getBoundingClientRect()
-      const transform = getElementTransform(canvas)
-
-      setDragCurrent({
-        x: (e.clientX - canvasRect.left) / transform.scale,
-        y: (e.clientY - canvasRect.top) / transform.scale,
-      })
-    },
-    [isDragging, dragStart],
   )
 
   // Mouse up to finish drag
@@ -451,13 +491,25 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
           cancelAnnotation()
         } else if (editingAnnotation) {
           cancelEdit()
+        } else if (mode === 'inspect' && selectedInspectElement) {
+          // Clear inspect selection on Escape
+          setSelectedInspectElement(null)
+          onInspect?.(null)
         }
       }
     }
 
     window.addEventListener('keydown', handleEscape)
     return () => window.removeEventListener('keydown', handleEscape)
-  }, [pendingAnnotation, editingAnnotation, cancelAnnotation, cancelEdit])
+  }, [
+    pendingAnnotation,
+    editingAnnotation,
+    cancelAnnotation,
+    cancelEdit,
+    mode,
+    selectedInspectElement,
+    onInspect,
+  ])
 
   return (
     <div
@@ -476,16 +528,41 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       {/* Overlay for hover, markers, drag selection */}
       {isActive && (
         <div className="agentator-overlay" style={{ pointerEvents: 'none' }}>
-          {/* Hover highlight */}
-          {hoverInfo && hoverInfo.rect && (
+          {/* Hover highlight (only show if not same as selected element) */}
+          {hoverInfo &&
+            hoverInfo.rect &&
+            !(
+              mode === 'inspect' &&
+              selectedInspectElement &&
+              hoverInfo.rect.x === selectedInspectElement.boundingBox.x &&
+              hoverInfo.rect.y === selectedInspectElement.boundingBox.y
+            ) && (
+              <div
+                className={`agentator-hover ${mode === 'inspect' ? 'inspect-mode' : ''}`}
+                style={{
+                  left: hoverInfo.rect.x,
+                  top: hoverInfo.rect.y,
+                  width: hoverInfo.rect.width,
+                  height: hoverInfo.rect.height,
+                  borderColor: mode === 'inspect' ? '#FF9500' : annotationColor,
+                }}
+              />
+            )}
+
+          {/* Persistent selection highlight in inspect mode */}
+          {mode === 'inspect' && selectedInspectElement && (
             <div
-              className={`agentator-hover ${mode === 'inspect' ? 'inspect-mode' : ''}`}
+              className="agentator-hover inspect-mode"
               style={{
-                left: hoverInfo.rect.x,
-                top: hoverInfo.rect.y,
-                width: hoverInfo.rect.width,
-                height: hoverInfo.rect.height,
-                borderColor: mode === 'inspect' ? '#FF9500' : annotationColor,
+                left: selectedInspectElement.boundingBox.x,
+                top: selectedInspectElement.boundingBox.y,
+                width: selectedInspectElement.boundingBox.width,
+                height: selectedInspectElement.boundingBox.height,
+                borderColor: '#FF9500',
+                borderWidth: '3px',
+                borderStyle: 'solid',
+                opacity: 1,
+                animation: 'none', // No pulse for selected element
               }}
             />
           )}
