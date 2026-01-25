@@ -283,6 +283,88 @@ Your output might:
 
 ---
 
+## Annotation-Friendly Markup
+
+To enable clear feedback and annotations on your UI, add strategic `id` attributes to key components:
+
+### ✅ Add IDs to These Elements:
+
+1. **Major sections & landmarks**: Navigation bars, headers, footers, sidebars
+
+   ```jsx
+   <nav id="main-nav">...</nav>
+   <header id="page-header">...</header>
+   <footer id="page-footer">...</footer>
+   ```
+
+2. **Repeated components with index**: Cards, list items, grid items
+
+   ```jsx
+   <div id="product-card-0">...</div>
+   <div id="product-card-1">...</div>
+   <div id="product-card-2">...</div>
+   ```
+
+3. **Interactive containers**: Forms, modals, search bars, filters
+
+   ```jsx
+   <form id="login-form">...</form>
+   <div id="search-bar">...</div>
+   <div id="filter-panel">...</div>
+   ```
+
+4. **Content sections**: Main content areas, article bodies, dashboards
+   ```jsx
+   <main id="dashboard">...</main>
+   <section id="hero-section">...</section>
+   <article id="blog-post">...</article>
+   ```
+
+### ❌ Don't Add IDs to:
+
+- Pure wrapper/layout divs (unless they're semantic containers)
+- Text elements (headings, paragraphs, labels)
+- Individual buttons (unless major CTAs)
+- Simple decorative elements
+
+### ID Naming Convention:
+
+- Use **kebab-case**: `product-card`, `checkout-form`, `hero-section`
+- Be **descriptive**: Describe the element's purpose
+- Add **index for repetition**: `card-0`, `card-1`, `item-2`
+- Keep it **concise**: 2-4 words maximum
+
+### Example:
+
+```jsx
+<div id="product-grid">
+  <div id="product-card-0">
+    <img src="..." alt="Headphones" />
+    <div className="product-info">
+      <h3>Wireless Headphones</h3>
+      <button>Add to Cart</button>
+    </div>
+  </div>
+
+  <div id="product-card-1">
+    <img src="..." alt="Watch" />
+    <div className="product-info">
+      <h3>Smart Watch</h3>
+      <button>Add to Cart</button>
+    </div>
+  </div>
+</div>
+```
+
+With these IDs, element paths become clear:
+
+- Instead of: `div > div > div > div > h3`
+- You get: `#product-grid > #product-card-0 > .product-info > h3`
+
+This makes annotations and feedback much clearer for both humans and AI.
+
+---
+
 ## Output Requirements
 
 ### Component Signature
@@ -1056,6 +1138,7 @@ export default function App({ onTransition }) {
   // ===== BLOCK 4: RENDER TREE =====
   return (
     <div
+      id="login-screen"
       style={{
         width: "375px",
         height: "812px",
@@ -1070,25 +1153,27 @@ export default function App({ onTransition }) {
     >
 
       {/* COMPONENT: Header */}
-      <div
-        style={{
-          fontSize: `${commonSizes[3]}px`,
-          fontWeight: "700",
-          marginBottom: `${quantum}px`,
-        }}
-      >
-        Welcome Back
-      </div>
+      <header id="page-header">
+        <div
+          style={{
+            fontSize: `${commonSizes[3]}px`,
+            fontWeight: "700",
+            marginBottom: `${quantum}px`,
+          }}
+        >
+          Welcome Back
+        </div>
 
-      <div
-        style={{
-          fontSize: `${commonSizes[1]}px`,
-          color: colors[3],
-          marginBottom: `${quantum * 4}px`,
-        }}
-      >
-        Login to your account
-      </div>
+        <div
+          style={{
+            fontSize: `${commonSizes[1]}px`,
+            color: colors[3],
+            marginBottom: `${quantum * 4}px`,
+          }}
+        >
+          Login to your account
+        </div>
+      </header>
 /*CHECKPOINT
     </div>
   );
@@ -1096,30 +1181,31 @@ export default function App({ onTransition }) {
 //$CHECKPOINT
 
       {/* COMPONENT: Login Form */}
-      <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="Enter email"
-        style={{
-          padding: `${quantum * 2}px`,
-          borderRadius: `${radii[0]}px`,
-          border: `1px solid ${colors[3]}`,
-          backgroundColor: colors[0],
-          color: colors[2],
-          fontSize: `${commonSizes[1]}px`,
-          marginBottom: `${quantum * 2}px`,
-        }}
-      />
+      <form id="login-form">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Enter email"
+          style={{
+            padding: `${quantum * 2}px`,
+            borderRadius: `${radii[0]}px`,
+            border: `1px solid ${colors[3]}`,
+            backgroundColor: colors[0],
+            color: colors[2],
+            fontSize: `${commonSizes[1]}px`,
+            marginBottom: `${quantum * 2}px`,
+          }}
+        />
 
-      <input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Enter password"
-        style={{
-          padding: `${quantum * 2}px`,
-          borderRadius: `${radii[0]}px`,
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Enter password"
+          style={{
+            padding: `${quantum * 2}px`,
+            borderRadius: `${radii[0]}px`,
           border: `1px solid ${colors[3]}`,
           backgroundColor: colors[0],
           color: colors[2],

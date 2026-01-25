@@ -769,30 +769,132 @@ export default function App({ onTransition }) {
   // ===== RENDER - EVERYTHING ELSE UNCHANGED =====
   return (
     <div
+      id="login-screen"
       style={{ width: "375px", height: "812px", padding: `${quantum * 3}px` }}
     >
-      <h1>Login</h1>
+      <header id="page-header">
+        <h1>Login</h1>
+      </header>
 
-      <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        style={{ padding: `${quantum * 2}px` }}
-      />
+      <form id="login-form">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ padding: `${quantum * 2}px` }}
+        />
 
-      <button
-        onClick={() => onTransition("next")}
-        style={{
-          height: `${quantum * 6}px`,
-          background: colors[1], // ← Uses the new red value
-          padding: `${quantum * 2}px`,
-        }}
-      >
-        Continue
-      </button>
+        <button
+          onClick={() => onTransition("next")}
+          style={{
+            height: `${quantum * 6}px`,
+            background: colors[1], // ← Uses the new red value
+            padding: `${quantum * 2}px`,
+          }}
+        >
+          Continue
+        </button>
+      </form>
     </div>
   );
 }
+```
+
+---
+
+## Understanding Annotation Metadata for Precise Targeting
+
+Annotations include enhanced metadata to help you locate the exact element to modify:
+
+### Annotation Structure:
+
+```typescript
+{
+  element: "Button",              // Semantic element name
+  elementPath: "#login-form > .button-group > button",  // CSS-like path with IDs
+  textContent: "Sign In",         // Text inside element
+  elementIndex: 0,                // 1st occurrence (if multiple similar elements)
+  cssClasses: "btn btn-primary",  // CSS classes
+  comment: "Make this bigger"     // User's feedback
+}
+```
+
+### How to Use Each Field:
+
+1. **textContent** (Strongest Signal)
+
+   - Search for elements containing this exact text
+   - Example: `"Sign In"` → Find the button with this text
+
+2. **elementPath with IDs**
+
+   - IDs make paths clear: `#login-form > button` vs `div > div > button`
+   - Navigate from ID landmarks: `#product-card-0 > .product-info > h3`
+
+3. **elementIndex**
+
+   - Disambiguates repeated elements
+   - "1st occurrence" = index 0, "2nd occurrence" = index 1
+
+4. **cssClasses**
+   - Additional targeting hint
+   - Helps distinguish similar elements
+
+### Example Targeting:
+
+**Annotation:**
+
+```
+Element: "Product Title"
+Path: #product-grid > #product-card-2 > .product-info > h3
+Text: "Smart Watch"
+Index: 2nd occurrence
+Feedback: "Make this title smaller"
+```
+
+**How to Find It:**
+
+```jsx
+// Look for:
+<div id="product-grid">
+  <div id="product-card-0">...</div>
+  <div id="product-card-1">...</div>
+  <div id="product-card-2">
+    {" "}
+    // ← 3rd card (index 2)
+    <div className="product-info">
+      <h3>Smart Watch</h3> // ← This is the element!
+    </div>
+  </div>
+</div>
+```
+
+**Your Surgical Edit:**
+
+```jsx
+// ONLY change the h3 font size, nothing else
+<h3 style={{ fontSize: "18px" }}>Smart Watch</h3> // ← Was 24px, now 18px
+```
+
+### When Path is Generic (`div > div > div`):
+
+If the path lacks IDs and is unhelpful, rely on:
+
+1. **Text content** (primary)
+2. **Element index** (if multiple)
+3. **CSS classes**
+4. **Semantic element name**
+
+### Preserve IDs in Your Edits:
+
+When editing code, **always preserve existing `id` attributes** - they help future annotations:
+
+```jsx
+// ✅ CORRECT - Preserved id="product-card-2"
+<div id="product-card-2" style={{ padding: "24px" }}>  // Changed padding only
+
+// ❌ WRONG - Lost the ID
+<div style={{ padding: "24px" }}>  // Future annotations can't find this!
 ```
 
 ---
