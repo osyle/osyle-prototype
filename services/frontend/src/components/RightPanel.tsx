@@ -1,7 +1,6 @@
 import {
   ChevronDown,
   Sparkles,
-  MessageSquare,
   Eye,
   AlertCircle,
   CheckCircle,
@@ -52,14 +51,6 @@ interface AISuggestion {
   severity: 'critical' | 'recommended' | 'optional'
   category: 'spacing' | 'color' | 'typography' | 'accessibility' | 'consistency'
   affectedElements: number
-}
-
-interface ConversationMessage {
-  id: string
-  type: 'user' | 'ai'
-  content: string
-  timestamp: Date
-  hasChanges?: boolean
 }
 
 export default function RightPanel({
@@ -222,30 +213,6 @@ export default function RightPanel({
   ])
 
   const [dismissedSuggestions, setDismissedSuggestions] = useState<string[]>([])
-
-  // Conversation state (NEW - for Reflect tab redesign)
-  const [conversation] = useState<ConversationMessage[]>([
-    {
-      id: '1',
-      type: 'user',
-      content: 'Make the header more prominent',
-      timestamp: new Date(Date.now() - 10 * 60 * 1000),
-    },
-    {
-      id: '2',
-      type: 'ai',
-      content:
-        'I increased the font size from 32px to 48px and added your signature gradient overlay. The header now follows your typical hero section pattern.',
-      timestamp: new Date(Date.now() - 10 * 60 * 1000),
-      hasChanges: true,
-    },
-    {
-      id: '3',
-      type: 'user',
-      content: 'Perfect, now fix the button spacing',
-      timestamp: new Date(Date.now() - 5 * 60 * 1000),
-    },
-  ])
 
   const activeSuggestions = suggestions.filter(
     s => !dismissedSuggestions.includes(s.id),
@@ -1256,7 +1223,7 @@ export default function RightPanel({
                   <div
                     className="flex flex-col mb-4"
                     style={{
-                      maxHeight: activeSuggestions.length > 0 ? '45%' : '0',
+                      maxHeight: activeSuggestions.length > 0 ? '100%' : '0',
                       transition: 'max-height 0.3s ease',
                     }}
                   >
@@ -1370,100 +1337,6 @@ export default function RightPanel({
                           </div>
                           <div className="text-xs" style={{ color: '#929397' }}>
                             Your design looks great!
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Divider */}
-                  {activeSuggestions.length > 0 && (
-                    <div
-                      className="flex items-center gap-3 py-3"
-                      style={{ borderTop: '1px solid #E8E1DD' }}
-                    >
-                      <div className="text-xs" style={{ color: '#929397' }}>
-                        {activeSuggestions.length} suggestions •{' '}
-                        {conversation.length} messages
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Conversation Section */}
-                  <div className="flex-1 flex flex-col overflow-hidden">
-                    <div className="flex items-center gap-2 mb-3">
-                      <MessageSquare size={16} style={{ color: '#667EEA' }} />
-                      <div
-                        className="text-sm font-semibold"
-                        style={{ color: '#3B3B3B' }}
-                      >
-                        Conversation
-                      </div>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-                      {conversation.map(msg => (
-                        <div
-                          key={msg.id}
-                          className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
-                        >
-                          <div
-                            className="rounded-lg px-4 py-2 max-w-[85%]"
-                            style={{
-                              backgroundColor:
-                                msg.type === 'user' ? '#F0F7FF' : '#F7F5F3',
-                            }}
-                          >
-                            <div className="flex items-center gap-2 mb-1">
-                              <div
-                                className="text-xs font-medium"
-                                style={{ color: '#3B3B3B' }}
-                              >
-                                {msg.type === 'user' ? 'You' : 'AI'}
-                              </div>
-                              <div
-                                className="text-xs"
-                                style={{ color: '#929397' }}
-                              >
-                                {msg.timestamp.toLocaleTimeString('en-US', {
-                                  hour: 'numeric',
-                                  minute: '2-digit',
-                                })}
-                              </div>
-                            </div>
-                            <div
-                              className="text-sm"
-                              style={{ color: '#3B3B3B' }}
-                            >
-                              {msg.content}
-                            </div>
-                            {msg.hasChanges && (
-                              <button
-                                className="mt-2 text-xs font-medium"
-                                style={{ color: '#3B82F6' }}
-                              >
-                                View Changes →
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-
-                      {conversation.length === 0 && (
-                        <div className="text-center py-8">
-                          <MessageSquare
-                            size={32}
-                            className="mx-auto mb-2"
-                            style={{ color: '#929397' }}
-                          />
-                          <div
-                            className="text-sm font-medium"
-                            style={{ color: '#3B3B3B' }}
-                          >
-                            No conversation yet
-                          </div>
-                          <div className="text-xs" style={{ color: '#929397' }}>
-                            Use the input below to start iterating
                           </div>
                         </div>
                       )}
