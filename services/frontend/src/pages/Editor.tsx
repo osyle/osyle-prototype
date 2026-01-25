@@ -126,8 +126,10 @@ export default function Editor() {
 
   // Version history state - RESTORED!
   const [currentFlowVersion, setCurrentFlowVersion] = useState<number>(1)
+  const [availableVersions, setAvailableVersions] = useState<number[]>([1])
   const [viewingVersion, setViewingVersion] = useState<number | null>(null)
   const [isReverting, setIsReverting] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const [conversationMessages, setConversationMessages] = useState<Message[]>(
     [],
@@ -261,6 +263,10 @@ export default function Editor() {
       const project = JSON.parse(currentProject)
       const versionData = await api.llm.getFlowVersions(project.project_id)
       setCurrentFlowVersion(versionData.current_version)
+
+      // Load list of available versions
+      const versionsData = await api.projects.listVersions(project.project_id)
+      setAvailableVersions(versionsData.versions)
     } catch (err) {
       console.error('Failed to load version info:', err)
     }
@@ -311,6 +317,9 @@ export default function Editor() {
       setCurrentFlowVersion(result.new_version)
       setViewingVersion(null)
 
+      // Refresh available versions list
+      await loadVersionInfo()
+
       // ✅ NEW: Load conversation from the version we reverted to
       // This copies the conversation to the new version
       await loadConversationFromBackend(project.project_id, version)
@@ -340,6 +349,41 @@ export default function Editor() {
       alert(err instanceof Error ? err.message : 'Failed to revert version')
     } finally {
       setIsReverting(false)
+    }
+  }
+
+  const handleDeleteVersion = async (version: number) => {
+    if (
+      !confirm(
+        `Are you sure you want to delete version ${version}? This action cannot be undone.`,
+      )
+    ) {
+      return
+    }
+
+    try {
+      setIsDeleting(true)
+      const currentProject = localStorage.getItem('current_project')
+      if (!currentProject) return
+
+      const project = JSON.parse(currentProject)
+      await api.projects.deleteVersion(project.project_id, version)
+
+      // Refresh available versions list
+      await loadVersionInfo()
+
+      // If we were viewing the deleted version, switch to current
+      if (viewingVersion === version) {
+        setViewingVersion(currentFlowVersion)
+        await handleVersionSelect(currentFlowVersion)
+      }
+
+      alert(`Successfully deleted version ${version}`)
+    } catch (err) {
+      console.error('Failed to delete version:', err)
+      alert(err instanceof Error ? err.message : 'Failed to delete version')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -750,6 +794,9 @@ export default function Editor() {
           console.log('  Version:', result.version)
           setCurrentFlowVersion(result.version)
           setViewingVersion(null)
+
+          // Refresh available versions list
+          loadVersionInfo()
 
           // Update project in localStorage with flow_graph and version
           project.flow_graph = result.flow_graph
@@ -1376,6 +1423,9 @@ export default function Editor() {
           // Update version
           setCurrentFlowVersion(data.new_version)
 
+          // Refresh available versions list
+          loadVersionInfo()
+
           setIterationStatus('')
           setIsIterating(false)
           setCurrentIteratingScreenId(null)
@@ -1644,9 +1694,12 @@ export default function Editor() {
             <div className="mt-4">
               <VersionHistory
                 currentVersion={currentFlowVersion}
+                availableVersions={availableVersions}
                 onVersionSelect={handleVersionSelect}
                 onRevert={handleRevertVersion}
+                onDelete={handleDeleteVersion}
                 isReverting={isReverting}
+                isDeleting={isDeleting}
                 viewingVersion={viewingVersion}
               />
             </div>

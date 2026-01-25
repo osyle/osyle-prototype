@@ -754,3 +754,109 @@ async def save_conversation(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save conversation: {str(e)}")
+
+
+@router.delete("/{project_id}/versions/{version}", response_model=MessageResponse)
+async def delete_project_version(
+    project_id: str,
+    version: int,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Delete a specific project version
+    
+    - **version**: Version number to delete
+    
+    NOTE: Cannot delete the current version. Version numbers are not renumbered.
+    """
+    # Check ownership
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.get("owner_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get current version from metadata
+    metadata_version = project.get("metadata", {}).get("flow_version", 1)
+    
+    # Also get the actual highest version from S3
+    available_versions = storage.list_project_flow_versions(
+        user["user_id"],
+        project_id
+    )
+    
+    # The current version is the highest available version
+    current_version = max(available_versions) if available_versions else metadata_version
+    
+    print(f"🔍 DELETE DEBUG: Attempting to delete version {version}")
+    print(f"🔍 DELETE DEBUG: Metadata says current_version is {metadata_version}")
+    print(f"🔍 DELETE DEBUG: S3 says highest version is {current_version}")
+    print(f"🔍 DELETE DEBUG: Available versions: {available_versions}")
+    
+    # Prevent deleting the current version
+    if version == current_version:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot delete the current version ({current_version}). Revert to a different version first."
+        )
+    
+    # Check if version exists by verifying S3 file
+    flow_key = f"projects/{user['user_id']}/{project_id}/flow_v{version}.json"
+    if not storage.check_object_exists(flow_key):
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Version {version} does not exist"
+        )
+    
+    # Delete from S3
+    try:
+        success = storage.delete_project_flow_version(
+            user["user_id"],
+            project_id,
+            version
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Failed to delete version {version}"
+            )
+        
+        return {
+            "message": f"Successfully deleted version {version}"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error deleting version: {str(e)}"
+        )
+
+
+@router.get("/{project_id}/versions")
+async def list_project_versions(
+    project_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """
+    List all available versions for a project
+    
+    Returns list of version numbers that exist in S3
+    """
+    # Check ownership
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.get("owner_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get list of versions from S3
+    versions = storage.list_project_flow_versions(
+        user["user_id"],
+        project_id
+    )
+    
+    return {
+        "versions": versions
+    }

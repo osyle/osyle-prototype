@@ -1,21 +1,28 @@
-import { History, RotateCcw, Eye, Check } from 'lucide-react'
+import { History, RotateCcw, Eye, Check, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 interface VersionHistoryProps {
   currentVersion: number
+  availableVersions: number[]
   // eslint-disable-next-line no-unused-vars
   onVersionSelect: (version: number) => void
   // eslint-disable-next-line no-unused-vars
   onRevert: (version: number) => void
+  // eslint-disable-next-line no-unused-vars
+  onDelete: (version: number) => void
   isReverting: boolean
+  isDeleting: boolean
   viewingVersion: number | null
 }
 
 export default function VersionHistory({
   currentVersion,
+  availableVersions,
   onVersionSelect,
   onRevert,
+  onDelete,
   isReverting,
+  isDeleting,
   viewingVersion,
 }: VersionHistoryProps) {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -36,10 +43,8 @@ export default function VersionHistory({
     )
   }
 
-  const versions = Array.from(
-    { length: currentVersion },
-    (_, i) => currentVersion - i,
-  )
+  // Sort versions in descending order (newest first)
+  const versions = [...availableVersions].sort((a, b) => b - a)
 
   return (
     <div
@@ -168,10 +173,26 @@ export default function VersionHistory({
                       backgroundColor: '#FEF3C7',
                       color: '#92400E',
                     }}
-                    disabled={isReverting}
+                    disabled={isReverting || isDeleting}
                     title="Revert to this version"
                   >
                     <RotateCcw size={14} />
+                  </button>
+                )}
+
+                {/* Delete button */}
+                {!isCurrent && (
+                  <button
+                    onClick={() => onDelete(version)}
+                    className="p-1.5 rounded transition-all hover:scale-105 disabled:opacity-50"
+                    style={{
+                      backgroundColor: '#FEE2E2',
+                      color: '#991B1B',
+                    }}
+                    disabled={isReverting || isDeleting}
+                    title="Delete this version"
+                  >
+                    <Trash2 size={14} />
                   </button>
                 )}
               </div>
@@ -183,7 +204,8 @@ export default function VersionHistory({
       {/* Info text */}
       <p className="text-xs mt-3" style={{ color: '#929397' }}>
         Click <Eye size={12} className="inline" /> to preview versions.
-        Reverting creates a new version as a copy.
+        Reverting creates a new version as a copy. Deleting removes the version
+        permanently.
       </p>
     </div>
   )

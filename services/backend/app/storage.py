@@ -571,6 +571,35 @@ def list_project_flow_versions(user_id: str, project_id: str) -> list:
         return []
 
 
+def delete_project_flow_version(user_id: str, project_id: str, version: int) -> bool:
+    """
+    Delete a specific flow version
+    
+    Args:
+        user_id: User ID
+        project_id: Project ID
+        version: Version number to delete
+    
+    Returns:
+        True if deletion successful, False otherwise
+    """
+    flow_key = f"projects/{user_id}/{project_id}/flow_v{version}.json"
+    conversation_key = f"projects/{user_id}/{project_id}/conversation_v{version}.json"
+    
+    try:
+        # Delete flow file
+        flow_deleted = delete_object(flow_key)
+        
+        # Delete conversation file (if exists)
+        conversation_deleted = delete_object(conversation_key)
+        
+        print(f"✅ Deleted version {version}: flow={flow_deleted}, conversation={conversation_deleted}")
+        return flow_deleted  # Return True if at least flow was deleted
+    except Exception as e:
+        print(f"❌ Error deleting version {version}: {e}")
+        return False
+
+
 # ============================================================================
 # CONVERSATION VERSIONING FUNCTIONS
 # ============================================================================

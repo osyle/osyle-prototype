@@ -673,6 +673,30 @@ export const projectsAPI = {
       body: JSON.stringify({ conversation, version }),
     })
   },
+
+  /**
+   * Delete a specific project version
+   */
+  deleteVersion: async (
+    projectId: string,
+    version: number,
+  ): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(
+      `/api/projects/${projectId}/versions/${version}`,
+      {
+        method: 'DELETE',
+      },
+    )
+  },
+
+  /**
+   * List all available versions for a project
+   */
+  listVersions: async (projectId: string): Promise<{ versions: number[] }> => {
+    return apiRequest<{ versions: number[] }>(
+      `/api/projects/${projectId}/versions`,
+    )
+  },
 }
 
 // ============================================================================
