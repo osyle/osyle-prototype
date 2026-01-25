@@ -1285,6 +1285,26 @@ export default function Editor() {
           setIsIterating(false)
         },
 
+        onComplete: result => {
+          console.log(
+            'WebSocket complete, updating localStorage with final flow_graph',
+          )
+
+          const currentProject = localStorage.getItem('current_project')
+          if (currentProject && result['flow_graph']) {
+            try {
+              const project = JSON.parse(currentProject)
+              project.flow_graph = result['flow_graph'] // Update with final flow_graph from backend
+              localStorage.setItem('current_project', JSON.stringify(project))
+              console.log(
+                '✅ Updated localStorage with flow_graph after iteration',
+              )
+            } catch (err) {
+              console.error('Failed to update localStorage:', err)
+            }
+          }
+        },
+
         onError: error => {
           console.error('Iteration error:', error)
 

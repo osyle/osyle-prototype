@@ -93,12 +93,18 @@ export default function ConversationBar({
           {/* Expanded Message History */}
           {isExpanded && (
             <div
-              className="px-6 pt-6 pb-4 max-h-[400px] overflow-y-auto space-y-3"
               style={{
                 borderBottom: '1px solid #E8E1DD',
               }}
             >
-              <div className="flex items-center justify-between mb-2">
+              {/* Fixed Header - Outside scroll container */}
+              <div
+                className="px-6 pt-6 pb-3 flex items-center justify-between"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderBottom: '1px solid #F7F5F3',
+                }}
+              >
                 <div
                   className="text-xs font-semibold"
                   style={{ color: '#3B3B3B' }}
@@ -108,7 +114,7 @@ export default function ConversationBar({
                 {!isProcessing && (
                   <button
                     onClick={() => setIsExpanded(false)}
-                    className="text-xs"
+                    className="text-xs hover:underline"
                     style={{ color: '#929397' }}
                   >
                     Collapse
@@ -116,81 +122,87 @@ export default function ConversationBar({
                 )}
               </div>
 
-              {messages.length === 0 ? (
-                <div
-                  className="text-sm text-center py-8"
-                  style={{ color: '#929397' }}
-                >
-                  Start a conversation to iterate on your design...
-                </div>
-              ) : (
-                <>
-                  {messages.map(msg => (
-                    <div
-                      key={msg.id}
-                      className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
+              {/* Scrollable Messages */}
+              <div className="px-6 py-4 max-h-[400px] overflow-y-auto space-y-3">
+                {messages.length === 0 ? (
+                  <div
+                    className="text-sm text-center py-8"
+                    style={{ color: '#929397' }}
+                  >
+                    Start a conversation to iterate on your design...
+                  </div>
+                ) : (
+                  <>
+                    {messages.map(msg => (
                       <div
-                        className="rounded-lg px-4 py-2 max-w-[70%]"
-                        style={{
-                          backgroundColor:
-                            msg.type === 'user' ? '#F0F7FF' : '#F7F5F3',
-                        }}
+                        key={msg.id}
+                        className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
                       >
                         <div
-                          className="text-xs mb-1 flex items-center justify-between gap-2"
-                          style={{ color: '#929397' }}
+                          className="rounded-lg px-4 py-2 max-w-[70%]"
+                          style={{
+                            backgroundColor:
+                              msg.type === 'user' ? '#F0F7FF' : '#F7F5F3',
+                          }}
                         >
-                          <span>
-                            {msg.type === 'user' ? 'You' : 'AI'} •{' '}
-                            {msg.timestamp.toLocaleTimeString('en-US', {
-                              hour: 'numeric',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                          {msg.type === 'ai' && msg.screen && (
-                            <span
-                              className="font-semibold"
-                              style={{ color: '#667EEA' }}
-                            >
-                              {msg.screen}
+                          <div
+                            className="text-xs mb-1 flex items-center justify-between gap-2"
+                            style={{ color: '#929397' }}
+                          >
+                            <span>
+                              {msg.type === 'user' ? 'You' : 'AI'} •{' '}
+                              {msg.timestamp.toLocaleTimeString('en-US', {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })}
                             </span>
-                          )}
-                        </div>
-                        <div
-                          className="text-sm whitespace-pre-wrap"
-                          style={{ color: '#3B3B3B' }}
-                        >
-                          {msg.content}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Processing indicator */}
-                  {isProcessing && (
-                    <div className="flex justify-start">
-                      <div
-                        className="rounded-lg px-4 py-3 max-w-[70%]"
-                        style={{ backgroundColor: '#FFF9E6' }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Loader2
-                            size={16}
-                            className="animate-spin"
-                            style={{ color: '#F5C563' }}
-                          />
-                          <div className="text-sm" style={{ color: '#92400E' }}>
-                            {processingStatus}
+                            {msg.type === 'ai' && msg.screen && (
+                              <span
+                                className="font-semibold"
+                                style={{ color: '#667EEA' }}
+                              >
+                                {msg.screen}
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            className="text-sm whitespace-pre-wrap"
+                            style={{ color: '#3B3B3B' }}
+                          >
+                            {msg.content}
                           </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    ))}
 
-                  <div ref={messagesEndRef} />
-                </>
-              )}
+                    {/* Processing indicator */}
+                    {isProcessing && (
+                      <div className="flex justify-start">
+                        <div
+                          className="rounded-lg px-4 py-3 max-w-[70%]"
+                          style={{ backgroundColor: '#FFF9E6' }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Loader2
+                              size={16}
+                              className="animate-spin"
+                              style={{ color: '#F5C563' }}
+                            />
+                            <div
+                              className="text-sm"
+                              style={{ color: '#92400E' }}
+                            >
+                              {processingStatus}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div ref={messagesEndRef} />
+                  </>
+                )}
+              </div>
             </div>
           )}
 

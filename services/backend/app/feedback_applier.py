@@ -68,55 +68,56 @@ class FeedbackApplier:
             ):
                 buffer += chunk
                 chunk_index += 1
-            
-            # Check for delimiter
-            if not delimiter_found and "$GENERATING" in buffer:
-                # Split at delimiter
-                before_delimiter, after_delimiter = buffer.split("$GENERATING", 1)
                 
-                # Send any remaining conversation text before delimiter
-                if before_delimiter.strip():
-                    conversation_part.append(before_delimiter)
-                    yield {
-                        "type": "conversation",
-                        "chunk": before_delimiter
-                    }
+                # ✅ FIX: Process chunks in real-time INSIDE the loop
+                # Check for delimiter
+                if not delimiter_found and "$GENERATING" in buffer:
+                    # Split at delimiter
+                    before_delimiter, after_delimiter = buffer.split("$GENERATING", 1)
+                    
+                    # Send any remaining conversation text before delimiter
+                    if before_delimiter.strip():
+                        conversation_part.append(before_delimiter)
+                        yield {
+                            "type": "conversation",
+                            "chunk": before_delimiter
+                        }
+                    
+                    # Signal delimiter detected
+                    delimiter_found = True
+                    yield {"type": "delimiter_detected"}
+                    
+                    # Start code buffer with text after delimiter
+                    buffer = after_delimiter
+                    
+                    # Send code chunk if any
+                    if buffer.strip():
+                        code_part.append(buffer)
+                        yield {
+                            "type": "code",
+                            "chunk": buffer
+                        }
+                    
+                    buffer = ""
                 
-                # Signal delimiter detected
-                delimiter_found = True
-                yield {"type": "delimiter_detected"}
+                elif not delimiter_found:
+                    # Still in conversation part
+                    # Send chunks as they arrive for real-time streaming
+                    if len(buffer) > 50:  # Send in reasonable chunks
+                        conversation_part.append(buffer)
+                        yield {
+                            "type": "conversation",
+                            "chunk": buffer
+                        }
+                        buffer = ""
                 
-                # Start code buffer with text after delimiter
-                buffer = after_delimiter
-                
-                # Send code chunk if any
-                if buffer.strip():
-                    code_part.append(buffer)
+                else:
+                    # In code part - accumulate but don't send yet
+                    code_part.append(chunk)
                     yield {
                         "type": "code",
-                        "chunk": buffer
+                        "chunk": chunk
                     }
-                
-                buffer = ""
-            
-            elif not delimiter_found:
-                # Still in conversation part
-                # Send chunks as they arrive for real-time streaming
-                if len(buffer) > 50:  # Send in reasonable chunks
-                    conversation_part.append(buffer)
-                    yield {
-                        "type": "conversation",
-                        "chunk": buffer
-                    }
-                    buffer = ""
-            
-            else:
-                # In code part
-                code_part.append(chunk)
-                yield {
-                    "type": "code",
-                    "chunk": chunk
-                }
             
             # Send any remaining buffer
             if buffer:
