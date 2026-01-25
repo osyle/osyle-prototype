@@ -1,0 +1,671 @@
+/* =============================================================================
+   Agentator - Standalone Annotation Library Styles
+   ============================================================================= */
+
+/* Canvas */
+.agentator-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.agentator-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 9998;
+}
+
+.agentator-overlay > * {
+  pointer-events: auto;
+}
+
+/* Hover Highlight */
+.agentator-hover {
+  position: absolute;
+  border: 2px solid;
+  border-radius: 4px;
+  pointer-events: none;
+  transition: all 0.15s ease;
+  animation: agentator-pulse 2s ease-in-out infinite;
+}
+
+@keyframes agentator-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Drag Selection */
+.agentator-drag {
+  position: absolute;
+  border: 2px dashed #34C759;
+  background: rgba(52, 199, 89, 0.1);
+  pointer-events: none;
+}
+
+/* Markers */
+.agentator-marker {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 9999;
+}
+
+.agentator-marker:hover {
+  transform: translate(-50%, -50%) scale(1.2);
+}
+
+.agentator-marker.pending {
+  animation: agentator-marker-enter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes agentator-marker-enter {
+  from {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+.agentator-marker-delete {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ff3b30;
+  border: 2px solid #fff;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.agentator-marker:hover .agentator-marker-delete {
+  opacity: 1;
+}
+
+/* Outlines */
+.agentator-outline {
+  position: absolute;
+  border: 2px solid;
+  pointer-events: none;
+  animation: agentator-outline-fade 0.2s ease;
+}
+
+.agentator-outline.multi {
+  border-style: dashed;
+  background: rgba(52, 199, 89, 0.05);
+}
+
+.agentator-outline.text {
+  background: rgba(255, 149, 0, 0.05);
+}
+
+@keyframes agentator-outline-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Floating Button */
+.agentator-floating {
+  position: fixed;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.agentator-bottom-right {
+  bottom: 24px;
+  right: 24px;
+}
+
+.agentator-bottom-left {
+  bottom: 24px;
+  left: 24px;
+}
+
+.agentator-top-right {
+  top: 24px;
+  right: 24px;
+  flex-direction: column-reverse;
+}
+
+.agentator-top-left {
+  top: 24px;
+  left: 24px;
+  flex-direction: column-reverse;
+}
+
+.agentator-main-button {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agentator-main-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 12px 32px rgba(102, 126, 234, 0.5);
+}
+
+.agentator-main-button.active {
+  background: linear-gradient(135deg, #34C759 0%, #30D158 100%);
+  box-shadow: 0 8px 24px rgba(52, 199, 89, 0.4);
+}
+
+.agentator-icon-large {
+  font-size: 28px;
+}
+
+.agentator-count-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ff3b30;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 12px;
+  min-width: 24px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.agentator-close-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #ff3b30;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agentator-close-button:hover {
+  transform: scale(1.1);
+  background: #ff2d1f;
+}
+
+/* Menu */
+.agentator-menu {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 16px;
+  padding: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  min-width: 180px;
+  animation: agentator-menu-enter 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes agentator-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.agentator-menu-section {
+  padding: 4px 0;
+}
+
+.agentator-menu-section + .agentator-menu-section {
+  border-top: 1px solid #2a2a2a;
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
+.agentator-menu-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 16px 8px;
+}
+
+.agentator-menu-item {
+  width: 100%;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+}
+
+.agentator-menu-item:hover:not(:disabled) {
+  background: #252525;
+}
+
+.agentator-menu-item.active {
+  background: rgba(60, 130, 247, 0.1);
+  color: #3c82f7;
+}
+
+.agentator-menu-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.agentator-menu-item.agentator-danger:hover:not(:disabled) {
+  background: rgba(255, 59, 48, 0.1);
+  color: #ff3b30;
+}
+
+.agentator-check {
+  margin-left: auto;
+  font-size: 14px;
+  color: #3c82f7;
+}
+
+.agentator-icon {
+  font-size: 18px;
+}
+
+.agentator-badge {
+  margin-left: auto;
+  background: #3c82f7;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* Inspect mode button indicator */
+.agentator-main-button.inspect-mode.active {
+  background: linear-gradient(135deg, #FF9500 0%, #FF8C00 100%);
+  box-shadow: 0 8px 24px rgba(255, 149, 0, 0.4);
+}
+
+/* Toast */
+.agentator-toast {
+  background: #34C759;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 8px 24px rgba(52, 199, 89, 0.3);
+  animation: agentator-toast-enter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  white-space: nowrap;
+}
+
+@keyframes agentator-toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Popup */
+.agentator-popup {
+  position: absolute;
+  width: 320px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  z-index: 10001;
+  animation: agentator-popup-enter 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes agentator-popup-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.agentator-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #333;
+}
+
+.agentator-popup-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.agentator-popup-close {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: #999;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.agentator-popup-close:hover {
+  background: #252525;
+  color: #fff;
+}
+
+.agentator-popup-selected {
+  padding: 12px 20px;
+  background: rgba(255, 149, 0, 0.1);
+  border-bottom: 1px solid rgba(255, 149, 0, 0.2);
+  color: #FF9500;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.agentator-popup-textarea {
+  width: 100%;
+  padding: 16px 20px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+}
+
+.agentator-popup-textarea::placeholder {
+  color: #666;
+}
+
+.agentator-popup-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agentator-popup-hint {
+  font-size: 11px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.agentator-popup-hint kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #252525;
+  border: 1px solid #333;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 10px;
+}
+
+.agentator-popup-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.agentator-popup-button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.agentator-popup-button.secondary {
+  background: transparent;
+  border: 1px solid #333;
+  color: #999;
+}
+
+.agentator-popup-button.secondary:hover {
+  background: #252525;
+  border-color: #444;
+  color: #fff;
+}
+
+.agentator-popup-button.primary {
+  border: none;
+  color: #fff;
+}
+
+.agentator-popup-button.primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.agentator-popup-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* =============================================================================
+   Inspector Panel
+   ============================================================================= */
+
+.agentator-inspector {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  width: 280px;
+  max-height: 400px;
+  overflow-y: auto;
+  animation: agentator-inspector-enter 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.agentator-inspector-bottom {
+  margin-bottom: 12px;
+}
+
+.agentator-inspector-top {
+  margin-top: 12px;
+}
+
+@keyframes agentator-inspector-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.agentator-inspector-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #333;
+  border-left: 3px solid;
+}
+
+.agentator-inspector-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.agentator-inspector-content {
+  padding: 12px 16px;
+}
+
+.agentator-inspector-section {
+  margin-bottom: 12px;
+}
+
+.agentator-inspector-section:last-child {
+  margin-bottom: 0;
+}
+
+.agentator-inspector-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.agentator-inspector-value {
+  font-size: 13px;
+  color: #fff;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.agentator-inspector-path {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 11px;
+  color: #a0a0a0;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+.agentator-inspector-tag {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  color: #FF9500;
+}
+
+.agentator-inspector-classes {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 11px;
+  color: #34C759;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+.agentator-inspector-position {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.agentator-inspector-dim {
+  color: #666;
+  margin-left: 6px;
+}
+
+.agentator-inspector-attributes {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.agentator-inspector-attribute {
+  font-size: 11px;
+  margin-bottom: 4px;
+  display: flex;
+  gap: 6px;
+}
+
+.agentator-inspector-attribute:last-child {
+  margin-bottom: 0;
+}
+
+.agentator-inspector-attr-key {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  color: #FF9500;
+  flex-shrink: 0;
+}
+
+.agentator-inspector-attr-value {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  color: #34C759;
+  word-break: break-all;
+}
+
+.agentator-inspector-more {
+  font-size: 10px;
+  color: #666;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* Inspector mode highlight */
+.agentator-hover.inspect-mode {
+  border-width: 3px;
+  border-style: dashed;
+  animation: agentator-inspect-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes agentator-inspect-pulse {
+  0%, 100% { 
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 1;
+    transform: scale(1.01);
+  }
+}
