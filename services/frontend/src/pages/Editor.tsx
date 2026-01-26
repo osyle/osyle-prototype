@@ -1,3 +1,4 @@
+import * as Babel from '@babel/standalone'
 import { fetchAuthSession, getCurrentUser, signOut } from 'aws-amplify/auth'
 import {
   ArrowLeft,
@@ -134,36 +135,59 @@ function ConceptScreenWithStyles({
 }
 
 /**
- * Validate checkpoint code to see if it's compilable
- * Returns true if code is valid, false if it would error
+ * Validate checkpoint code by actually trying to compile it with Babel
+ * This uses the same transformation as DynamicReactRenderer
+ * Returns true if code compiles successfully, false if it would error
  */
 function validateCheckpointCode(code: string): boolean {
   try {
-    // Basic structural checks
+    // Basic structural checks first (fast fail)
     if (!code || code.trim().length < 50) return false
     if (!code.includes('export default')) return false
     if (!code.includes('return')) return false
 
-    // Check balanced braces
-    const braceCount =
-      (code.match(/{/g) || []).length - (code.match(/}/g) || []).length
-    if (braceCount !== 0) return false
+    // Try to transform with Babel (same as DynamicReactRenderer)
+    let cleanCode = code.trim()
 
-    // Check balanced parens
-    const parenCount =
-      (code.match(/\(/g) || []).length - (code.match(/\)/g) || []).length
-    if (parenCount !== 0) return false
+    // Remove markdown code fences if present
+    cleanCode = cleanCode.replace(
+      /^```(?:jsx|javascript|tsx|typescript|ts|react)?\s*/m,
+      '',
+    )
+    cleanCode = cleanCode.replace(/```\s*$/m, '')
+    cleanCode = cleanCode.trim()
 
-    // Check balanced brackets
-    const bracketCount =
-      (code.match(/\[/g) || []).length - (code.match(/\]/g) || []).length
-    if (bracketCount !== 0) return false
+    // Remove imports (same safety as renderer)
+    cleanCode = cleanCode.replace(
+      /^import\s+.+?from\s+['"][^'"]+['"]\s*;?\s*$/gm,
+      '',
+    )
+    cleanCode = cleanCode.replace(/^import\s+['"][^'"]+['"]\s*;?\s*$/gm, '')
+    cleanCode = cleanCode.replace(
+      /import\s*\{[^}]*\}\s*from\s+['"][^'"]+['"]\s*;?/gm,
+      '',
+    )
+    cleanCode = cleanCode.trim()
 
-    // If it passes basic checks, assume it's valid
-    // DynamicReactRenderer will do more thorough validation
+    // Try Babel transform (this will throw if code is invalid)
+    const transformed = Babel.transform(cleanCode, {
+      presets: ['react', 'typescript'],
+      filename: 'checkpoint-validation.tsx',
+    })
+
+    if (!transformed || !transformed.code) {
+      console.warn(
+        'Checkpoint validation failed: Babel transform returned empty',
+      )
+      return false
+    }
+
     return true
   } catch (err) {
-    console.warn('Checkpoint validation error:', err)
+    console.warn(
+      'Checkpoint validation failed:',
+      err instanceof Error ? err.message : err,
+    )
     return false
   }
 }
@@ -1332,7 +1356,7 @@ export default function Editor() {
                                   zIndex: 100,
                                 }}
                               >
-                                ⚡ Streaming...
+                                ⏳ Generating...
                               </div>
                             )}
                           </ConceptScreenWithStyles>
