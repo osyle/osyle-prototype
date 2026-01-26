@@ -272,16 +272,48 @@ export default function RightPanel({
         >
           {!isCollapsed && (
             <>
-              {/* Top Row: Tabs (left) + User Profile (right) */}
-              <div className="flex items-center justify-between gap-4 mb-4">
-                {/* Tab Navigation - Figma Style */}
+              {/* User Profile - Top Right */}
+              {userInfo && (
+                <div className="flex justify-end">
+                  <div className="relative group">
+                    <button
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all hover:scale-110"
+                      style={{
+                        backgroundColor: '#F0F7FF',
+                        color: '#3B82F6',
+                      }}
+                    >
+                      {userInfo.initials}
+                    </button>
+                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                      <div className="p-3 border-b border-gray-100">
+                        <div className="text-sm font-medium text-gray-900">
+                          {userInfo.name}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {userInfo.email}
+                        </div>
+                      </div>
+                      <button
+                        onClick={onSignOut}
+                        className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab Navigation - Figma Style */}
+              <div className="mb-4">
                 <div
-                  className="flex items-center gap-0 border-b"
+                  className="flex items-center gap-0 border-b overflow-x-auto"
                   style={{ borderColor: '#E8E1DD' }}
                 >
                   <button
                     onClick={() => setActiveTab('explore')}
-                    className="px-3 py-2 text-xs font-medium transition-colors border-b-2"
+                    className="px-3 py-2 text-xs font-medium transition-colors border-b-2 whitespace-nowrap"
                     style={{
                       color: activeTab === 'explore' ? '#3B3B3B' : '#929397',
                       borderColor:
@@ -292,7 +324,7 @@ export default function RightPanel({
                   </button>
                   <button
                     onClick={() => setActiveTab('refine')}
-                    className="px-3 py-2 text-xs font-medium transition-colors border-b-2"
+                    className="px-3 py-2 text-xs font-medium transition-colors border-b-2 whitespace-nowrap"
                     style={{
                       color: activeTab === 'refine' ? '#3B3B3B' : '#929397',
                       borderColor:
@@ -303,7 +335,7 @@ export default function RightPanel({
                   </button>
                   <button
                     onClick={() => setActiveTab('annotate')}
-                    className="px-3 py-2 text-xs font-medium transition-colors border-b-2 relative"
+                    className="px-3 py-2 text-xs font-medium transition-colors border-b-2 relative whitespace-nowrap"
                     style={{
                       color: activeTab === 'annotate' ? '#3B3B3B' : '#929397',
                       borderColor:
@@ -325,7 +357,7 @@ export default function RightPanel({
                   </button>
                   <button
                     onClick={() => setActiveTab('reflect')}
-                    className="px-3 py-2 text-xs font-medium transition-colors border-b-2"
+                    className="px-3 py-2 text-xs font-medium transition-colors border-b-2 whitespace-nowrap"
                     style={{
                       color: activeTab === 'reflect' ? '#3B3B3B' : '#929397',
                       borderColor:
@@ -335,37 +367,6 @@ export default function RightPanel({
                     Reflect
                   </button>
                 </div>
-
-                {/* User Profile */}
-                {userInfo && (
-                  <div className="relative group">
-                    <button
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all hover:scale-110"
-                      style={{
-                        backgroundColor: '#F0F7FF',
-                        color: '#3B82F6',
-                      }}
-                    >
-                      {userInfo.initials}
-                    </button>
-                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                      <div className="p-3 border-b border-gray-100">
-                        <div className="text-sm font-medium text-gray-900">
-                          {userInfo.name}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {userInfo.email}
-                        </div>
-                      </div>
-                      <button
-                        onClick={onSignOut}
-                        className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
-                      >
-                        Sign Out
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Project Title & Description - Editable */}
@@ -459,44 +460,62 @@ export default function RightPanel({
                   className="flex-1 flex flex-col gap-5 overflow-y-auto"
                   style={{ paddingRight: '4px' }}
                 >
-                  {/* Parametric Controls - Only in parametric mode */}
-                  {renderingMode === 'parametric' &&
-                    !!selectedScreen?.['variation_space'] && (
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-2 mb-3">
-                          <div
-                            className="w-8 h-8 rounded-lg flex items-center justify-center"
-                            style={{
-                              background:
-                                'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
-                            }}
-                          >
-                            <Sliders size={16} style={{ color: '#FFFFFF' }} />
-                          </div>
-                          <div>
-                            <div
-                              className="text-sm font-semibold"
-                              style={{ color: '#3B3B3B' }}
-                            >
-                              Variation Space
-                            </div>
-                            <div
-                              className="text-xs"
-                              style={{ color: '#929397' }}
-                            >
-                              Explore design parameters
-                            </div>
-                          </div>
+                  {/* Variation Space Section */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center"
+                        style={{
+                          background:
+                            'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+                        }}
+                      >
+                        <Sliders size={16} style={{ color: '#FFFFFF' }} />
+                      </div>
+                      <div>
+                        <div
+                          className="text-sm font-semibold"
+                          style={{ color: '#3B3B3B' }}
+                        >
+                          Variation Space
                         </div>
-                        <ParametricControls
-                          variationSpace={
-                            selectedScreen['variation_space'] as VariationSpace
-                          }
-                          initialValues={parameterValues}
-                          onChange={newValues => setParameterValues(newValues)}
-                        />
+                        <div className="text-xs" style={{ color: '#929397' }}>
+                          Explore design parameters
+                        </div>
+                      </div>
+                    </div>
+
+                    {renderingMode === 'parametric' &&
+                    !!selectedScreen?.['variation_space'] ? (
+                      <ParametricControls
+                        variationSpace={
+                          selectedScreen['variation_space'] as VariationSpace
+                        }
+                        initialValues={parameterValues}
+                        onChange={newValues => setParameterValues(newValues)}
+                      />
+                    ) : (
+                      <div
+                        className="p-4 rounded-xl"
+                        style={{
+                          backgroundColor: '#F7F5F3',
+                          border: '1px solid #E8E1DD',
+                        }}
+                      >
+                        <div
+                          className="flex flex-col items-center justify-center gap-2 py-6"
+                          style={{ color: '#929397' }}
+                        >
+                          <Sliders size={20} />
+                          <span className="text-xs text-center">
+                            {renderingMode === 'react'
+                              ? 'Variation space not available in React mode'
+                              : 'No variation space defined'}
+                          </span>
+                        </div>
                       </div>
                     )}
+                  </div>
 
                   {/* Style Selector - Dropdown */}
                   <div className="relative">
