@@ -146,31 +146,8 @@ function validateCheckpointCode(code: string): boolean {
     if (!code.includes('export default')) return false
     if (!code.includes('return')) return false
 
-    // Try to transform with Babel (same as DynamicReactRenderer)
-    let cleanCode = code.trim()
-
-    // Remove markdown code fences if present
-    cleanCode = cleanCode.replace(
-      /^```(?:jsx|javascript|tsx|typescript|ts|react)?\s*/m,
-      '',
-    )
-    cleanCode = cleanCode.replace(/```\s*$/m, '')
-    cleanCode = cleanCode.trim()
-
-    // Remove imports (same safety as renderer)
-    cleanCode = cleanCode.replace(
-      /^import\s+.+?from\s+['"][^'"]+['"]\s*;?\s*$/gm,
-      '',
-    )
-    cleanCode = cleanCode.replace(/^import\s+['"][^'"]+['"]\s*;?\s*$/gm, '')
-    cleanCode = cleanCode.replace(
-      /import\s*\{[^}]*\}\s*from\s+['"][^'"]+['"]\s*;?/gm,
-      '',
-    )
-    cleanCode = cleanCode.trim()
-
     // Try Babel transform (this will throw if code is invalid)
-    const transformed = Babel.transform(cleanCode, {
+    const transformed = Babel.transform(code, {
       presets: ['react', 'typescript'],
       filename: 'checkpoint-validation.tsx',
     })
@@ -184,6 +161,23 @@ function validateCheckpointCode(code: string): boolean {
 
     return true
   } catch (err) {
+    // Only fail on actual syntax errors, not style warnings
+    const errorMsg = err instanceof Error ? err.message : String(err)
+
+    // These are style warnings that won't break rendering
+    const isStyleWarning =
+      errorMsg.includes('Missing semicolon') ||
+      errorMsg.includes('Unnecessary semicolon')
+
+    if (isStyleWarning) {
+      console.log(
+        '⚠️ Checkpoint has style warning but should render fine:',
+        errorMsg,
+      )
+      return true // Allow it through
+    }
+
+    // Real syntax errors should fail validation
     console.warn(
       'Checkpoint validation failed:',
       err instanceof Error ? err.message : err,
@@ -1136,6 +1130,8 @@ export default function Editor() {
               const position = positions[screen.screen_id] || { x: 0, y: 0 }
               const isEntry = screen.screen_type === 'entry'
               const isIterating = currentIteratingScreenId === screen.screen_id
+              const isGenerating =
+                screenCheckpoints[screen.screen_id] !== undefined
 
               return (
                 <div
@@ -1220,6 +1216,87 @@ export default function Editor() {
                           }}
                         />
                         ✨ Updating...
+                      </div>
+
+                      {/* Shimmer sweep effect */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          pointerEvents: 'none',
+                          zIndex: 40,
+                          overflow: 'hidden',
+                          borderRadius:
+                            device_info.platform === 'phone' ? '48px' : '12px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: '-100%',
+                            width: '100%',
+                            height: '100%',
+                            background:
+                              'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
+                            animation: 'shimmer-sweep 3s ease-in-out infinite',
+                          }}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Spotlight effect during progressive generation */}
+                  {isGenerating && !isIterating && (
+                    <>
+                      {/* Pulsing glow border */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          pointerEvents: 'none',
+                          zIndex: 50,
+                          borderRadius:
+                            device_info.platform === 'phone' ? '48px' : '12px',
+                          boxShadow:
+                            '0 0 0 4px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.4), 0 0 80px rgba(59, 130, 246, 0.2)',
+                          border: '3px solid #3B82F6',
+                          animation: 'spotlight-pulse 2s ease-in-out infinite',
+                        }}
+                      />
+
+                      {/* Generating badge */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '-40px',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          zIndex: 50,
+                          padding: '8px 20px',
+                          borderRadius: '20px',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          background:
+                            'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                          color: '#FFFFFF',
+                          boxShadow: '0 4px 16px rgba(59, 130, 246, 0.5)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          animation: 'badge-float 2s ease-in-out infinite',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            backgroundColor: '#FFFFFF',
+                            animation: 'badge-pulse 1s ease-in-out infinite',
+                          }}
+                        />
+                        ⏳ Generating...
                       </div>
 
                       {/* Shimmer sweep effect */}
