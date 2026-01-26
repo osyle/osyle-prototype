@@ -44,15 +44,6 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
   // @ts-expect-error - State setter is used, but value is kept for future use
   const [extractedStyles, setExtractedStyles] = // eslint-disable-line @typescript-eslint/no-unused-vars, no-unused-vars
     useState<ExtractedStyles | null>(null)
-  const [expandedCategories, setExpandedCategories] = useState<
-    Record<string, boolean>
-  >({
-    Layout: true,
-    Typography: true,
-    Background: false,
-    Border: false,
-    Effects: false,
-  })
 
   // Extract styles when element changes
   useEffect(() => {
@@ -76,25 +67,47 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
     return (
       <div
         style={{
-          padding: '20px',
+          padding: '24px',
           textAlign: 'center',
-          color: '#6B7280',
-          fontSize: '14px',
         }}
       >
-        Select an element to edit its styles
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '48px',
+            height: '48px',
+            borderRadius: '12px',
+            background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
+            marginBottom: '12px',
+          }}
+        >
+          <span style={{ fontSize: '24px' }}>✏️</span>
+        </div>
+        <div
+          style={{
+            fontSize: '14px',
+            fontWeight: 600,
+            color: '#3B3B3B',
+            marginBottom: '4px',
+          }}
+        >
+          No Element Selected
+        </div>
+        <div
+          style={{
+            fontSize: '12px',
+            color: '#929397',
+          }}
+        >
+          Use Inspect mode to select an element
+        </div>
       </div>
     )
   }
 
   const categories = getStyleCategories()
-
-  const toggleCategory = (categoryName: string) => {
-    setExpandedCategories(prev => ({
-      ...prev,
-      [categoryName]: !prev[categoryName],
-    }))
-  }
 
   const handlePropertyChange = (cssProperty: string, value: string) => {
     onStyleChange(
@@ -125,34 +138,43 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        backgroundColor: '#FFFFFF',
       }}
     >
-      {/* Header */}
-      <div
-        style={{
-          padding: '16px 20px',
-          borderBottom: '1px solid #E5E7EB',
-          backgroundColor: '#F9FAFB',
-        }}
-      >
-        <div
-          style={{
-            fontSize: '13px',
-            fontWeight: 600,
-            color: '#374151',
-            marginBottom: '4px',
-          }}
-        >
-          ✏️ Edit Styles
-        </div>
-        <div
-          style={{
-            fontSize: '11px',
-            color: '#6B7280',
-          }}
-        >
-          {inspectedElement.element}
+      {/* Header - Redesigned to match other sections */}
+      <div style={{ marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
+            }}
+          >
+            <span style={{ fontSize: '16px' }}>✏️</span>
+          </div>
+          <div>
+            <div
+              style={{
+                fontSize: '14px',
+                fontWeight: 600,
+                color: '#3B3B3B',
+              }}
+            >
+              Edit Styles
+            </div>
+            <div
+              style={{
+                fontSize: '12px',
+                color: '#929397',
+              }}
+            >
+              {inspectedElement.element}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -161,184 +183,157 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
         style={{
           flex: 1,
           overflowY: 'auto',
-          padding: '12px',
         }}
       >
         {categories.map(category => (
           <div
             key={category.name}
             style={{
-              marginBottom: '12px',
-              border: '1px solid #E5E7EB',
-              borderRadius: '8px',
-              backgroundColor: '#FFFFFF',
-              overflow: 'hidden',
+              marginBottom: '16px',
             }}
           >
             {/* Category Header */}
-            <button
-              onClick={() => toggleCategory(category.name)}
+            <div
               style={{
                 width: '100%',
                 padding: '12px 16px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
-                backgroundColor: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
+                gap: '8px',
+                backgroundColor: '#F7F5F3',
+                border: '1px solid #E8E1DD',
+                borderRadius: '12px',
                 fontSize: '13px',
                 fontWeight: 600,
-                color: '#374151',
+                color: '#3B3B3B',
               }}
             >
-              <span>
-                {category.icon} {category.name}
-              </span>
-              <span
-                style={{
-                  transform: expandedCategories[category.name]
-                    ? 'rotate(180deg)'
-                    : 'rotate(0deg)',
-                  transition: 'transform 0.2s',
-                }}
-              >
-                ▼
-              </span>
-            </button>
+              <span style={{ fontSize: '14px' }}>{category.icon}</span>
+              <span>{category.name}</span>
+            </div>
 
-            {/* Category Properties */}
-            {expandedCategories[category.name] && (
-              <div
-                style={{
-                  padding: '8px 16px 16px',
-                  borderTop: '1px solid #F3F4F6',
-                }}
-              >
-                {category.properties.map(property => {
-                  const currentValue = getCurrentValue(property.cssProperty)
-                  const isOverridden =
-                    currentOverrides?.styles[property.cssProperty] !== undefined
+            {/* Category Properties - Always Visible */}
+            <div
+              style={{
+                marginTop: '8px',
+                padding: '16px',
+                backgroundColor: '#FAFAF9',
+                border: '1px solid #E8E1DD',
+                borderRadius: '12px',
+              }}
+            >
+              {category.properties.map(property => {
+                const currentValue = getCurrentValue(property.cssProperty)
+                const isOverridden =
+                  currentOverrides?.styles[property.cssProperty] !== undefined
 
-                  return (
-                    <div
-                      key={property.cssProperty}
+                return (
+                  <div
+                    key={property.cssProperty}
+                    style={{
+                      marginBottom: '12px',
+                    }}
+                  >
+                    {/* Property Label */}
+                    <label
                       style={{
-                        marginBottom: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        color: '#929397',
+                        marginBottom: '6px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
                       }}
                     >
-                      {/* Property Label */}
-                      <label
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          fontSize: '12px',
-                          fontWeight: 500,
-                          color: '#4B5563',
-                          marginBottom: '6px',
-                        }}
-                      >
-                        <span>{property.name}</span>
-                        {isOverridden && (
-                          <span
+                      <span>{property.name}</span>
+                      {isOverridden && (
+                        <span
+                          style={{
+                            fontSize: '9px',
+                            color: '#8B5CF6',
+                            fontWeight: 700,
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                          }}
+                        >
+                          EDITED
+                        </span>
+                      )}
+                    </label>
+
+                    {/* Property Input */}
+                    {property.type === 'text' && (
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          type="text"
+                          value={parseCSSValue(currentValue).number}
+                          onChange={e => {
+                            const unit = property.unit || ''
+                            handlePropertyChange(
+                              property.cssProperty,
+                              e.target.value + unit,
+                            )
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '8px 12px',
+                            fontSize: '13px',
+                            border: '1px solid #E8E1DD',
+                            borderRadius: '8px',
+                            outline: 'none',
+                            backgroundColor: '#FFFFFF',
+                            color: '#3B3B3B',
+                          }}
+                          placeholder="auto"
+                        />
+                        {property.unit && (
+                          <div
                             style={{
-                              fontSize: '10px',
-                              color: '#3B82F6',
-                              fontWeight: 600,
+                              padding: '8px 12px',
+                              fontSize: '13px',
+                              color: '#929397',
+                              border: '1px solid #E8E1DD',
+                              borderRadius: '8px',
+                              backgroundColor: '#F7F5F3',
+                              fontWeight: 500,
                             }}
                           >
-                            EDITED
-                          </span>
+                            {property.unit}
+                          </div>
                         )}
-                      </label>
+                      </div>
+                    )}
 
-                      {/* Property Input */}
-                      {property.type === 'text' && (
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <input
-                            type="text"
-                            value={parseCSSValue(currentValue).number}
-                            onChange={e => {
-                              const unit = property.unit || ''
-                              handlePropertyChange(
-                                property.cssProperty,
-                                e.target.value + unit,
-                              )
-                            }}
-                            style={{
-                              flex: 1,
-                              padding: '6px 10px',
-                              fontSize: '12px',
-                              border: '1px solid #D1D5DB',
-                              borderRadius: '6px',
-                              outline: 'none',
-                            }}
-                            placeholder="auto"
-                          />
-                          {property.unit && (
-                            <div
-                              style={{
-                                padding: '6px 10px',
-                                fontSize: '12px',
-                                color: '#6B7280',
-                                border: '1px solid #D1D5DB',
-                                borderRadius: '6px',
-                                backgroundColor: '#F9FAFB',
-                              }}
-                            >
-                              {property.unit}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {property.type === 'color' && (
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <input
-                            type="color"
-                            value={
-                              currentValue.startsWith('rgb')
-                                ? rgbToHex(currentValue)
-                                : currentValue
-                            }
-                            onChange={e =>
-                              handlePropertyChange(
-                                property.cssProperty,
-                                e.target.value,
-                              )
-                            }
-                            style={{
-                              width: '40px',
-                              height: '32px',
-                              border: '1px solid #D1D5DB',
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                            }}
-                          />
-                          <input
-                            type="text"
-                            value={currentValue}
-                            onChange={e =>
-                              handlePropertyChange(
-                                property.cssProperty,
-                                e.target.value,
-                              )
-                            }
-                            style={{
-                              flex: 1,
-                              padding: '6px 10px',
-                              fontSize: '12px',
-                              border: '1px solid #D1D5DB',
-                              borderRadius: '6px',
-                              outline: 'none',
-                            }}
-                          />
-                        </div>
-                      )}
-
-                      {property.type === 'select' && (
-                        <select
+                    {property.type === 'color' && (
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          type="color"
+                          value={
+                            currentValue.startsWith('rgb')
+                              ? rgbToHex(currentValue)
+                              : currentValue
+                          }
+                          onChange={e =>
+                            handlePropertyChange(
+                              property.cssProperty,
+                              e.target.value,
+                            )
+                          }
+                          style={{
+                            width: '48px',
+                            height: '40px',
+                            border: '1px solid #E8E1DD',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            padding: '4px',
+                          }}
+                        />
+                        <input
+                          type="text"
                           value={currentValue}
                           onChange={e =>
                             handlePropertyChange(
@@ -347,60 +342,88 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
                             )
                           }
                           style={{
-                            width: '100%',
-                            padding: '6px 10px',
-                            fontSize: '12px',
-                            border: '1px solid #D1D5DB',
-                            borderRadius: '6px',
+                            flex: 1,
+                            padding: '8px 12px',
+                            fontSize: '13px',
+                            border: '1px solid #E8E1DD',
+                            borderRadius: '8px',
                             outline: 'none',
                             backgroundColor: '#FFFFFF',
+                            color: '#3B3B3B',
+                            fontFamily: 'monospace',
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {property.type === 'select' && (
+                      <select
+                        value={currentValue}
+                        onChange={e =>
+                          handlePropertyChange(
+                            property.cssProperty,
+                            e.target.value,
+                          )
+                        }
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          fontSize: '13px',
+                          border: '1px solid #E8E1DD',
+                          borderRadius: '8px',
+                          outline: 'none',
+                          backgroundColor: '#FFFFFF',
+                          cursor: 'pointer',
+                          color: '#3B3B3B',
+                        }}
+                      >
+                        {property.options?.map(option => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    {property.type === 'slider' && (
+                      <div>
+                        <input
+                          type="range"
+                          min={property.min}
+                          max={property.max}
+                          step={property.step}
+                          value={parseFloat(currentValue) || 1}
+                          onChange={e =>
+                            handlePropertyChange(
+                              property.cssProperty,
+                              e.target.value,
+                            )
+                          }
+                          style={{
+                            width: '100%',
                             cursor: 'pointer',
+                            height: '6px',
+                            borderRadius: '3px',
+                            outline: 'none',
+                          }}
+                        />
+                        <div
+                          style={{
+                            marginTop: '6px',
+                            fontSize: '12px',
+                            color: '#929397',
+                            textAlign: 'center',
+                            fontWeight: 500,
                           }}
                         >
-                          {property.options?.map(option => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-
-                      {property.type === 'slider' && (
-                        <div>
-                          <input
-                            type="range"
-                            min={property.min}
-                            max={property.max}
-                            step={property.step}
-                            value={parseFloat(currentValue) || 1}
-                            onChange={e =>
-                              handlePropertyChange(
-                                property.cssProperty,
-                                e.target.value,
-                              )
-                            }
-                            style={{
-                              width: '100%',
-                              cursor: 'pointer',
-                            }}
-                          />
-                          <div
-                            style={{
-                              marginTop: '4px',
-                              fontSize: '11px',
-                              color: '#6B7280',
-                              textAlign: 'center',
-                            }}
-                          >
-                            {currentValue}
-                          </div>
+                          {currentValue}
                         </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         ))}
       </div>
@@ -409,9 +432,11 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
       {hasUnsavedChanges && (
         <div
           style={{
-            padding: '16px 20px',
-            borderTop: '1px solid #E5E7EB',
-            backgroundColor: '#F9FAFB',
+            marginTop: '16px',
+            padding: '16px',
+            backgroundColor: '#F7F5F3',
+            border: '1px solid #E8E1DD',
+            borderRadius: '12px',
             display: 'flex',
             gap: '12px',
           }}
@@ -423,15 +448,21 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
               padding: '10px 16px',
               fontSize: '13px',
               fontWeight: 600,
-              color: '#6B7280',
+              color: '#929397',
               backgroundColor: '#FFFFFF',
-              border: '1px solid #D1D5DB',
+              border: '1px solid #E8E1DD',
               borderRadius: '8px',
               cursor: 'pointer',
-              transition: 'all 0.15s',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.backgroundColor = '#F7F5F3'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.backgroundColor = '#FFFFFF'
             }}
           >
-            Reset
+            Discard
           </button>
           <button
             onClick={onSave}
@@ -441,14 +472,20 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
               fontSize: '13px',
               fontWeight: 600,
               color: '#FFFFFF',
-              backgroundColor: '#3B82F6',
+              background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
               border: 'none',
               borderRadius: '8px',
               cursor: 'pointer',
-              transition: 'all 0.15s',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.transform = 'scale(1.02)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'scale(1)'
             }}
           >
-            Save Changes
+            💾 Save Changes
           </button>
         </div>
       )}
