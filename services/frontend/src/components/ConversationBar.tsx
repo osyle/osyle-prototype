@@ -36,6 +36,7 @@ export default function ConversationBar({
 }: ConversationBarProps) {
   const [inputText, setInputText] = useState('')
   const [isExpanded, setIsExpanded] = useState(false)
+  const [wasAutoExpanded, setWasAutoExpanded] = useState(false) // Track if expansion was automatic
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const sentAnnotationsRef = useRef<Set<string>>(new Set()) // Track screens with sent annotations
 
@@ -76,8 +77,22 @@ export default function ConversationBar({
   useEffect(() => {
     if (isProcessing && !isExpanded) {
       setIsExpanded(true)
+      setWasAutoExpanded(true) // Mark as auto-expanded
     }
-  }, [isProcessing])
+  }, [isProcessing, isExpanded])
+
+  // Auto-collapse when processing finishes (only if it was auto-expanded)
+  useEffect(() => {
+    if (!isProcessing && isExpanded && wasAutoExpanded) {
+      // Add a small delay to let the user see the final message
+      const timer = setTimeout(() => {
+        setIsExpanded(false)
+        setWasAutoExpanded(false) // Reset the flag
+      }, 1500) // 1.5 second delay after processing completes
+
+      return () => clearTimeout(timer)
+    }
+  }, [isProcessing, isExpanded, wasAutoExpanded])
 
   const handleSend = () => {
     if (!inputText.trim() && totalAnnotations === 0) return
@@ -234,7 +249,10 @@ export default function ConversationBar({
                 </div>
                 {!isProcessing && (
                   <button
-                    onClick={() => setIsExpanded(false)}
+                    onClick={() => {
+                      setIsExpanded(false)
+                      setWasAutoExpanded(false) // Reset flag when manually collapsed
+                    }}
                     className="text-xs hover:underline"
                     style={{ color: '#929397' }}
                   >
@@ -350,11 +368,24 @@ export default function ConversationBar({
                 />
                 {!isExpanded && messages.length > 0 && !isProcessing && (
                   <button
-                    onClick={() => setIsExpanded(true)}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 p-1.5 rounded hover:bg-gray-100 transition-colors"
+                    onClick={() => {
+                      setIsExpanded(true)
+                      // Don't set wasAutoExpanded - this is a manual action
+                    }}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-all hover:scale-110"
+                    style={{
+                      backgroundColor: '#F7F5F3',
+                      border: '1px solid #E8E1DD',
+                    }}
                     title="Show conversation history"
+                    onMouseEnter={e => {
+                      e.currentTarget.style.backgroundColor = '#F0EDE8'
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.backgroundColor = '#F7F5F3'
+                    }}
                   >
-                    <ChevronUp size={16} style={{ color: '#929397' }} />
+                    <ChevronUp size={16} style={{ color: '#667EEA' }} />
                   </button>
                 )}
               </div>
