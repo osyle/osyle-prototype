@@ -3,7 +3,7 @@
  * Handles iterate-ui action with feedback loop
  */
 import { fetchAuthSession } from 'aws-amplify/auth'
-import type { Annotation } from '../lib/Agentator/types'
+import type { Annotation, CodeAnnotation } from '../lib/Agentator/types'
 
 const WS_BASE_URL =
   import.meta.env['VITE_WS_URL'] ||
@@ -13,13 +13,15 @@ const WS_BASE_URL =
 
 const WS_PATH = WS_BASE_URL.includes('localhost') ? '/ws/llm' : ''
 
+export type ConversationAnnotation = Annotation | CodeAnnotation
+
 export interface Message {
   id: string
   type: 'user' | 'ai'
   content: string
   timestamp: Date
   screen?: string
-  annotations?: Record<string, Annotation[]> // Store annotations with message
+  annotations?: Record<string, ConversationAnnotation[]> // Store annotations with message
 }
 
 export interface IterationCallbacks {

@@ -37,6 +37,7 @@ interface AnnotationCanvasProps {
   annotationColor?: string
   // eslint-disable-next-line no-unused-vars
   onInspect?: (element: InspectedElement | null) => void
+  isConceptMode?: boolean // NEW: Whether this is in Concept tab (non-interactive) vs Prototype tab
 }
 
 /**
@@ -89,6 +90,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   mode,
   annotationColor = '#3c82f7',
   onInspect,
+  isConceptMode = false,
 }) => {
   const canvasRef = useRef<HTMLDivElement>(null)
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null)
@@ -254,6 +256,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
 
         if (!canvas.contains(target)) return
 
+        e.preventDefault() // Prevent default actions (checkbox, button, etc.)
         e.stopPropagation()
 
         const identified = identifyElement(target)
@@ -312,6 +315,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       if (target.closest('[data-annotation-ui]') || target === canvas) return
       if (!canvas.contains(target)) return
 
+      e.preventDefault() // Prevent default actions (checkbox, button, etc.)
       e.stopPropagation()
 
       const identified = identifyElement(target)
@@ -516,7 +520,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       ref={canvasRef}
       className="agentator-canvas"
       onMouseMove={isActive ? handleMouseMove : undefined}
-      onClick={isActive ? handleClick : undefined}
+      onClickCapture={isActive ? handleClick : undefined}
       onMouseDown={
         isActive && mode === 'annotate' ? handleMouseDown : undefined
       }
@@ -524,6 +528,28 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       style={{ position: 'relative', width: '100%', height: '100%' }}
     >
       {children}
+
+      {/* Blocking overlay for Concept mode when Agentator is inactive */}
+      {isConceptMode && !isActive && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 9997, // Just below agentator-overlay (9998)
+            pointerEvents: 'auto',
+            cursor: 'default',
+            backgroundColor: 'transparent',
+          }}
+          onClick={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
+          onMouseUp={e => e.stopPropagation()}
+          onDoubleClick={e => e.stopPropagation()}
+          onContextMenu={e => e.preventDefault()}
+        />
+      )}
 
       {/* Overlay for hover, markers, drag selection */}
       {isActive && (

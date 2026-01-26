@@ -16,6 +16,7 @@ export interface AgentatorProps {
   screenId: string
   screenName: string
   disabled?: boolean
+  isConceptMode?: boolean // NEW: Pass through to AnnotationCanvas
 }
 
 export const Agentator: React.FC<AgentatorProps> = ({
@@ -23,6 +24,7 @@ export const Agentator: React.FC<AgentatorProps> = ({
   screenId,
   screenName,
   disabled = false,
+  isConceptMode = false,
 }) => {
   const {
     mode,
@@ -76,6 +78,7 @@ export const Agentator: React.FC<AgentatorProps> = ({
       isActive={isActive}
       mode={mode}
       annotationColor={annotationColor}
+      isConceptMode={isConceptMode}
     >
       {children}
     </AnnotationCanvas>

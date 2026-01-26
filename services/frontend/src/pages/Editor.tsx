@@ -23,13 +23,13 @@ import PrototypeRunner from '../components/PrototypeRunner'
 import RightPanel from '../components/RightPanel'
 import VersionHistory from '../components/VersionHistory'
 import { useDeviceContext } from '../hooks/useDeviceContext'
-import type { Annotation } from '../lib/Agentator'
 import { Agentator, AgentatorGlobalProvider } from '../lib/Agentator'
 
 import api from '../services/api'
 import {
   iterateUIWebSocket,
   type Message,
+  type ConversationAnnotation,
 } from '../services/iterationWebSocket'
 import { type FlowGraph } from '../types/home.types'
 import type {
@@ -1085,6 +1085,7 @@ export default function Editor() {
                     <Agentator
                       screenId={screen.screen_id}
                       screenName={screen.name}
+                      isConceptMode={true}
                     >
                       {(screen as ScreenWithLoadingState).ui_loading ? (
                         // Loading state with spinner
@@ -1289,7 +1290,7 @@ export default function Editor() {
    */
   const handleSendMessage = async (
     userMessage: string,
-    annotations?: Record<string, Annotation[]>,
+    annotations?: Record<string, ConversationAnnotation[]>,
   ) => {
     if (!flowGraph || !flowGraph.screens || flowGraph.screens.length === 0) {
       console.error('No flow graph available for iteration')

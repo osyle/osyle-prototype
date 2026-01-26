@@ -39,6 +39,15 @@ export default function PrototypeRunner({
     )
 
     if (transition) {
+      // Check if this is a self-transition (same screen to same screen)
+      // These are used for internal state changes and should not cause navigation
+      if (transition.to_screen_id === currentScreenId) {
+        console.log(
+          `Ignoring self-transition ${transitionId} - internal state change only`,
+        )
+        return
+      }
+
       // Add current screen to history
       setHistory([...history, currentScreenId])
 
