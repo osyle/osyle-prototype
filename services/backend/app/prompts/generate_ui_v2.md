@@ -1536,6 +1536,39 @@ export default function App({ onTransition }) {
 
 1. **ALWAYS include BOTH parts**: `/*CHECKPOINT...*/` AND `//$CHECKPOINT`
 2. Completion code MUST exactly close all open tags and braces back to root
+
+**CRITICAL: When nesting containers, close ALL intermediate tags**
+
+Example with nested structure:
+
+```jsx
+<div style={{ width: "375px" }}>              // ROOT div
+  <div style={{ padding: "24px" }}>           // CONTAINER div
+    <header>
+      <h1>Title</h1>
+    </header>
+/*CHECKPOINT
+  </div>      // ✅ Close CONTAINER div first
+</div>        // ✅ Then close ROOT div
+);            // ✅ Close return
+}*/           // ✅ Close function
+//$CHECKPOINT
+```
+
+**WRONG - Missing intermediate closing tag:**
+
+```jsx
+<div style={{ width: "375px" }}>
+  <div style={{ padding: "24px" }}>
+    <header>
+      <h1>Title</h1>
+    </header>
+/*CHECKPOINT
+    </div>    // ❌ Only closes ROOT, missing CONTAINER!
+  );
+}*/
+```
+
 3. Checkpoint comment MUST be valid JavaScript multi-line comment
 4. Each checkpoint creates a complete, compilable component
 5. The completion code goes INSIDE the comment: `/*CHECKPOINT\n    </div>\n  );\n}*/`
