@@ -97,8 +97,12 @@ function ConceptScreenWithStyles({
   propsToInject,
   children,
 }: ConceptScreenWithStylesProps) {
-  const { getStyleOverrides, loadStyleOverrides, isLoadingMutations } =
-    useAgentatorGlobal()
+  const {
+    getStyleOverrides,
+    loadStyleOverrides,
+    isLoadingMutations,
+    applyReorderMutations,
+  } = useAgentatorGlobal()
   const containerRef = useRef<HTMLDivElement>(null)
   const [hasLoadedMutations, setHasLoadedMutations] = useState(false)
 
@@ -109,6 +113,19 @@ function ConceptScreenWithStyles({
       setHasLoadedMutations(true)
     }
   }, [projectId, screenId, hasLoadedMutations, loadStyleOverrides])
+
+  // Apply reorder mutations after DOM is rendered
+  useEffect(() => {
+    if (jsxCode && containerRef.current && hasLoadedMutations) {
+      // Small delay to ensure React has finished rendering
+      const timer = setTimeout(() => {
+        if (containerRef.current) {
+          applyReorderMutations(screenId, containerRef.current)
+        }
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [jsxCode, screenId, hasLoadedMutations, applyReorderMutations])
 
   const styleOverrides = getStyleOverrides(screenId)
   const isLoading = isLoadingMutations(screenId)

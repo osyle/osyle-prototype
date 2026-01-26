@@ -129,6 +129,10 @@ interface AgentatorGlobalContextValue extends AgentatorGlobalState {
   // eslint-disable-next-line no-unused-vars
   isLoadingMutations: (screenId: string) => boolean
 
+  // Drag & Reorder (Phase 3-4)
+  // eslint-disable-next-line no-unused-vars
+  applyReorderMutations: (screenId: string, containerRef: HTMLElement) => void
+
   // Settings
   // eslint-disable-next-line no-unused-vars
   setAnnotationColor: (color: string) => void
@@ -532,6 +536,56 @@ export const AgentatorGlobalProvider: React.FC<
     [loadingScreens],
   )
 
+  // Drag & Reorder - Apply reorder mutations to DOM (Phase 3-4)
+  const applyReorderMutations = useCallback(
+    (screenId: string, containerRef: HTMLElement) => {
+      const mutations =
+        designMutations[screenId]?.filter(m => m.type === 'reorder') || []
+
+      if (mutations.length === 0) return
+
+      // Sort by timestamp to apply in order
+      const sorted = [...mutations].sort(
+        (a, b) => (a.timestamp || 0) - (b.timestamp || 0),
+      )
+
+      sorted.forEach(mutation => {
+        try {
+          // Find element by path
+          const elements = containerRef.querySelectorAll(mutation.elementPath)
+          const element = elements[mutation.elementIndex || 0] as HTMLElement
+
+          if (element && mutation.newIndex !== undefined) {
+            const parent = element.parentElement
+            if (parent) {
+              const children = Array.from(parent.children)
+              const targetIndex = Math.min(
+                mutation.newIndex,
+                children.length - 1,
+              )
+
+              if (targetIndex >= 0 && targetIndex < children.length) {
+                // Move element to new position
+                if (targetIndex < children.length - 1) {
+                  parent.insertBefore(element, children[targetIndex])
+                } else {
+                  parent.appendChild(element)
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to apply reorder mutation:', error)
+        }
+      })
+
+      console.log(
+        `✅ Applied ${sorted.length} reorder mutations to screen ${screenId}`,
+      )
+    },
+    [designMutations],
+  )
+
   // Context value
   const value: AgentatorGlobalContextValue = {
     // State
@@ -581,6 +635,9 @@ export const AgentatorGlobalProvider: React.FC<
     clearAllMutations,
     hasUnsavedChanges,
     isLoadingMutations,
+
+    // Drag & Reorder (Phase 3-4)
+    applyReorderMutations,
 
     // Settings
     setAnnotationColor,
