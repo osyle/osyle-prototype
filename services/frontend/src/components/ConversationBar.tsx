@@ -1,4 +1,4 @@
-import { Send, ChevronUp, Loader2, Eye, Pen, XCircle } from 'lucide-react'
+import { Send, ChevronUp, Loader2, Eye, Pen, XCircle, Move } from 'lucide-react'
 import React, { useState, useEffect, useRef } from 'react'
 import { useAgentatorGlobal } from '../lib/Agentator'
 import type { Annotation, CodeAnnotation } from '../lib/Agentator'
@@ -149,6 +149,18 @@ export default function ConversationBar({
     } else {
       // Turn on inspect mode
       setMode('inspect')
+      setIsActive(true)
+    }
+  }
+
+  // Toggle drag mode
+  const handleDragToggle = () => {
+    if (isActive && mode === 'drag') {
+      // Already in drag mode - turn off
+      setIsActive(false)
+    } else {
+      // Turn on drag mode
+      setMode('drag')
       setIsActive(true)
     }
   }
@@ -412,6 +424,33 @@ export default function ConversationBar({
                     {isActive && mode === 'inspect'
                       ? 'Exit Inspect'
                       : 'Inspect'}
+                  </span>
+                </button>
+
+                {/* Drag Button */}
+                <button
+                  onClick={handleDragToggle}
+                  className={`p-2 rounded-lg transition-all group relative disabled:opacity-50 ${
+                    isActive && mode === 'drag'
+                      ? 'bg-purple-500 text-white scale-105 shadow-lg'
+                      : 'hover:bg-gray-50'
+                  }`}
+                  title={
+                    isActive && mode === 'drag'
+                      ? 'Exit drag mode'
+                      : 'Enter drag mode'
+                  }
+                  disabled={isProcessing}
+                >
+                  <Move
+                    size={16}
+                    style={{
+                      color:
+                        isActive && mode === 'drag' ? '#FFFFFF' : '#3B3B3B',
+                    }}
+                  />
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    {isActive && mode === 'drag' ? 'Exit Drag' : 'Drag'}
                   </span>
                 </button>
 

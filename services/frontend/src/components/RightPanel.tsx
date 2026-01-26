@@ -8,8 +8,6 @@ import {
   Sliders,
   RotateCcw,
   Palette,
-  Layout,
-  Type,
   Layers,
   MessageCircle,
   Trash2,
@@ -19,7 +17,9 @@ import { useAgentatorGlobal } from '../lib/Agentator'
 import api from '../services/api'
 import type { FlowGraph, FlowScreen } from '../types/home.types'
 import type { ParameterValues, VariationSpace } from '../types/parametric.types'
+import type { StyleOverride } from '../types/styleEditor.types'
 import ParametricControls from './ParametricControls'
+import { StyleEditorPanel } from './StyleEditorPanel'
 
 interface RightPanelProps {
   isCollapsed: boolean
@@ -75,6 +75,9 @@ export default function RightPanel({
     deleteAnnotation: deleteAnnotationGlobal,
     deleteCodeAnnotation,
     getTotalAnnotationCount,
+    addStyleOverride,
+    getStyleOverrides,
+    clearStyleOverrides,
   } = useAgentatorGlobal()
 
   // Project title/description editing state (MOVED FROM Editor.tsx)
@@ -815,183 +818,70 @@ export default function RightPanel({
                     )}
                   </div>
 
-                  {/* Layout Controls */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center"
-                        style={{
-                          background:
-                            'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
-                        }}
-                      >
-                        <Layout size={16} style={{ color: '#FFFFFF' }} />
-                      </div>
-                      <div>
-                        <div
-                          className="text-sm font-semibold"
-                          style={{ color: '#3B3B3B' }}
-                        >
-                          Layout & Spacing
-                        </div>
-                        <div className="text-xs" style={{ color: '#929397' }}>
-                          Fine-tune structure
-                        </div>
-                      </div>
-                    </div>
+                  {/* Style Editor Panel - Replaces placeholder controls */}
+                  <StyleEditorPanel
+                    inspectedElement={inspectedElement?.element || null}
+                    screenId={selectedScreen?.screen_id || ''}
+                    onStyleChange={(path, index, property, value) => {
+                      if (!selectedScreen?.screen_id) return
 
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        className="p-3 rounded-lg transition-all hover:scale-[1.02]"
-                        style={{
-                          backgroundColor: '#F7F5F3',
-                          border: '1px solid #E8E1DD',
-                        }}
-                      >
-                        <div
-                          className="w-full h-16 rounded flex items-center justify-center mb-2"
-                          style={{ backgroundColor: '#FFFFFF' }}
-                        >
-                          <div className="text-xs" style={{ color: '#929397' }}>
-                            □
-                          </div>
-                        </div>
-                        <div
-                          className="text-xs text-center"
-                          style={{ color: '#3B3B3B' }}
-                        >
-                          Compact
-                        </div>
-                      </button>
-                      <button
-                        className="p-3 rounded-lg transition-all hover:scale-[1.02]"
-                        style={{
-                          backgroundColor: '#F7F5F3',
-                          border: '2px solid #3B3B3B',
-                        }}
-                      >
-                        <div
-                          className="w-full h-16 rounded flex items-center justify-center mb-2"
-                          style={{ backgroundColor: '#FFFFFF' }}
-                        >
-                          <div className="text-xs" style={{ color: '#929397' }}>
-                            ▭
-                          </div>
-                        </div>
-                        <div
-                          className="text-xs text-center font-semibold"
-                          style={{ color: '#3B3B3B' }}
-                        >
-                          Balanced
-                        </div>
-                      </button>
-                      <button
-                        className="p-3 rounded-lg transition-all hover:scale-[1.02]"
-                        style={{
-                          backgroundColor: '#F7F5F3',
-                          border: '1px solid #E8E1DD',
-                        }}
-                      >
-                        <div
-                          className="w-full h-16 rounded flex items-center justify-center mb-2"
-                          style={{ backgroundColor: '#FFFFFF' }}
-                        >
-                          <div className="text-xs" style={{ color: '#929397' }}>
-                            ▬
-                          </div>
-                        </div>
-                        <div
-                          className="text-xs text-center"
-                          style={{ color: '#3B3B3B' }}
-                        >
-                          Spacious
-                        </div>
-                      </button>
-                    </div>
-                  </div>
+                      // Get existing override for this element
+                      const existingOverrides = getStyleOverrides(
+                        selectedScreen.screen_id,
+                      )
+                      const existing = existingOverrides.find(
+                        o => o.elementPath === path && o.elementIndex === index,
+                      )
 
-                  {/* Typography */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center"
-                        style={{
-                          background:
-                            'linear-gradient(135deg, #A8EDEA 0%, #FED6E3 100%)',
-                        }}
-                      >
-                        <Type size={16} style={{ color: '#3B3B3B' }} />
-                      </div>
-                      <div>
-                        <div
-                          className="text-sm font-semibold"
-                          style={{ color: '#3B3B3B' }}
-                        >
-                          Typography Scale
-                        </div>
-                        <div className="text-xs" style={{ color: '#929397' }}>
-                          Text sizing and hierarchy
-                        </div>
-                      </div>
-                    </div>
+                      // Create or update style override
+                      const override: StyleOverride = {
+                        elementPath: path,
+                        elementIndex: index,
+                        styles: {
+                          ...(existing?.styles || {}),
+                          [property]: value,
+                        },
+                        timestamp: Date.now(),
+                      }
 
-                    <div className="space-y-2">
-                      <div
-                        className="flex items-center justify-between p-3 rounded-lg"
-                        style={{ backgroundColor: '#F7F5F3' }}
-                      >
-                        <span className="text-sm" style={{ color: '#3B3B3B' }}>
-                          Scale
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="text-xs font-mono"
-                            style={{ color: '#929397' }}
-                          >
-                            1.25
-                          </span>
-                          <input
-                            type="range"
-                            min="1.1"
-                            max="1.6"
-                            step="0.05"
-                            defaultValue="1.25"
-                            className="w-24"
-                            style={{ accentColor: '#3B3B3B' }}
-                          />
-                        </div>
-                      </div>
-                      <div
-                        className="flex items-center justify-between p-3 rounded-lg"
-                        style={{ backgroundColor: '#F7F5F3' }}
-                      >
-                        <span className="text-sm" style={{ color: '#3B3B3B' }}>
-                          Line Height
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="text-xs font-mono"
-                            style={{ color: '#929397' }}
-                          >
-                            1.5
-                          </span>
-                          <input
-                            type="range"
-                            min="1.2"
-                            max="2.0"
-                            step="0.1"
-                            defaultValue="1.5"
-                            className="w-24"
-                            style={{ accentColor: '#3B3B3B' }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                      addStyleOverride(selectedScreen.screen_id, override)
+                    }}
+                    onReset={() => {
+                      if (selectedScreen?.screen_id) {
+                        clearStyleOverrides(selectedScreen.screen_id)
+                      }
+                    }}
+                    onSave={() => {
+                      // TODO: Implement save to backend
+                      if (!selectedScreen?.screen_id) return
+
+                      const overrides = getStyleOverrides(
+                        selectedScreen.screen_id,
+                      )
+                      console.log('Save style changes:', overrides)
+
+                      // Future: Call API to save mutations
+                      // await api.projects.saveDesignMutations(projectId, screenId, overrides)
+                    }}
+                    hasUnsavedChanges={
+                      selectedScreen?.screen_id
+                        ? getStyleOverrides(selectedScreen.screen_id).length > 0
+                        : false
+                    }
+                    currentOverrides={
+                      inspectedElement && selectedScreen?.screen_id
+                        ? getStyleOverrides(selectedScreen.screen_id).find(
+                            o =>
+                              o.elementPath ===
+                                inspectedElement.element.elementPath &&
+                              o.elementIndex ===
+                                inspectedElement.element.elementIndex,
+                          ) || null
+                        : null
+                    }
+                  />
                 </div>
               )}
-
-              {/* Tab Content - Annotate (NEW) */}
               {activeTab === 'annotate' && (
                 <div
                   className="flex-1 flex flex-col overflow-hidden"

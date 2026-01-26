@@ -76,4 +76,4 @@ export interface InspectedElement {
   elementIndex?: number // Index if multiple elements share same path
 }
 
-export type AgentatorMode = 'annotate' | 'inspect'
+export type AgentatorMode = 'annotate' | 'inspect' | 'drag'

@@ -7,6 +7,10 @@
 
 import React, { createContext, useContext, useState, useCallback } from 'react'
 import type {
+  StyleOverride,
+  DesignMutation,
+} from '../../types/styleEditor.types'
+import type {
   Annotation,
   InspectedElement,
   AgentatorMode,
@@ -41,6 +45,10 @@ interface AgentatorGlobalState {
 
   // Inspect mode (only one element at a time globally)
   inspectedElement: InspectedElementWithScreen | null
+
+  // Style editing (NEW)
+  styleOverrides: Record<string, StyleOverride[]> // screenId -> overrides
+  designMutations: Record<string, DesignMutation[]> // screenId -> mutations
 
   // Settings
   annotationColor: string
@@ -84,6 +92,20 @@ interface AgentatorGlobalContextValue extends AgentatorGlobalState {
     element: InspectedElement | null,
   ) => void
   clearInspectedElement: () => void
+
+  // Style editing (NEW)
+  // eslint-disable-next-line no-unused-vars
+  addStyleOverride: (screenId: string, override: StyleOverride) => void
+  // eslint-disable-next-line no-unused-vars
+  getStyleOverrides: (screenId: string) => StyleOverride[]
+  // eslint-disable-next-line no-unused-vars
+  clearStyleOverrides: (screenId: string) => void
+  // eslint-disable-next-line no-unused-vars
+  addDesignMutation: (screenId: string, mutation: DesignMutation) => void
+  // eslint-disable-next-line no-unused-vars
+  getDesignMutations: (screenId: string) => DesignMutation[]
+  // eslint-disable-next-line no-unused-vars
+  clearDesignMutations: (screenId: string) => void
 
   // Settings
   // eslint-disable-next-line no-unused-vars
@@ -134,6 +156,14 @@ export const AgentatorGlobalProvider: React.FC<
     useState<InspectedElementWithScreen | null>(null)
   const [annotationColor, setAnnotationColor] = useState(initialColor)
   const [markersVisible, setMarkersVisible] = useState(true)
+
+  // Style editing state (NEW)
+  const [styleOverrides, setStyleOverrides] = useState<
+    Record<string, StyleOverride[]>
+  >({})
+  const [designMutations, setDesignMutations] = useState<
+    Record<string, DesignMutation[]>
+  >({})
 
   // Mode control
   const toggleActive = useCallback(() => {
@@ -300,6 +330,64 @@ export const AgentatorGlobalProvider: React.FC<
       return annotations
     }, [annotations])
 
+  // Style editing methods (NEW)
+  const addStyleOverride = useCallback(
+    (screenId: string, override: StyleOverride) => {
+      setStyleOverrides(prev => {
+        const existing = prev[screenId] || []
+        // Check if override for same element exists
+        const filtered = existing.filter(
+          o =>
+            o.elementPath !== override.elementPath ||
+            o.elementIndex !== override.elementIndex,
+        )
+        return {
+          ...prev,
+          [screenId]: [...filtered, override],
+        }
+      })
+    },
+    [],
+  )
+
+  const getStyleOverrides = useCallback(
+    (screenId: string): StyleOverride[] => {
+      return styleOverrides[screenId] || []
+    },
+    [styleOverrides],
+  )
+
+  const clearStyleOverrides = useCallback((screenId: string) => {
+    setStyleOverrides(prev => ({
+      ...prev,
+      [screenId]: [],
+    }))
+  }, [])
+
+  const addDesignMutation = useCallback(
+    (screenId: string, mutation: DesignMutation) => {
+      setDesignMutations(prev => ({
+        ...prev,
+        [screenId]: [...(prev[screenId] || []), mutation],
+      }))
+    },
+    [],
+  )
+
+  const getDesignMutations = useCallback(
+    (screenId: string): DesignMutation[] => {
+      return designMutations[screenId] || []
+    },
+    [designMutations],
+  )
+
+  const clearDesignMutations = useCallback((screenId: string) => {
+    setDesignMutations(prev => ({
+      ...prev,
+      [screenId]: [],
+    }))
+  }, [])
+
   // Context value
   const value: AgentatorGlobalContextValue = {
     // State
@@ -310,6 +398,8 @@ export const AgentatorGlobalProvider: React.FC<
     inspectedElement,
     annotationColor,
     markersVisible,
+    styleOverrides,
+    designMutations,
 
     // Mode control
     setMode,
@@ -332,6 +422,14 @@ export const AgentatorGlobalProvider: React.FC<
     // Inspect mode
     setInspectedElement,
     clearInspectedElement,
+
+    // Style editing (NEW)
+    addStyleOverride,
+    getStyleOverrides,
+    clearStyleOverrides,
+    addDesignMutation,
+    getDesignMutations,
+    clearDesignMutations,
 
     // Settings
     setAnnotationColor,

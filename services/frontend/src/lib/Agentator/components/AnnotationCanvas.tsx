@@ -242,11 +242,34 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       if (!isActive || isDragging || pendingAnnotation || !canvasRef.current)
         return
 
+      const canvas = canvasRef.current
+      const target = e.target as HTMLElement
+
+      // FIX 2: DRAG MODE - Block all interactions and show message
+      if (mode === 'drag') {
+        if (target.closest('[data-annotation-ui]') || target === canvas) return
+        if (!canvas.contains(target)) return
+
+        // Always prevent default in drag mode
+        e.preventDefault()
+        e.stopPropagation()
+
+        // Show informative message (drag functionality not yet implemented)
+        console.log('Drag mode: Click detected on', target)
+        console.log('Drag & reorder functionality coming in Phase 3-4')
+
+        // TODO Phase 3-4: Implement drag handlers
+        // - Check if element is draggable (isDraggable utility)
+        // - Show drag handles
+        // - Implement drag start/move/end
+        // - Apply DOM reordering
+        // - Track mutations
+
+        return
+      }
+
       // Inspect mode - select the element and show persistent highlight
       if (mode === 'inspect') {
-        const canvas = canvasRef.current
-        const target = e.target as HTMLElement
-
         if (target.closest('[data-annotation-ui]') || target === canvas) {
           // Clicked on UI or canvas - clear selection
           setSelectedInspectElement(null)
@@ -276,6 +299,36 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
         if (target.getAttribute('aria-label'))
           attributes['aria-label'] = target.getAttribute('aria-label')!
 
+        // PHASE 2 FIX: Extract computed styles for StyleEditor
+        const computed = window.getComputedStyle(target)
+        const computedStyles: Record<string, string> = {
+          // Layout
+          display: computed.display,
+          position: computed.position,
+          width: computed.width,
+          height: computed.height,
+          margin: computed.margin,
+          padding: computed.padding,
+          gap: computed.gap,
+          // Typography
+          fontSize: computed.fontSize,
+          fontWeight: computed.fontWeight,
+          fontFamily: computed.fontFamily,
+          lineHeight: computed.lineHeight,
+          color: computed.color,
+          textAlign: computed.textAlign,
+          // Background
+          backgroundColor: computed.backgroundColor,
+          // Border
+          borderWidth: computed.borderWidth,
+          borderColor: computed.borderColor,
+          borderRadius: computed.borderRadius,
+          borderStyle: computed.borderStyle,
+          // Effects
+          opacity: computed.opacity,
+          boxShadow: computed.boxShadow,
+        }
+
         // Get enhanced metadata
         const textContent = getElementTextContent(target)
         const elementIndex = getElementIndex(target)
@@ -288,6 +341,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
           nearbyText: getNearbyText(target),
           tagName: target.tagName,
           attributes,
+          computedStyles, // NOW INCLUDED
           timestamp: Date.now(),
           textContent,
           elementIndex,
@@ -308,9 +362,6 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
         handleTextSelection()
         return
       }
-
-      const canvas = canvasRef.current
-      const target = e.target as HTMLElement
 
       if (target.closest('[data-annotation-ui]') || target === canvas) return
       if (!canvas.contains(target)) return
@@ -525,6 +576,23 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
         isActive && mode === 'annotate' ? handleMouseDown : undefined
       }
       onMouseUp={isDragging ? handleMouseUp : undefined}
+      // FIX 3: Universal event blocking in Concept mode
+      onMouseDownCapture={
+        isConceptMode
+          ? e => {
+              e.preventDefault()
+              e.stopPropagation()
+            }
+          : undefined
+      }
+      onChangeCapture={
+        isConceptMode
+          ? e => {
+              e.preventDefault()
+              e.stopPropagation()
+            }
+          : undefined
+      }
       style={{ position: 'relative', width: '100%', height: '100%' }}
     >
       {children}
