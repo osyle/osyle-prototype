@@ -35,6 +35,9 @@ from app.rethink_processor import RethinkProcessor
 # Import progressive streaming
 from app.progressive_streaming import generate_screen_ui_progressive
 
+# Import prompt selector for granular checkpoint mode
+from app.prompt_selector import get_prompt_name
+
 from app.feedback_router import FeedbackRouter
 from app.feedback_applier import FeedbackApplier
 
@@ -389,7 +392,7 @@ async def handle_generate_ui(websocket: WebSocket, data: Dict[str, Any], user_id
             # Generate without DTM
             simple_prompt = f"Generate React component: {task_description}\nDevice: {device_info}"
             response = await llm.call_claude(
-                prompt_name="generate_ui_v2",
+                prompt_name=get_prompt_name("generate_ui_v2"),
                 user_message=simple_prompt,
                 max_tokens=6000
             )
@@ -784,7 +787,7 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
                 
                 elif reference_mode == "rethink":
                     # RETHINK MODE: Use rethink-specific prompt with strategic context
-                    prompt_name = "generate_ui_rethink"
+                    prompt_name = get_prompt_name("generate_ui_rethink")
                     screen_content = [
                         {"type": "text", "text": screen_message}
                     ]

@@ -13,6 +13,7 @@ from typing import Dict, Any, List, Optional
 import base64
 
 from app.parametric import ParametricGenerator
+from app.prompt_selector import get_prompt_name
 
 
 class GenerationOrchestrator:
@@ -182,7 +183,7 @@ class GenerationOrchestrator:
         
         # Call LLM
         response = await self.llm.call_claude(
-            prompt_name="generate_ui_with_taste",  # Updated prompt name
+            prompt_name=get_prompt_name("generate_ui_with_taste"),
             user_message=message_content,
             max_tokens=8000,
             temperature=0.7
@@ -872,7 +873,7 @@ Device: {platform} ({width}x{height}px)
         
         # Call LLM with exact recreation prompt
         response = await self.llm.call_claude(
-            prompt_name="generate_ui_exact_recreation",
+            prompt_name=get_prompt_name("generate_ui_exact_recreation"),
             user_message=message_content,
             max_tokens=8000,
             temperature=0.3  # Lower temperature for more literal copying
