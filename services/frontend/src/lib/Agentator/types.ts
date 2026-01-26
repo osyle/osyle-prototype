@@ -2,6 +2,7 @@
 // Annotation Types
 // =============================================================================
 
+// Visual annotation (DOM-based) - UNCHANGED from original
 export interface Annotation {
   id: string
   screenId: string
@@ -11,19 +12,35 @@ export interface Annotation {
   comment: string
   element: string
   elementPath: string
-  timestamp: number
+  timestamp: number // Keep as number for backward compatibility
   selectedText?: string
   boundingBox?: { x: number; y: number; width: number; height: number }
   nearbyText?: string
   cssClasses?: string
   isMultiSelect?: boolean
   isFixed?: boolean
-  elementIndex?: number // Index if multiple elements share same path (e.g., 3rd button)
-  textContent?: string // Full text content of element (for LLM context)
+  elementIndex?: number
+  textContent?: string
+  tagName?: string
+}
+
+// Code annotation (line-based) - SEPARATE type
+export interface CodeAnnotation {
+  id: string
+  type: 'code' // Always 'code'
+  screenName: string
+  startLine: number
+  endLine: number
+  selectedCode: string
+  comment: string
+  timestamp: Date
+  boundingBox?: { x: number; y: number; width: number; height: number }
+  filePath?: string
+  component?: string
 }
 
 export interface PendingAnnotation extends Annotation {
-  clientY: number // For popup positioning
+  clientY: number
   computedStylesObj?: Record<string, string>
 }
 

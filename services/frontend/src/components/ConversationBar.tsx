@@ -1,7 +1,9 @@
 import { Send, ChevronUp, Loader2, Eye, Pen, XCircle } from 'lucide-react'
 import React, { useState, useEffect, useRef } from 'react'
 import { useAgentatorGlobal } from '../lib/Agentator'
-import type { Annotation } from '../lib/Agentator'
+import type { Annotation, CodeAnnotation } from '../lib/Agentator'
+
+type ConversationAnnotation = Annotation | CodeAnnotation
 
 export interface Message {
   id: string
@@ -9,7 +11,7 @@ export interface Message {
   content: string
   timestamp: Date
   screen?: string
-  annotations?: Record<string, Annotation[]> // Store annotations with message
+  annotations?: Record<string, ConversationAnnotation[]> // Store annotations with message
 }
 
 interface ConversationBarProps {
@@ -19,7 +21,7 @@ interface ConversationBarProps {
     // eslint-disable-next-line no-unused-vars
     message: string,
     // eslint-disable-next-line no-unused-vars
-    annotations?: Record<string, Annotation[]>,
+    annotations?: Record<string, ConversationAnnotation[]>,
   ) => void
   isProcessing: boolean
   processingStatus?: string
@@ -47,6 +49,7 @@ export default function ConversationBar({
     clearAnnotations,
     getAnnotationsForConversation,
     annotations,
+    codeAnnotations,
   } = useAgentatorGlobal()
 
   const totalAnnotations = getTotalAnnotationCount()
@@ -82,18 +85,35 @@ export default function ConversationBar({
 
     // If there are annotations, include them
     if (totalAnnotations > 0) {
-      const annotationsData = getAnnotationsForConversation()
+      const visualAnnotationsData = getAnnotationsForConversation()
+
+      // Merge visual and code annotations per screen
+      // Backend will handle both Annotation and CodeAnnotation types
+      const allAnnotations: Record<string, ConversationAnnotation[]> = {}
+
+      // Add visual annotations
+      Object.keys(visualAnnotationsData).forEach(screenName => {
+        allAnnotations[screenName] = [...visualAnnotationsData[screenName]]
+      })
+
+      // Add code annotations
+      Object.keys(codeAnnotations).forEach(screenName => {
+        if (!allAnnotations[screenName]) {
+          allAnnotations[screenName] = []
+        }
+        allAnnotations[screenName].push(...codeAnnotations[screenName])
+      })
 
       // Track which screens have annotations so we can clear them later
-      Object.keys(annotationsData).forEach(screenName => {
-        if (annotationsData[screenName].length > 0) {
+      Object.keys(allAnnotations).forEach(screenName => {
+        if (allAnnotations[screenName].length > 0) {
           sentAnnotationsRef.current.add(screenName)
         }
       })
 
       onSendMessage(
         inputText.trim() || 'Please apply these annotations',
-        annotationsData,
+        allAnnotations,
       )
     } else {
       onSendMessage(inputText.trim())

@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { CodeAnnotator } from '../lib/Agentator'
+import { useAgentatorGlobal } from '../lib/Agentator'
 import type { FlowGraph } from '../types/home.types'
 
 interface CodeViewerProps {
@@ -11,6 +13,8 @@ export default function CodeViewer({ flow }: CodeViewerProps) {
   const [activeScreenId, setActiveScreenId] = useState<string | null>(
     flow?.screens?.[0]?.screen_id || null,
   )
+
+  const { isActive } = useAgentatorGlobal()
 
   const activeScreen = useMemo(() => {
     if (!flow || !activeScreenId) return null
@@ -132,33 +136,74 @@ export default function CodeViewer({ flow }: CodeViewerProps) {
                 </div>
               </div>
 
-              {/* Syntax Highlighted Code */}
-              <SyntaxHighlighter
-                language="jsx"
-                style={vscDarkPlus}
-                showLineNumbers
-                customStyle={{
-                  margin: 0,
-                  padding: '20px',
-                  fontSize: '13px',
-                  lineHeight: '1.6',
-                  background: '#0A0A0F',
-                }}
-                lineNumberStyle={{
-                  minWidth: '3em',
-                  paddingRight: '1em',
-                  color: '#4A4A5A',
-                  userSelect: 'none',
-                }}
-                codeTagProps={{
-                  style: {
-                    fontFamily:
-                      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                  },
-                }}
-              >
-                {highlightDTMValues(activeScreen.ui_code)}
-              </SyntaxHighlighter>
+              {/* Syntax Highlighted Code with Code Annotator */}
+              <div className="relative">
+                {activeScreen.ui_code && isActive ? (
+                  <CodeAnnotator
+                    screenName={
+                      activeScreen.name ||
+                      `Screen ${flow.screens.findIndex(s => s.screen_id === activeScreenId) + 1}`
+                    }
+                    code={activeScreen.ui_code}
+                    lineHeight={20.8} // Based on lineHeight 1.6 * fontSize 13px
+                    isActive={isActive}
+                  >
+                    <SyntaxHighlighter
+                      language="jsx"
+                      style={vscDarkPlus}
+                      showLineNumbers
+                      customStyle={{
+                        margin: 0,
+                        padding: '20px',
+                        fontSize: '13px',
+                        lineHeight: '1.6',
+                        background: '#0A0A0F',
+                      }}
+                      lineNumberStyle={{
+                        minWidth: '3em',
+                        paddingRight: '1em',
+                        color: '#4A4A5A',
+                        userSelect: 'none',
+                      }}
+                      codeTagProps={{
+                        style: {
+                          fontFamily:
+                            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                        },
+                      }}
+                    >
+                      {highlightDTMValues(activeScreen.ui_code)}
+                    </SyntaxHighlighter>
+                  </CodeAnnotator>
+                ) : (
+                  <SyntaxHighlighter
+                    language="jsx"
+                    style={vscDarkPlus}
+                    showLineNumbers
+                    customStyle={{
+                      margin: 0,
+                      padding: '20px',
+                      fontSize: '13px',
+                      lineHeight: '1.6',
+                      background: '#0A0A0F',
+                    }}
+                    lineNumberStyle={{
+                      minWidth: '3em',
+                      paddingRight: '1em',
+                      color: '#4A4A5A',
+                      userSelect: 'none',
+                    }}
+                    codeTagProps={{
+                      style: {
+                        fontFamily:
+                          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                      },
+                    }}
+                  >
+                    {highlightDTMValues(activeScreen.ui_code)}
+                  </SyntaxHighlighter>
+                )}
+              </div>
             </div>
           ) : activeScreen.ui_loading ? (
             <div className="flex items-center justify-center h-full">
@@ -202,7 +247,8 @@ export default function CodeViewer({ flow }: CodeViewerProps) {
       <div className="flex items-center justify-between px-4 py-2 bg-[#13131A] border-t border-[#1F1F28] text-xs">
         <div className="flex items-center gap-4 text-gray-500">
           <span>
-            Screen {flow.screens.findIndex(s => s.screen_id === activeScreenId) + 1} of{' '}
+            Screen{' '}
+            {flow.screens.findIndex(s => s.screen_id === activeScreenId) + 1} of{' '}
             {flow.screens.length}
           </span>
           {activeScreen && (
@@ -211,15 +257,14 @@ export default function CodeViewer({ flow }: CodeViewerProps) {
               <span>{activeScreen.platform}</span>
               <span>•</span>
               <span>
-                {activeScreen.dimensions?.width}x{activeScreen.dimensions?.height}
+                {activeScreen.dimensions?.width}x
+                {activeScreen.dimensions?.height}
               </span>
             </>
           )}
         </div>
 
-        <div className="text-gray-600">
-          JSX • React
-        </div>
+        <div className="text-gray-600">JSX • React</div>
       </div>
     </div>
   )

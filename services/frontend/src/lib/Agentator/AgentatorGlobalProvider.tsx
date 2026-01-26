@@ -6,7 +6,12 @@
  */
 
 import React, { createContext, useContext, useState, useCallback } from 'react'
-import type { Annotation, InspectedElement, AgentatorMode } from './types'
+import type {
+  Annotation,
+  InspectedElement,
+  AgentatorMode,
+  CodeAnnotation,
+} from './types'
 
 // =============================================================================
 // Types
@@ -14,6 +19,10 @@ import type { Annotation, InspectedElement, AgentatorMode } from './types'
 
 interface AnnotationsPerScreen {
   [screenName: string]: Annotation[]
+}
+
+interface CodeAnnotationsPerScreen {
+  [screenName: string]: CodeAnnotation[]
 }
 
 interface InspectedElementWithScreen {
@@ -28,6 +37,7 @@ interface AgentatorGlobalState {
 
   // Annotations per screen
   annotations: AnnotationsPerScreen
+  codeAnnotations: CodeAnnotationsPerScreen
 
   // Inspect mode (only one element at a time globally)
   inspectedElement: InspectedElementWithScreen | null
@@ -45,7 +55,7 @@ interface AgentatorGlobalContextValue extends AgentatorGlobalState {
   setIsActive: (active: boolean) => void
   toggleActive: () => void
 
-  // Annotation management
+  // Annotation management (visual)
   // eslint-disable-next-line no-unused-vars
   addAnnotation: (screenName: string, annotation: Annotation) => void
   // eslint-disable-next-line no-unused-vars
@@ -57,6 +67,14 @@ interface AgentatorGlobalContextValue extends AgentatorGlobalState {
   // eslint-disable-next-line no-unused-vars
   getAnnotations: (screenName: string) => Annotation[]
   getTotalAnnotationCount: () => number
+
+  // Code annotation management
+  // eslint-disable-next-line no-unused-vars
+  addCodeAnnotation: (screenName: string, annotation: CodeAnnotation) => void
+  // eslint-disable-next-line no-unused-vars
+  deleteCodeAnnotation: (screenName: string, annotationId: string) => void
+  // eslint-disable-next-line no-unused-vars
+  getCodeAnnotations: (screenName: string) => CodeAnnotation[]
 
   // Inspect mode
   setInspectedElement: (
@@ -110,6 +128,8 @@ export const AgentatorGlobalProvider: React.FC<
   const [mode, setMode] = useState<AgentatorMode>('annotate')
   const [isActive, setIsActive] = useState(false)
   const [annotations, setAnnotations] = useState<AnnotationsPerScreen>({})
+  const [codeAnnotations, setCodeAnnotations] =
+    useState<CodeAnnotationsPerScreen>({})
   const [inspectedElement, setInspectedElementState] =
     useState<InspectedElementWithScreen | null>(null)
   const [annotationColor, setAnnotationColor] = useState(initialColor)
@@ -120,7 +140,7 @@ export const AgentatorGlobalProvider: React.FC<
     setIsActive(prev => !prev)
   }, [])
 
-  // Annotation management
+  // Annotation management (visual)
   const addAnnotation = useCallback(
     (screenName: string, annotation: Annotation) => {
       setAnnotations(prev => ({
@@ -157,14 +177,19 @@ export const AgentatorGlobalProvider: React.FC<
 
   const clearAnnotations = useCallback((screenName?: string) => {
     if (screenName) {
-      // Clear specific screen
+      // Clear specific screen (both visual and code)
       setAnnotations(prev => ({
         ...prev,
         [screenName]: [],
       }))
+      setCodeAnnotations(prev => ({
+        ...prev,
+        [screenName]: [],
+      }))
     } else {
-      // Clear all screens
+      // Clear all screens (both visual and code)
       setAnnotations({})
+      setCodeAnnotations({})
     }
   }, [])
 
@@ -176,8 +201,46 @@ export const AgentatorGlobalProvider: React.FC<
   )
 
   const getTotalAnnotationCount = useCallback((): number => {
-    return Object.values(annotations).reduce((sum, arr) => sum + arr.length, 0)
-  }, [annotations])
+    const visualCount = Object.values(annotations).reduce(
+      (sum, arr) => sum + arr.length,
+      0,
+    )
+    const codeCount = Object.values(codeAnnotations).reduce(
+      (sum, arr) => sum + arr.length,
+      0,
+    )
+    return visualCount + codeCount
+  }, [annotations, codeAnnotations])
+
+  // Code annotation management
+  const addCodeAnnotation = useCallback(
+    (screenName: string, annotation: CodeAnnotation) => {
+      setCodeAnnotations(prev => ({
+        ...prev,
+        [screenName]: [...(prev[screenName] || []), annotation],
+      }))
+    },
+    [],
+  )
+
+  const deleteCodeAnnotation = useCallback(
+    (screenName: string, annotationId: string) => {
+      setCodeAnnotations(prev => ({
+        ...prev,
+        [screenName]: (prev[screenName] || []).filter(
+          a => a.id !== annotationId,
+        ),
+      }))
+    },
+    [],
+  )
+
+  const getCodeAnnotations = useCallback(
+    (screenName: string): CodeAnnotation[] => {
+      return codeAnnotations[screenName] || []
+    },
+    [codeAnnotations],
+  )
 
   // Inspect mode
   const setInspectedElement = useCallback(
@@ -243,6 +306,7 @@ export const AgentatorGlobalProvider: React.FC<
     mode,
     isActive,
     annotations,
+    codeAnnotations,
     inspectedElement,
     annotationColor,
     markersVisible,
@@ -252,13 +316,18 @@ export const AgentatorGlobalProvider: React.FC<
     setIsActive,
     toggleActive,
 
-    // Annotation management
+    // Annotation management (visual)
     addAnnotation,
     deleteAnnotation,
     updateAnnotation,
     clearAnnotations,
     getAnnotations,
     getTotalAnnotationCount,
+
+    // Code annotation management
+    addCodeAnnotation,
+    deleteCodeAnnotation,
+    getCodeAnnotations,
 
     // Inspect mode
     setInspectedElement,

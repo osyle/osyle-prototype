@@ -84,6 +84,9 @@ export const Agentator: React.FC<AgentatorProps> = ({
 
 export default Agentator
 
+export { AnnotationCanvas } from './components/AnnotationCanvas'
+export { CodeAnnotator } from './CodeAnnotator'
+
 // Re-export everything
 export type {
   Annotation,
@@ -93,6 +96,7 @@ export type {
   OutputDetailLevel,
   InspectedElement,
   AgentatorMode,
+  CodeAnnotation,
 } from './types'
 
 export {

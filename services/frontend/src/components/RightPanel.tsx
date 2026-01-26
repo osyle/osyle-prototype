@@ -70,8 +70,10 @@ export default function RightPanel({
   // Get Agentator state
   const {
     annotations,
+    codeAnnotations,
     inspectedElement,
     deleteAnnotation: deleteAnnotationGlobal,
+    deleteCodeAnnotation,
     getTotalAnnotationCount,
   } = useAgentatorGlobal()
 
@@ -1023,166 +1025,269 @@ export default function RightPanel({
 
                   {/* Annotations List */}
                   <div className="flex-1 overflow-y-auto space-y-4">
-                    {Object.entries(annotations).map(
-                      ([screenName, screenAnnotations]) => {
-                        if (screenAnnotations.length === 0) return null
+                    {/* Get all unique screen names from both annotation types */}
+                    {Array.from(
+                      new Set([
+                        ...Object.keys(annotations),
+                        ...Object.keys(codeAnnotations),
+                      ]),
+                    ).map(screenName => {
+                      const visualAnns = annotations[screenName] || []
+                      const codeAnns = codeAnnotations[screenName] || []
+                      const totalAnns = visualAnns.length + codeAnns.length
 
-                        return (
-                          <div key={screenName} className="space-y-2">
-                            {/* Screen Header */}
+                      if (totalAnns === 0) return null
+
+                      return (
+                        <div key={screenName} className="space-y-2">
+                          {/* Screen Header */}
+                          <div
+                            className="sticky top-0 px-3 py-2 rounded-lg z-10"
+                            style={{
+                              backgroundColor: '#F0F7FF',
+                              border: '1px solid #E0EFFF',
+                            }}
+                          >
                             <div
-                              className="sticky top-0 px-3 py-2 rounded-lg z-10"
-                              style={{
-                                backgroundColor: '#F0F7FF',
-                                border: '1px solid #E0EFFF',
-                              }}
+                              className="text-xs font-semibold"
+                              style={{ color: '#3B82F6' }}
                             >
-                              <div
-                                className="text-xs font-semibold"
-                                style={{ color: '#3B82F6' }}
-                              >
-                                {screenName}
-                              </div>
-                              <div
-                                className="text-xs"
-                                style={{ color: '#929397' }}
-                              >
-                                {screenAnnotations.length} annotation
-                                {screenAnnotations.length !== 1 ? 's' : ''}
-                              </div>
+                              {screenName}
                             </div>
-
-                            {/* Annotations for this screen */}
-                            <div className="space-y-2">
-                              {screenAnnotations.map((annotation, index) => (
-                                <div
-                                  key={annotation.id}
-                                  className="rounded-xl p-3 group relative"
-                                  style={{
-                                    backgroundColor: '#FFFFFF',
-                                    border: '1px solid #E8E1DD',
-                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                                  }}
-                                >
-                                  {/* Annotation Number Badge */}
-                                  <div className="flex items-start gap-3">
-                                    <div
-                                      className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-                                      style={{
-                                        backgroundColor: '#3C82F7',
-                                        color: '#FFFFFF',
-                                      }}
-                                    >
-                                      {index + 1}
-                                    </div>
-
-                                    <div className="flex-1 min-w-0">
-                                      {/* Element Name */}
-                                      <div
-                                        className="text-sm font-semibold mb-1"
-                                        style={{ color: '#3B3B3B' }}
-                                      >
-                                        {annotation.element}
-                                      </div>
-
-                                      {/* Selected Text */}
-                                      {annotation.selectedText && (
-                                        <div
-                                          className="text-xs italic mb-2 px-2 py-1 rounded"
-                                          style={{
-                                            color: '#FF9500',
-                                            backgroundColor:
-                                              'rgba(255, 149, 0, 0.1)',
-                                          }}
-                                        >
-                                          &amp;{annotation.selectedText}&amp;
-                                        </div>
-                                      )}
-
-                                      {/* Text Content */}
-                                      {annotation.textContent &&
-                                        !annotation.selectedText && (
-                                          <div
-                                            className="text-xs mb-2 px-2 py-1 rounded"
-                                            style={{
-                                              color: '#929397',
-                                              backgroundColor:
-                                                'rgba(0, 0, 0, 0.03)',
-                                            }}
-                                          >
-                                            Text: &amp;{annotation.textContent}
-                                            &amp;
-                                          </div>
-                                        )}
-
-                                      {/* Element Index */}
-                                      {annotation.elementIndex !==
-                                        undefined && (
-                                        <div
-                                          className="text-xs mb-2"
-                                          style={{ color: '#929397' }}
-                                        >
-                                          {annotation.elementIndex + 1}
-                                          {annotation.elementIndex === 0
-                                            ? 'st'
-                                            : annotation.elementIndex === 1
-                                              ? 'nd'
-                                              : annotation.elementIndex === 2
-                                                ? 'rd'
-                                                : 'th'}{' '}
-                                          occurrence
-                                        </div>
-                                      )}
-
-                                      {/* Comment */}
-                                      <div
-                                        className="text-sm mb-2"
-                                        style={{ color: '#3B3B3B' }}
-                                      >
-                                        {annotation.comment}
-                                      </div>
-
-                                      {/* Element Path */}
-                                      <div
-                                        className="text-xs font-mono px-2 py-1 rounded"
-                                        style={{
-                                          color: '#667EEA',
-                                          backgroundColor:
-                                            'rgba(102, 126, 234, 0.08)',
-                                        }}
-                                      >
-                                        {annotation.elementPath}
-                                      </div>
-                                    </div>
-
-                                    {/* Delete Button */}
-                                    <button
-                                      onClick={() =>
-                                        deleteAnnotationGlobal(
-                                          screenName,
-                                          annotation.id,
-                                        )
-                                      }
-                                      className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
-                                      style={{
-                                        backgroundColor:
-                                          'rgba(255, 59, 48, 0.1)',
-                                      }}
-                                      title="Delete annotation"
-                                    >
-                                      <Trash2
-                                        size={14}
-                                        style={{ color: '#FF3B30' }}
-                                      />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
+                            <div
+                              className="text-xs"
+                              style={{ color: '#929397' }}
+                            >
+                              {totalAnns} annotation
+                              {totalAnns !== 1 ? 's' : ''}
+                              {visualAnns.length > 0 && codeAnns.length > 0 && (
+                                <span>
+                                  {' '}
+                                  • {visualAnns.length} visual,{' '}
+                                  {codeAnns.length} code
+                                </span>
+                              )}
                             </div>
                           </div>
-                        )
-                      },
-                    )}
+
+                          {/* Visual Annotations */}
+                          <div className="space-y-2">
+                            {visualAnns.map((annotation, index) => (
+                              <div
+                                key={annotation.id}
+                                className="rounded-xl p-3 group relative"
+                                style={{
+                                  backgroundColor: '#FFFFFF',
+                                  border: '1px solid #E8E1DD',
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                }}
+                              >
+                                {/* Annotation Number Badge */}
+                                <div className="flex items-start gap-3">
+                                  <div
+                                    className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+                                    style={{
+                                      backgroundColor: '#3C82F7',
+                                      color: '#FFFFFF',
+                                    }}
+                                  >
+                                    {index + 1}
+                                  </div>
+
+                                  <div className="flex-1 min-w-0">
+                                    {/* Element Name */}
+                                    <div
+                                      className="text-sm font-semibold mb-1"
+                                      style={{ color: '#3B3B3B' }}
+                                    >
+                                      {annotation.element}
+                                    </div>
+
+                                    {/* Selected Text */}
+                                    {annotation.selectedText && (
+                                      <div
+                                        className="text-xs italic mb-2 px-2 py-1 rounded"
+                                        style={{
+                                          color: '#FF9500',
+                                          backgroundColor:
+                                            'rgba(255, 149, 0, 0.1)',
+                                        }}
+                                      >
+                                        &amp;{annotation.selectedText}&amp;
+                                      </div>
+                                    )}
+
+                                    {/* Text Content */}
+                                    {annotation.textContent &&
+                                      !annotation.selectedText && (
+                                        <div
+                                          className="text-xs mb-2 px-2 py-1 rounded"
+                                          style={{
+                                            color: '#929397',
+                                            backgroundColor:
+                                              'rgba(0, 0, 0, 0.03)',
+                                          }}
+                                        >
+                                          Text: &amp;{annotation.textContent}
+                                          &amp;
+                                        </div>
+                                      )}
+
+                                    {/* Element Index */}
+                                    {annotation.elementIndex !== undefined && (
+                                      <div
+                                        className="text-xs mb-2"
+                                        style={{ color: '#929397' }}
+                                      >
+                                        {annotation.elementIndex + 1}
+                                        {annotation.elementIndex === 0
+                                          ? 'st'
+                                          : annotation.elementIndex === 1
+                                            ? 'nd'
+                                            : annotation.elementIndex === 2
+                                              ? 'rd'
+                                              : 'th'}{' '}
+                                        occurrence
+                                      </div>
+                                    )}
+
+                                    {/* Comment */}
+                                    <div
+                                      className="text-sm mb-2"
+                                      style={{ color: '#3B3B3B' }}
+                                    >
+                                      {annotation.comment}
+                                    </div>
+
+                                    {/* Element Path */}
+                                    <div
+                                      className="text-xs font-mono px-2 py-1 rounded"
+                                      style={{
+                                        color: '#667EEA',
+                                        backgroundColor:
+                                          'rgba(102, 126, 234, 0.08)',
+                                      }}
+                                    >
+                                      {annotation.elementPath}
+                                    </div>
+                                  </div>
+
+                                  {/* Delete Button */}
+                                  <button
+                                    onClick={() =>
+                                      deleteAnnotationGlobal(
+                                        screenName,
+                                        annotation.id,
+                                      )
+                                    }
+                                    className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+                                    style={{
+                                      backgroundColor: 'rgba(255, 59, 48, 0.1)',
+                                    }}
+                                    title="Delete annotation"
+                                  >
+                                    <Trash2
+                                      size={14}
+                                      style={{ color: '#FF3B30' }}
+                                    />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+
+                            {/* Code Annotations */}
+                            {codeAnns.map((annotation, index) => (
+                              <div
+                                key={annotation.id}
+                                className="rounded-xl p-3 group relative"
+                                style={{
+                                  backgroundColor: '#FFFBF0',
+                                  border: '1px solid #FFE4A3',
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                }}
+                              >
+                                {/* Annotation Number Badge */}
+                                <div className="flex items-start gap-3">
+                                  <div
+                                    className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+                                    style={{
+                                      backgroundColor: '#F59E0B',
+                                      color: '#FFFFFF',
+                                    }}
+                                  >
+                                    {visualAnns.length + index + 1}
+                                  </div>
+
+                                  <div className="flex-1 min-w-0">
+                                    {/* Code Location */}
+                                    <div
+                                      className="text-sm font-semibold mb-1 flex items-center gap-2"
+                                      style={{ color: '#3B3B3B' }}
+                                    >
+                                      <span>Lines {annotation.startLine}</span>
+                                      {annotation.endLine !==
+                                        annotation.startLine &&
+                                        `-${annotation.endLine}`}
+                                      <span
+                                        className="text-xs px-2 py-0.5 rounded"
+                                        style={{
+                                          backgroundColor: '#F59E0B',
+                                          color: '#FFFFFF',
+                                        }}
+                                      >
+                                        CODE
+                                      </span>
+                                    </div>
+
+                                    {/* Selected Code */}
+                                    <div
+                                      className="text-xs font-mono mb-2 px-2 py-1 rounded overflow-x-auto"
+                                      style={{
+                                        color: '#92400E',
+                                        backgroundColor: '#FEF3C7',
+                                        maxHeight: '80px',
+                                      }}
+                                    >
+                                      <pre className="whitespace-pre">
+                                        {annotation.selectedCode}
+                                      </pre>
+                                    </div>
+
+                                    {/* Comment */}
+                                    <div
+                                      className="text-sm mb-2"
+                                      style={{ color: '#3B3B3B' }}
+                                    >
+                                      {annotation.comment}
+                                    </div>
+                                  </div>
+
+                                  {/* Delete Button */}
+                                  <button
+                                    onClick={() =>
+                                      deleteCodeAnnotation(
+                                        screenName,
+                                        annotation.id,
+                                      )
+                                    }
+                                    className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+                                    style={{
+                                      backgroundColor: 'rgba(255, 59, 48, 0.1)',
+                                    }}
+                                    title="Delete annotation"
+                                  >
+                                    <Trash2
+                                      size={14}
+                                      style={{ color: '#FF3B30' }}
+                                    />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
 
                     {/* Empty State */}
                     {getTotalAnnotationCount() === 0 && (
