@@ -133,6 +133,41 @@ function ConceptScreenWithStyles({
   )
 }
 
+/**
+ * Validate checkpoint code to see if it's compilable
+ * Returns true if code is valid, false if it would error
+ */
+function validateCheckpointCode(code: string): boolean {
+  try {
+    // Basic structural checks
+    if (!code || code.trim().length < 50) return false
+    if (!code.includes('export default')) return false
+    if (!code.includes('return')) return false
+
+    // Check balanced braces
+    const braceCount =
+      (code.match(/{/g) || []).length - (code.match(/}/g) || []).length
+    if (braceCount !== 0) return false
+
+    // Check balanced parens
+    const parenCount =
+      (code.match(/\(/g) || []).length - (code.match(/\)/g) || []).length
+    if (parenCount !== 0) return false
+
+    // Check balanced brackets
+    const bracketCount =
+      (code.match(/\[/g) || []).length - (code.match(/\]/g) || []).length
+    if (bracketCount !== 0) return false
+
+    // If it passes basic checks, assume it's valid
+    // DynamicReactRenderer will do more thorough validation
+    return true
+  } catch (err) {
+    console.warn('Checkpoint validation error:', err)
+    return false
+  }
+}
+
 export default function Editor() {
   const navigate = useNavigate()
 
@@ -786,6 +821,21 @@ export default function Editor() {
         onUICheckpoint: (screenId, uiCode, checkpointNumber) => {
           console.log(`📍 Checkpoint ${checkpointNumber} for ${screenId}`)
 
+          // Validate checkpoint before storing
+          const isValid = validateCheckpointCode(uiCode)
+
+          if (!isValid) {
+            console.warn(
+              `⚠️  Checkpoint ${checkpointNumber} failed validation, keeping previous checkpoint`,
+            )
+            // Don't update screenCheckpoints - keep the last valid one
+            return
+          }
+
+          console.log(
+            `✅ Checkpoint ${checkpointNumber} validated successfully`,
+          )
+
           // Store checkpoint code for progressive preview
           setScreenCheckpoints(prev => ({
             ...prev,
@@ -807,35 +857,63 @@ export default function Editor() {
         onScreenReady: (screenId, uiCode, variationSpace) => {
           console.log(`✅ Screen ready: ${screenId}`)
 
-          // Clear checkpoint preview when final version arrives
+          // Validate final code
+          const isValid = validateCheckpointCode(uiCode)
+
+          if (!isValid) {
+            console.warn(`⚠️  Final code for ${screenId} failed validation!`)
+            console.log(`🔍 Checking for last valid checkpoint...`)
+          } else {
+            console.log(`✅ Final code validated successfully`)
+          }
+
+          // Access current checkpoint state and decide what to use
           setScreenCheckpoints(prev => {
+            const lastCheckpoint = prev[screenId]
+            let finalCode = uiCode
+
+            // If final code is broken and we have a checkpoint, use checkpoint
+            if (!isValid && lastCheckpoint) {
+              console.log(
+                `✅ Using last valid checkpoint instead of broken final code`,
+              )
+              finalCode = lastCheckpoint
+            } else if (!isValid) {
+              console.error(
+                `❌ No checkpoint available, forced to use broken final code`,
+              )
+            }
+
+            // Update flow graph with the chosen code
+            if (variationSpace) {
+              console.log(
+                `  📊 Variation space with ${(variationSpace['dimensions'] as VariationSpace['dimensions'])?.length || 0} dimensions`,
+              )
+            }
+
+            setFlowGraph(prevGraph => {
+              if (!prevGraph) return prevGraph
+              return {
+                ...prevGraph,
+                screens: prevGraph.screens.map(s =>
+                  s.screen_id === screenId
+                    ? {
+                        ...s,
+                        ui_code: finalCode,
+                        ui_loading: false,
+                        ...(variationSpace && {
+                          variation_space: variationSpace,
+                        }),
+                      }
+                    : s,
+                ),
+              }
+            })
+
+            // Clear checkpoint since we're done
             const newCheckpoints = { ...prev }
             delete newCheckpoints[screenId]
             return newCheckpoints
-          })
-
-          if (variationSpace) {
-            console.log(
-              `  📊 Variation space with ${(variationSpace['dimensions'] as VariationSpace['dimensions'])?.length || 0} dimensions`,
-            )
-          }
-          setFlowGraph(prev => {
-            if (!prev) return prev
-            return {
-              ...prev,
-              screens: prev.screens.map(s =>
-                s.screen_id === screenId
-                  ? {
-                      ...s,
-                      ui_code: uiCode,
-                      ui_loading: false,
-                      ...(variationSpace && {
-                        variation_space: variationSpace,
-                      }),
-                    }
-                  : s,
-              ),
-            }
           })
         },
         onScreenError: (screenId, error) => {
