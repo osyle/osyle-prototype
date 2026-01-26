@@ -78,6 +78,7 @@ export default function RightPanel({
     addStyleOverride,
     getStyleOverrides,
     clearStyleOverrides,
+    loadStyleOverrides,
     saveStyleOverrides,
     clearAllMutations,
     hasUnsavedChanges,
@@ -621,6 +622,119 @@ export default function RightPanel({
                   className="flex-1 flex flex-col gap-5 overflow-y-auto"
                   style={{ paddingRight: '4px' }}
                 >
+                  {/* Revert All to Original - NEW */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center"
+                        style={{
+                          background:
+                            'linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%)',
+                        }}
+                      >
+                        <RotateCcw size={16} style={{ color: '#FFFFFF' }} />
+                      </div>
+                      <div>
+                        <div
+                          className="text-sm font-semibold"
+                          style={{ color: '#3B3B3B' }}
+                        >
+                          Revert All Changes
+                        </div>
+                        <div className="text-xs" style={{ color: '#929397' }}>
+                          Restore AI-generated originals
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      className="p-4 rounded-xl space-y-3"
+                      style={{
+                        backgroundColor: '#FFF5F5',
+                        border: '1px solid #FFE0E0',
+                      }}
+                    >
+                      <div className="text-xs" style={{ color: '#929397' }}>
+                        Remove all manual style changes from every screen and
+                        restore the original AI-generated designs.
+                      </div>
+
+                      <button
+                        onClick={async () => {
+                          if (
+                            !confirm(
+                              'Are you sure you want to revert ALL manual edits across all screens? This will restore every screen to its AI-generated original. This action cannot be undone.',
+                            )
+                          ) {
+                            return
+                          }
+
+                          try {
+                            const currentProject =
+                              localStorage.getItem('current_project')
+                            if (!currentProject) {
+                              alert('No project found')
+                              return
+                            }
+
+                            const project = JSON.parse(currentProject)
+
+                            // Get all screen IDs from flow graph
+                            const screenIds =
+                              flowGraph?.screens.map(s => s.screen_id) || []
+
+                            if (screenIds.length === 0) {
+                              alert('No screens found in flow')
+                              return
+                            }
+
+                            // Clear mutations for all screens
+                            let clearedCount = 0
+                            for (const screenId of screenIds) {
+                              try {
+                                await clearAllMutations(
+                                  project.project_id,
+                                  screenId,
+                                )
+                                clearedCount++
+                              } catch (error) {
+                                console.error(
+                                  `Failed to clear screen ${screenId}:`,
+                                  error,
+                                )
+                              }
+                            }
+
+                            console.log(
+                              `✅ Reverted ${clearedCount} screens to original`,
+                            )
+                            alert(
+                              `Successfully reverted ${clearedCount} screen${clearedCount !== 1 ? 's' : ''} to original AI design!`,
+                            )
+                          } catch (error) {
+                            console.error('Failed to revert all:', error)
+                            alert('Failed to revert changes. Please try again.')
+                          }
+                        }}
+                        className="w-full px-4 py-2.5 rounded-lg font-medium text-sm transition-all"
+                        style={{
+                          backgroundColor: '#FF6B6B',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.backgroundColor = '#FF5252'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.backgroundColor = '#FF6B6B'
+                        }}
+                      >
+                        🔄 Revert All Screens to Original
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Component Details - NOW FIRST */}
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
@@ -852,10 +966,10 @@ export default function RightPanel({
                     onReset={async () => {
                       if (!selectedScreen?.screen_id) return
 
-                      // Show confirmation dialog
+                      // Only discard unsaved local changes (reload from database)
                       if (
                         !confirm(
-                          'Reset all manual edits? This will restore the AI-generated original.',
+                          'Discard unsaved changes for this screen? This will revert to the last saved version.',
                         )
                       ) {
                         return
@@ -866,18 +980,19 @@ export default function RightPanel({
                           localStorage.getItem('current_project')
                         if (currentProject) {
                           const project = JSON.parse(currentProject)
-                          await clearAllMutations(
+                          // Reload saved mutations from database
+                          await loadStyleOverrides(
                             project.project_id,
                             selectedScreen.screen_id,
                           )
-                          console.log('✅ All edits cleared!')
+                          console.log('🔄 Reverted to last saved version')
                         } else {
-                          // If no projectId (not saved yet), just clear local state
+                          // If no project, just clear local state
                           clearStyleOverrides(selectedScreen.screen_id)
                         }
                       } catch (error) {
-                        console.error('Failed to clear edits:', error)
-                        alert('Failed to clear edits. Please try again.')
+                        console.error('Failed to reload saved version:', error)
+                        alert('Failed to discard changes. Please try again.')
                       }
                     }}
                     onSave={async () => {
