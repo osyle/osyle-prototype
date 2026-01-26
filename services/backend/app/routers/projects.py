@@ -860,3 +860,122 @@ async def list_project_versions(
     return {
         "versions": versions
     }
+
+
+# ============================================================================
+# DESIGN MUTATIONS ENDPOINTS
+# ============================================================================
+
+@router.post("/{project_id}/screens/{screen_id}/mutations")
+async def save_screen_mutations(
+    project_id: str,
+    screen_id: str,
+    mutations_data: dict,  # Will receive {"mutations": [...]}
+    user: dict = Depends(get_current_user)
+):
+    """
+    Save design mutations for a screen
+    
+    This replaces all existing mutations for the screen with the provided ones.
+    Mutations are style overrides applied by the user in the visual editor.
+    """
+    # Check ownership
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.get("owner_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Extract mutations from request
+    mutations = mutations_data.get("mutations", [])
+    
+    # Delete existing mutations for this screen
+    deleted_count = db.delete_design_mutations_for_screen(project_id, screen_id)
+    
+    # Create new mutations
+    saved_count = 0
+    for mutation in mutations:
+        db.create_design_mutation(
+            project_id=project_id,
+            screen_id=screen_id,
+            mutation_type="style_override",
+            element_path=mutation.get("elementPath", ""),
+            element_index=mutation.get("elementIndex", 0),
+            mutation_data=mutation.get("styles", {})
+        )
+        saved_count += 1
+    
+    return {
+        "success": True,
+        "savedCount": saved_count
+    }
+
+
+@router.get("/{project_id}/screens/{screen_id}/mutations")
+async def get_screen_mutations(
+    project_id: str,
+    screen_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Get all design mutations for a screen
+    
+    Returns all style overrides that the user has applied to this screen.
+    """
+    # Check ownership
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.get("owner_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get mutations from database
+    mutations_db = db.get_design_mutations_for_screen(project_id, screen_id)
+    
+    # Transform to frontend format
+    mutations = [
+        {
+            "id": m["mutation_id"],
+            "mutationType": m["mutation_type"],
+            "elementPath": m["element_path"],
+            "elementIndex": m.get("element_index", 0),
+            "data": m["mutation_data"],
+            "createdAt": m["created_at"],
+            "updatedAt": m["updated_at"]
+        }
+        for m in mutations_db
+    ]
+    
+    return {
+        "mutations": mutations
+    }
+
+
+@router.delete("/{project_id}/screens/{screen_id}/mutations")
+async def clear_screen_mutations(
+    project_id: str,
+    screen_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Clear all design mutations for a screen
+    
+    Deletes all style overrides, returning the screen to its AI-generated original state.
+    """
+    # Check ownership
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.get("owner_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Delete all mutations for this screen
+    deleted_count = db.delete_design_mutations_for_screen(project_id, screen_id)
+    
+    return {
+        "success": True,
+        "deletedCount": deleted_count
+    }

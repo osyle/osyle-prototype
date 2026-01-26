@@ -697,6 +697,72 @@ export const projectsAPI = {
       `/api/projects/${projectId}/versions`,
     )
   },
+
+  /**
+   * Save design mutations for a screen
+   */
+  saveMutations: async (
+    projectId: string,
+    screenId: string,
+    mutations: Array<{
+      elementPath: string
+      elementIndex: number
+      styles: Record<string, string>
+    }>,
+  ): Promise<{ success: boolean; savedCount: number }> => {
+    return apiRequest<{ success: boolean; savedCount: number }>(
+      `/api/projects/${projectId}/screens/${screenId}/mutations`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ mutations }),
+      },
+    )
+  },
+
+  /**
+   * Get design mutations for a screen
+   */
+  getMutations: async (
+    projectId: string,
+    screenId: string,
+  ): Promise<{
+    mutations: Array<{
+      id: string
+      mutationType: string
+      elementPath: string
+      elementIndex: number
+      data: Record<string, string>
+      createdAt: string
+      updatedAt: string
+    }>
+  }> => {
+    return apiRequest<{
+      mutations: Array<{
+        id: string
+        mutationType: string
+        elementPath: string
+        elementIndex: number
+        data: Record<string, string>
+        createdAt: string
+        updatedAt: string
+      }>
+    }>(`/api/projects/${projectId}/screens/${screenId}/mutations`)
+  },
+
+  /**
+   * Clear all design mutations for a screen
+   */
+  clearMutations: async (
+    projectId: string,
+    screenId: string,
+  ): Promise<{ success: boolean; deletedCount: number }> => {
+    return apiRequest<{ success: boolean; deletedCount: number }>(
+      `/api/projects/${projectId}/screens/${screenId}/mutations`,
+      {
+        method: 'DELETE',
+      },
+    )
+  },
 }
 
 // ============================================================================

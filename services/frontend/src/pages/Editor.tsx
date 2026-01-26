@@ -7,7 +7,7 @@ import {
   Plus,
   List,
 } from 'lucide-react'
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AddInspirationModal from '../components/AddInspirationModal'
 import CodeViewer from '../components/CodeViewer'
@@ -21,9 +21,14 @@ import InfiniteCanvas, {
 import PrototypeCanvas from '../components/PrototypeCanvas'
 import PrototypeRunner from '../components/PrototypeRunner'
 import RightPanel from '../components/RightPanel'
+import { StyleOverlayApplicator } from '../components/StyleOverlayApplicator'
 import VersionHistory from '../components/VersionHistory'
 import { useDeviceContext } from '../hooks/useDeviceContext'
-import { Agentator, AgentatorGlobalProvider } from '../lib/Agentator'
+import {
+  Agentator,
+  AgentatorGlobalProvider,
+  useAgentatorGlobal,
+} from '../lib/Agentator'
 
 import api from '../services/api'
 import {
@@ -72,6 +77,62 @@ interface ScreenWithLoadingState {
   [key: string]: unknown // Allow other fields from FlowGraph
 }
 
+/**
+ * Wrapper component for Concept screens that applies style overrides and loads them from database
+ * Uses useAgentatorGlobal hook (must be inside AgentatorGlobalProvider)
+ */
+interface ConceptScreenWithStylesProps {
+  projectId: string | undefined
+  screenId: string
+  jsxCode: string
+  propsToInject: Record<string, unknown>
+  children?: React.ReactNode
+}
+
+function ConceptScreenWithStyles({
+  projectId,
+  screenId,
+  jsxCode,
+  propsToInject,
+  children,
+}: ConceptScreenWithStylesProps) {
+  const { getStyleOverrides, loadStyleOverrides, isLoadingMutations } =
+    useAgentatorGlobal()
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [hasLoadedMutations, setHasLoadedMutations] = useState(false)
+
+  // Load mutations from database on mount
+  useEffect(() => {
+    if (projectId && screenId && !hasLoadedMutations) {
+      loadStyleOverrides(projectId, screenId)
+      setHasLoadedMutations(true)
+    }
+  }, [projectId, screenId, hasLoadedMutations, loadStyleOverrides])
+
+  const styleOverrides = getStyleOverrides(screenId)
+  const isLoading = isLoadingMutations(screenId)
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+      </div>
+    )
+  }
+
+  return (
+    <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
+      <StyleOverlayApplicator
+        overrides={styleOverrides}
+        containerRef={containerRef}
+      >
+        <DynamicReactRenderer jsxCode={jsxCode} propsToInject={propsToInject} />
+      </StyleOverlayApplicator>
+      {children}
+    </div>
+  )
+}
+
 export default function Editor() {
   const navigate = useNavigate()
 
@@ -103,6 +164,9 @@ export default function Editor() {
   const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null)
   const [isFlowNavigatorOpen, setIsFlowNavigatorOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Project state (for persistence)
+  const [project, setProject] = useState<{ project_id: string } | null>(null)
 
   // Progressive UI checkpoint state
   const [screenCheckpoints, setScreenCheckpoints] = useState<
@@ -583,6 +647,9 @@ export default function Editor() {
       }
 
       const project = JSON.parse(currentProject)
+
+      // Set project to state for persistence
+      setProject(project)
 
       // Apply project's device settings if they exist
       if (project.device_info) {
@@ -1155,7 +1222,9 @@ export default function Editor() {
                       ) : screen.ui_code ||
                         screenCheckpoints[screen.screen_id] ? (
                         <>
-                          <DynamicReactRenderer
+                          <ConceptScreenWithStyles
+                            projectId={project?.project_id}
+                            screenId={screen.screen_id}
                             jsxCode={
                               screenCheckpoints[screen.screen_id] ||
                               screen.ui_code ||
@@ -1169,25 +1238,26 @@ export default function Editor() {
                                 ? { parameters: parameterValues }
                                 : {}),
                             }}
-                          />
-                          {screenCheckpoints[screen.screen_id] && (
-                            <div
-                              style={{
-                                position: 'absolute',
-                                top: '8px',
-                                left: '8px',
-                                background: 'rgba(59, 130, 246, 0.9)',
-                                color: 'white',
-                                padding: '4px 12px',
-                                borderRadius: '12px',
-                                fontSize: '11px',
-                                fontWeight: '600',
-                                zIndex: 100,
-                              }}
-                            >
-                              ⚡ Streaming...
-                            </div>
-                          )}
+                          >
+                            {screenCheckpoints[screen.screen_id] && (
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  top: '8px',
+                                  left: '8px',
+                                  background: 'rgba(59, 130, 246, 0.9)',
+                                  color: 'white',
+                                  padding: '4px 12px',
+                                  borderRadius: '12px',
+                                  fontSize: '11px',
+                                  fontWeight: '600',
+                                  zIndex: 100,
+                                }}
+                              >
+                                ⚡ Streaming...
+                              </div>
+                            )}
+                          </ConceptScreenWithStyles>
                         </>
                       ) : (
                         <div className="flex items-center justify-center h-full">

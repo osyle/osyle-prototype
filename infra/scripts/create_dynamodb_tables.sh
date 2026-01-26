@@ -105,6 +105,36 @@ aws dynamodb create-table \
 echo "✓ Projects table created with owner_id index"
 
 # ============================================================================
+# DESIGN MUTATIONS TABLE with project_id-screen_id index
+# ============================================================================
+
+echo "Creating Design Mutations table..."
+aws dynamodb create-table \
+    --table-name OsyleDesignMutations \
+    --attribute-definitions \
+        AttributeName=mutation_id,AttributeType=S \
+        AttributeName=project_id,AttributeType=S \
+        AttributeName=screen_id,AttributeType=S \
+    --key-schema \
+        AttributeName=mutation_id,KeyType=HASH \
+    --global-secondary-indexes \
+        "[
+            {
+                \"IndexName\": \"project_id-screen_id-index\",
+                \"KeySchema\": [
+                    {\"AttributeName\":\"project_id\",\"KeyType\":\"HASH\"},
+                    {\"AttributeName\":\"screen_id\",\"KeyType\":\"RANGE\"}
+                ],
+                \"Projection\":{\"ProjectionType\":\"ALL\"}
+            }
+        ]" \
+    --billing-mode PAY_PER_REQUEST \
+    --region $REGION \
+    --tags Key=Project,Value=Osyle Key=Environment,Value=Production
+
+echo "✓ Design Mutations table created with project_id-screen_id index"
+
+# ============================================================================
 # WAIT FOR TABLES TO BE ACTIVE
 # ============================================================================
 
@@ -114,6 +144,7 @@ aws dynamodb wait table-exists --table-name OsyleUsers --region $REGION
 aws dynamodb wait table-exists --table-name OsyleTastes --region $REGION
 aws dynamodb wait table-exists --table-name OsyleResources --region $REGION
 aws dynamodb wait table-exists --table-name OsyleProjects --region $REGION
+aws dynamodb wait table-exists --table-name OsyleDesignMutations --region $REGION
 
 echo ""
 echo "✓ All tables are active!"
@@ -123,6 +154,7 @@ echo "  - OsyleUsers"
 echo "  - OsyleTastes (with owner_id-index)"
 echo "  - OsyleResources (with taste_id-index)"
 echo "  - OsyleProjects (with owner_id-index)"
+echo "  - OsyleDesignMutations (with project_id-screen_id-index)"
 echo ""
 echo "Next steps:"
 echo "  1. Update your backend .env file with table names"

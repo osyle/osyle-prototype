@@ -107,6 +107,28 @@ interface AgentatorGlobalContextValue extends AgentatorGlobalState {
   // eslint-disable-next-line no-unused-vars
   clearDesignMutations: (screenId: string) => void
 
+  // Persistence (NEW)
+  // eslint-disable-next-line no-unused-vars
+  loadStyleOverrides: (projectId: string, screenId: string) => Promise<void>
+  // eslint-disable-next-line no-unused-vars
+  saveStyleOverrides: (
+    // eslint-disable-next-line no-unused-vars
+    projectId: string,
+    // eslint-disable-next-line no-unused-vars
+    screenId: string,
+  ) => Promise<{ success: boolean }>
+  // eslint-disable-next-line no-unused-vars
+  clearAllMutations: (
+    // eslint-disable-next-line no-unused-vars
+    projectId: string,
+    // eslint-disable-next-line no-unused-vars
+    screenId: string,
+  ) => Promise<{ success: boolean }>
+  // eslint-disable-next-line no-unused-vars
+  hasUnsavedChanges: (screenId: string) => boolean
+  // eslint-disable-next-line no-unused-vars
+  isLoadingMutations: (screenId: string) => boolean
+
   // Settings
   // eslint-disable-next-line no-unused-vars
   setAnnotationColor: (color: string) => void
@@ -164,6 +186,10 @@ export const AgentatorGlobalProvider: React.FC<
   const [designMutations, setDesignMutations] = useState<
     Record<string, DesignMutation[]>
   >({})
+
+  // Persistence state (NEW)
+  const [dirtyScreens, setDirtyScreens] = useState<Set<string>>(new Set())
+  const [loadingScreens, setLoadingScreens] = useState<Set<string>>(new Set())
 
   // Mode control
   const toggleActive = useCallback(() => {
@@ -346,6 +372,9 @@ export const AgentatorGlobalProvider: React.FC<
           [screenId]: [...filtered, override],
         }
       })
+
+      // Mark screen as dirty (has unsaved changes)
+      setDirtyScreens(prev => new Set(prev).add(screenId))
     },
     [],
   )
@@ -387,6 +416,121 @@ export const AgentatorGlobalProvider: React.FC<
       [screenId]: [],
     }))
   }, [])
+
+  // Persistence methods (NEW)
+  const loadStyleOverrides = useCallback(
+    async (projectId: string, screenId: string) => {
+      setLoadingScreens(prev => new Set(prev).add(screenId))
+
+      try {
+        const api = (await import('../../services/api')).default
+        const response = await api.projects.getMutations(projectId, screenId)
+
+        type Mutation = {
+          id: string
+          mutationType: string
+          elementPath: string
+          elementIndex: number
+          data: Record<string, string>
+          createdAt: string
+          updatedAt: string
+        }
+
+        const styleOverridesData = response.mutations
+          .filter((m: Mutation) => m.mutationType === 'style_override')
+          .map((m: Mutation) => ({
+            elementPath: m.elementPath,
+            elementIndex: m.elementIndex,
+            styles: m.data,
+            timestamp: new Date(m.updatedAt).getTime(),
+          }))
+
+        setStyleOverrides(prev => ({
+          ...prev,
+          [screenId]: styleOverridesData,
+        }))
+      } catch (error) {
+        console.error('Failed to load mutations:', error)
+      } finally {
+        setLoadingScreens(prev => {
+          const next = new Set(prev)
+          next.delete(screenId)
+          return next
+        })
+      }
+    },
+    [],
+  )
+
+  const saveStyleOverrides = useCallback(
+    async (projectId: string, screenId: string) => {
+      const overrides = styleOverrides[screenId] || []
+
+      try {
+        const api = (await import('../../services/api')).default
+        // Map to ensure elementIndex is always a number (default to 0 if undefined)
+        const mutations = overrides.map(override => ({
+          elementPath: override.elementPath,
+          elementIndex: override.elementIndex ?? 0,
+          styles: override.styles,
+        }))
+        await api.projects.saveMutations(projectId, screenId, mutations)
+
+        // Mark as no longer dirty
+        setDirtyScreens(prev => {
+          const next = new Set(prev)
+          next.delete(screenId)
+          return next
+        })
+
+        return { success: true }
+      } catch (error) {
+        console.error('Failed to save mutations:', error)
+        throw error
+      }
+    },
+    [styleOverrides],
+  )
+
+  const clearAllMutations = useCallback(
+    async (projectId: string, screenId: string) => {
+      try {
+        const api = (await import('../../services/api')).default
+        await api.projects.clearMutations(projectId, screenId)
+
+        // Clear local state
+        setStyleOverrides(prev => ({
+          ...prev,
+          [screenId]: [],
+        }))
+        setDirtyScreens(prev => {
+          const next = new Set(prev)
+          next.delete(screenId)
+          return next
+        })
+
+        return { success: true }
+      } catch (error) {
+        console.error('Failed to clear mutations:', error)
+        throw error
+      }
+    },
+    [],
+  )
+
+  const hasUnsavedChanges = useCallback(
+    (screenId: string) => {
+      return dirtyScreens.has(screenId)
+    },
+    [dirtyScreens],
+  )
+
+  const isLoadingMutations = useCallback(
+    (screenId: string) => {
+      return loadingScreens.has(screenId)
+    },
+    [loadingScreens],
+  )
 
   // Context value
   const value: AgentatorGlobalContextValue = {
@@ -430,6 +574,13 @@ export const AgentatorGlobalProvider: React.FC<
     addDesignMutation,
     getDesignMutations,
     clearDesignMutations,
+
+    // Persistence (NEW)
+    loadStyleOverrides,
+    saveStyleOverrides,
+    clearAllMutations,
+    hasUnsavedChanges,
+    isLoadingMutations,
 
     // Settings
     setAnnotationColor,

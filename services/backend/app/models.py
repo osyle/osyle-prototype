@@ -238,3 +238,47 @@ class MessageResponse(BaseModel):
 class ErrorResponse(BaseModel):
     """Error response"""
     detail: str
+
+
+# ============================================================================
+# DESIGN MUTATIONS MODELS
+# ============================================================================
+
+class StyleMutation(BaseModel):
+    """Style mutation from frontend"""
+    elementPath: str
+    elementIndex: int
+    styles: dict  # CSS properties
+
+
+class SaveMutationsRequest(BaseModel):
+    """Request to save design mutations"""
+    mutations: List[StyleMutation]
+
+
+class DesignMutationOut(BaseModel):
+    """Design mutation response"""
+    id: str  # mutation_id
+    mutationType: str
+    elementPath: str
+    elementIndex: int
+    data: dict  # The styles object
+    createdAt: str
+    updatedAt: str
+
+
+class GetMutationsResponse(BaseModel):
+    """Response for getting mutations"""
+    mutations: List[DesignMutationOut]
+
+
+class SaveMutationsResponse(BaseModel):
+    """Response for saving mutations"""
+    success: bool
+    savedCount: int
+
+
+class ClearMutationsResponse(BaseModel):
+    """Response for clearing mutations"""
+    success: bool
+    deletedCount: int

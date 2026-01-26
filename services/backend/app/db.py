@@ -56,12 +56,14 @@ USERS_TABLE_NAME = os.getenv("USERS_TABLE", "OsyleUsers")
 TASTES_TABLE_NAME = os.getenv("TASTES_TABLE", "OsyleTastes")
 RESOURCES_TABLE_NAME = os.getenv("RESOURCES_TABLE", "OsyleResources")
 PROJECTS_TABLE_NAME = os.getenv("PROJECTS_TABLE", "OsyleProjects")
+DESIGN_MUTATIONS_TABLE_NAME = os.getenv("DESIGN_MUTATIONS_TABLE", "OsyleDesignMutations")
 
 # Table references
 users_table = dynamodb.Table(USERS_TABLE_NAME)
 tastes_table = dynamodb.Table(TASTES_TABLE_NAME)
 resources_table = dynamodb.Table(RESOURCES_TABLE_NAME)
 projects_table = dynamodb.Table(PROJECTS_TABLE_NAME)
+design_mutations_table = dynamodb.Table(DESIGN_MUTATIONS_TABLE_NAME)
 
 
 # ============================================================================
@@ -467,3 +469,90 @@ def update_project_flow_graph(project_id: str, flow_graph: dict) -> Dict[str, An
     )
     
     return response.get("Attributes", {})
+
+
+# ============================================================================
+# DESIGN MUTATIONS OPERATIONS
+# ============================================================================
+
+def create_design_mutation(
+    project_id: str,
+    screen_id: str,
+    mutation_type: str,
+    element_path: str,
+    element_index: int,
+    mutation_data: dict
+) -> Dict[str, Any]:
+    """Create a new design mutation"""
+    mutation_id = generate_uuid()
+    now = get_timestamp()
+    
+    item = {
+        "mutation_id": mutation_id,
+        "project_id": project_id,
+        "screen_id": screen_id,
+        "mutation_type": mutation_type,
+        "element_path": element_path,
+        "element_index": element_index,
+        "mutation_data": mutation_data,
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    design_mutations_table.put_item(Item=item)
+    return item
+
+
+def get_design_mutations_for_screen(
+    project_id: str,
+    screen_id: str
+) -> List[Dict[str, Any]]:
+    """Get all design mutations for a specific screen"""
+    try:
+        response = design_mutations_table.query(
+            IndexName="project_id-screen_id-index",
+            KeyConditionExpression=Key('project_id').eq(project_id) & Key('screen_id').eq(screen_id)
+        )
+        items = response.get("Items", [])
+        return [convert_decimals(item) for item in items]
+    except ClientError as e:
+        print(f"Error querying design mutations: {e}")
+        # If index doesn't exist, fall back to scan (slower but works)
+        try:
+            response = design_mutations_table.scan(
+                FilterExpression=Attr('project_id').eq(project_id) & Attr('screen_id').eq(screen_id)
+            )
+            items = response.get("Items", [])
+            return [convert_decimals(item) for item in items]
+        except ClientError as e2:
+            print(f"Error scanning design mutations: {e2}")
+            return []
+
+
+def delete_design_mutations_for_screen(
+    project_id: str,
+    screen_id: str
+) -> int:
+    """Delete all design mutations for a specific screen"""
+    mutations = get_design_mutations_for_screen(project_id, screen_id)
+    deleted_count = 0
+    
+    for mutation in mutations:
+        try:
+            design_mutations_table.delete_item(
+                Key={"mutation_id": mutation["mutation_id"]}
+            )
+            deleted_count += 1
+        except ClientError as e:
+            print(f"Error deleting mutation {mutation['mutation_id']}: {e}")
+    
+    return deleted_count
+
+
+def delete_design_mutation(mutation_id: str) -> bool:
+    """Delete a specific design mutation"""
+    try:
+        design_mutations_table.delete_item(Key={"mutation_id": mutation_id})
+        return True
+    except ClientError:
+        return False

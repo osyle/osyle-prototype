@@ -78,6 +78,9 @@ export default function RightPanel({
     addStyleOverride,
     getStyleOverrides,
     clearStyleOverrides,
+    saveStyleOverrides,
+    clearAllMutations,
+    hasUnsavedChanges,
   } = useAgentatorGlobal()
 
   // Project title/description editing state (MOVED FROM Editor.tsx)
@@ -846,26 +849,66 @@ export default function RightPanel({
 
                       addStyleOverride(selectedScreen.screen_id, override)
                     }}
-                    onReset={() => {
-                      if (selectedScreen?.screen_id) {
-                        clearStyleOverrides(selectedScreen.screen_id)
-                      }
-                    }}
-                    onSave={() => {
-                      // TODO: Implement save to backend
+                    onReset={async () => {
                       if (!selectedScreen?.screen_id) return
 
-                      const overrides = getStyleOverrides(
-                        selectedScreen.screen_id,
-                      )
-                      console.log('Save style changes:', overrides)
+                      // Show confirmation dialog
+                      if (
+                        !confirm(
+                          'Reset all manual edits? This will restore the AI-generated original.',
+                        )
+                      ) {
+                        return
+                      }
 
-                      // Future: Call API to save mutations
-                      // await api.projects.saveDesignMutations(projectId, screenId, overrides)
+                      try {
+                        const currentProject =
+                          localStorage.getItem('current_project')
+                        if (currentProject) {
+                          const project = JSON.parse(currentProject)
+                          await clearAllMutations(
+                            project.project_id,
+                            selectedScreen.screen_id,
+                          )
+                          console.log('✅ All edits cleared!')
+                        } else {
+                          // If no projectId (not saved yet), just clear local state
+                          clearStyleOverrides(selectedScreen.screen_id)
+                        }
+                      } catch (error) {
+                        console.error('Failed to clear edits:', error)
+                        alert('Failed to clear edits. Please try again.')
+                      }
+                    }}
+                    onSave={async () => {
+                      if (!selectedScreen?.screen_id) return
+
+                      try {
+                        const currentProject =
+                          localStorage.getItem('current_project')
+                        if (currentProject) {
+                          const project = JSON.parse(currentProject)
+                          await saveStyleOverrides(
+                            project.project_id,
+                            selectedScreen.screen_id,
+                          )
+                          console.log('✅ Changes saved successfully!')
+                        } else {
+                          console.warn(
+                            'No project found, cannot save to database',
+                          )
+                          alert(
+                            'Project not found. Please save the project first.',
+                          )
+                        }
+                      } catch (error) {
+                        console.error('Failed to save changes:', error)
+                        alert('Failed to save changes. Please try again.')
+                      }
                     }}
                     hasUnsavedChanges={
                       selectedScreen?.screen_id
-                        ? getStyleOverrides(selectedScreen.screen_id).length > 0
+                        ? hasUnsavedChanges(selectedScreen.screen_id)
                         : false
                     }
                     currentOverrides={

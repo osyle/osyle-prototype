@@ -10,7 +10,7 @@ import type { StyleOverride } from '../types/styleEditor.types'
 interface StyleOverlayApplicatorProps {
   children: React.ReactNode
   overrides: StyleOverride[]
-  containerRef: React.RefObject<HTMLElement>
+  containerRef: React.RefObject<HTMLElement | null>
 }
 
 /**
@@ -37,20 +37,73 @@ function findElementByPath(
  * Apply style override to an element
  */
 function applyOverride(element: HTMLElement, styles: Record<string, string>) {
+  // Check if we already have original styles stored (from a previous override)
+  const existingOriginalStylesStr = element.getAttribute('data-original-styles')
+  const existingOriginalStyles = existingOriginalStylesStr
+    ? JSON.parse(existingOriginalStylesStr)
+    : {}
+
+  // Store original values before overriding (only if not already stored)
+  const originalStyles: Record<string, string> = { ...existingOriginalStyles }
+
   Object.entries(styles).forEach(([property, value]) => {
     // Convert camelCase to kebab-case
     const cssProp = property.replace(/([A-Z])/g, '-$1').toLowerCase()
+
+    // Only store original value if we haven't stored one yet for this property
+    if (!originalStyles[cssProp]) {
+      const originalValue = element.style.getPropertyValue(cssProp)
+      if (originalValue) {
+        originalStyles[cssProp] = originalValue
+      }
+    }
+
     element.style.setProperty(cssProp, value, 'important')
   })
+
   element.setAttribute('data-style-override', 'true')
+  // Store which properties we modified for cleanup
+  element.setAttribute('data-override-props', Object.keys(styles).join(','))
+  // Store original values
+  if (Object.keys(originalStyles).length > 0) {
+    element.setAttribute('data-original-styles', JSON.stringify(originalStyles))
+  }
 }
 
 /**
  * Remove style overrides from an element
  */
 function removeOverride(element: HTMLElement) {
+  const overrideProps = element.getAttribute('data-override-props')
+  const originalStylesStr = element.getAttribute('data-original-styles')
+
+  if (overrideProps) {
+    const props = overrideProps.split(',')
+    const originalStyles = originalStylesStr
+      ? JSON.parse(originalStylesStr)
+      : {}
+
+    props.forEach(property => {
+      const cssProp = property.replace(/([A-Z])/g, '-$1').toLowerCase()
+
+      // Restore original value if it existed
+      if (originalStyles[cssProp]) {
+        element.style.setProperty(cssProp, originalStyles[cssProp])
+      } else {
+        // Remove the property entirely
+        element.style.removeProperty(cssProp)
+      }
+    })
+  }
+
   element.removeAttribute('data-style-override')
-  // Note: Can't easily remove inline styles, would need to re-render
+  element.removeAttribute('data-override-props')
+  element.removeAttribute('data-original-styles')
+
+  // Clean up empty style attribute
+  if (element.style.cssText.trim() === '') {
+    element.removeAttribute('style')
+  }
 }
 
 export function StyleOverlayApplicator({
@@ -62,8 +115,12 @@ export function StyleOverlayApplicator({
 
   // Apply overrides whenever they change or DOM updates
   useEffect(() => {
-    if (!containerRef.current || overrides.length === 0) {
-      // Clear all previous overrides
+    if (!containerRef.current) {
+      return
+    }
+
+    // When overrides are cleared (reset), remove all applied overrides
+    if (overrides.length === 0) {
       appliedOverridesRef.current.forEach(el => removeOverride(el))
       appliedOverridesRef.current.clear()
       return
