@@ -1,13 +1,12 @@
 """
-Feedback Router - Analyzes user feedback and determines which screens need editing
-Uses Prompt A (lightweight conversational router)
+Feedback Router - Analyzes user feedback and routes to appropriate screens
 """
 import json
 from typing import Dict, Any, List
 
 
 class FeedbackRouter:
-    """Routes user feedback to appropriate screens for regeneration"""
+    """Routes user feedback to appropriate screens"""
     
     def __init__(self, llm_client):
         """
@@ -21,7 +20,7 @@ class FeedbackRouter:
         user_feedback: str,
         conversation_history: List[Dict[str, str]],
         flow_summary: List[Dict[str, str]],
-        annotations: Dict[str, List[Dict[str, Any]]] = None  # NEW: annotations by screen_name
+        annotations: Dict[str, List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
         Analyze user feedback and determine which screens need editing
@@ -47,7 +46,7 @@ class FeedbackRouter:
                 user_feedback,
                 conversation_history,
                 flow_summary,
-                annotations  # NEW: Pass annotations
+                annotations
             )
             
             # Call LLM with feedback_router_prompt
@@ -56,7 +55,7 @@ class FeedbackRouter:
                 user_message=user_message,
                 model="claude-sonnet",
                 max_tokens=2000,
-                temperature=0.3,  # Lower temperature for more consistent routing
+                temperature=0.3,
                 parse_json=True
             )
             
@@ -90,7 +89,7 @@ class FeedbackRouter:
         user_feedback: str,
         conversation_history: List[Dict[str, str]],
         flow_summary: List[Dict[str, str]],
-        annotations: Dict[str, List[Dict[str, Any]]] = None  # NEW: annotations parameter
+        annotations: Dict[str, List[Dict[str, Any]]] = None
     ) -> str:
         """Build the user message with all context"""
         
@@ -111,7 +110,7 @@ class FeedbackRouter:
         message_parts.append(json.dumps(flow_summary, indent=2))
         message_parts.append("\n```\n\n")
         
-        # NEW: Add annotations if present
+        # Add annotations if present
         if annotations and len(annotations) > 0:
             message_parts.append("## User Annotations\n")
             message_parts.append("The user has added visual annotations to specific screens:\n\n")

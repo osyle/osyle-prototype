@@ -1,7 +1,7 @@
 """
-Feedback Applier - Generates updated UI code based on contextualized feedback
-Uses Prompt B (heavy code generator)
+Feedback Applier - Generates updated UI code based on user feedback
 """
+import re
 from typing import List, Dict, Any, AsyncGenerator
 
 
@@ -22,7 +22,7 @@ class FeedbackApplier:
         dtm: Dict[str, Any],
         flow_context: Dict[str, Any],
         device_info: Dict[str, Any],
-        annotations: List[Dict[str, Any]] = None  # NEW: annotations for this screen
+        annotations: List[Dict[str, Any]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Apply feedback to screen code and generate updates (streaming)
@@ -32,17 +32,7 @@ class FeedbackApplier:
         - {"type": "delimiter_detected"} - When $GENERATING is found
         - {"type": "code", "chunk": str} - After $GENERATING
         - {"type": "complete", "conversation": str, "code": str} - Final complete response
-        
-        Args:
-            current_code: Current screen's React code
-            contextualized_feedback: Specific feedback for this screen
-            dtm: Designer Taste Model
-            flow_context: Flow context (transitions, etc.)
-            device_info: Device platform and dimensions
-            annotations: List of annotation objects for this screen (NEW)
         """
-        screen_id = flow_context.get("screen_id", "unknown")
-        screen_name = flow_context.get("screen_name", "Unknown")
         conversation_part = []
         code_part = []
         
@@ -54,14 +44,13 @@ class FeedbackApplier:
                 dtm=dtm,
                 flow_context=flow_context,
                 device_info=device_info,
-                annotations=annotations  # NEW: Pass annotations
+                annotations=annotations
             )
             
             delimiter_found = False
             buffer = ""
-            chunk_index = 0
             
-            # Stream from LLM using call_claude_streaming
+            # Stream from LLM
             async for chunk in self.llm.call_claude_streaming(
                 prompt_name="feedback_applier_prompt",
                 user_message=user_message,
@@ -69,16 +58,16 @@ class FeedbackApplier:
                 max_tokens=8000,
                 temperature=0.5
             ):
-                buffer += chunk
-                chunk_index += 1
+                # Only add to buffer before delimiter is found
+                if not delimiter_found:
+                    buffer += chunk
                 
-                # ✅ FIX: Process chunks in real-time INSIDE the loop
-                # Check for delimiter
+                # Process chunks in real-time
                 if not delimiter_found and "$GENERATING" in buffer:
                     # Split at delimiter
                     before_delimiter, after_delimiter = buffer.split("$GENERATING", 1)
                     
-                    # Send any remaining conversation text before delimiter
+                    # Send conversation part
                     if before_delimiter.strip():
                         conversation_part.append(before_delimiter)
                         yield {
@@ -90,23 +79,19 @@ class FeedbackApplier:
                     delimiter_found = True
                     yield {"type": "delimiter_detected"}
                     
-                    # Start code buffer with text after delimiter
-                    buffer = after_delimiter
-                    
-                    # Send code chunk if any
-                    if buffer.strip():
-                        code_part.append(buffer)
-                        yield {
-                            "type": "code",
-                            "chunk": buffer
-                        }
+                    # Add after_delimiter to code_part
+                    code_part.append(after_delimiter)
+                    yield {
+                        "type": "code",
+                        "chunk": after_delimiter
+                    }
                     
                     buffer = ""
                 
                 elif not delimiter_found:
                     # Still in conversation part
-                    # Send chunks as they arrive for real-time streaming
-                    if len(buffer) > 50:  # Send in reasonable chunks
+                    # Only flush if buffer is large AND doesn't contain partial delimiter
+                    if len(buffer) > 50 and not any(buffer.endswith(prefix) for prefix in ["$", "$G", "$GE", "$GEN", "$GENE", "$GENER", "$GENERA", "$GENERAT", "$GENERATI", "$GENERATIN"]):
                         conversation_part.append(buffer)
                         yield {
                             "type": "conversation",
@@ -115,7 +100,7 @@ class FeedbackApplier:
                         buffer = ""
                 
                 else:
-                    # In code part - accumulate but don't send yet
+                    # In code part - accumulate and send
                     code_part.append(chunk)
                     yield {
                         "type": "code",
@@ -137,9 +122,12 @@ class FeedbackApplier:
                         "chunk": buffer
                     }
             
-            # Send complete response
+            # Assemble final code
             full_conversation = "".join(conversation_part).strip()
             full_code = "".join(code_part).strip()
+            
+            # Strip markdown fences
+            full_code = self._strip_code_fences(full_code)
             
             yield {
                 "type": "complete",
@@ -148,8 +136,26 @@ class FeedbackApplier:
             }
             
         except Exception as e:
-            print(f"Error applying feedback to {screen_name}: {e}")
+            print(f"Error in feedback applier: {e}")
             raise
+    
+    def _strip_code_fences(self, code: str) -> str:
+        """Strip markdown code fences from generated code"""
+        code = code.strip()
+        
+        # Remove opening fence at the start (with or without language identifier)
+        if code.startswith('```'):
+            first_newline = code.find('\n')
+            if first_newline != -1:
+                code = code[first_newline + 1:]
+        
+        # Remove closing fence at the end
+        if code.rstrip().endswith('```'):
+            last_fence_index = code.rstrip().rfind('\n```')
+            if last_fence_index != -1:
+                code = code[:last_fence_index]
+        
+        return code.strip()
     
     def _build_user_message(
         self,
@@ -158,7 +164,7 @@ class FeedbackApplier:
         dtm: Dict[str, Any],
         flow_context: Dict[str, Any],
         device_info: Dict[str, Any],
-        annotations: List[Dict[str, Any]] = None  # NEW: annotations parameter
+        annotations: List[Dict[str, Any]] = None
     ) -> str:
         """Build the user message with all context"""
         
@@ -177,7 +183,7 @@ class FeedbackApplier:
         parts.append(contextualized_feedback)
         parts.append("\n\n")
         
-        # NEW: Annotations section
+        # Annotations section
         if annotations and len(annotations) > 0:
             parts.append("## Visual Annotations\n")
             parts.append(f"The user added {len(annotations)} annotation(s) on this screen:\n\n")
@@ -185,11 +191,9 @@ class FeedbackApplier:
             for idx, ann in enumerate(annotations, 1):
                 parts.append(f"**{idx}. {ann.get('element', 'Element')}**\n")
                 
-                # Element path (helps locate element in code)
                 if ann.get('elementPath'):
                     parts.append(f"   - Path: `{ann['elementPath']}`\n")
                 
-                # Element details for targeting
                 if ann.get('tagName'):
                     parts.append(f"   - Tag: `<{ann['tagName'].lower()}>`\n")
                 
@@ -208,7 +212,6 @@ class FeedbackApplier:
                     ord_str = ordinal[idx_num] if idx_num < len(ordinal) else f"{idx_num + 1}th"
                     parts.append(f"   - Occurrence: {ord_str}\n")
                 
-                # The actual feedback
                 parts.append(f"   - **Feedback:** {ann.get('comment', 'No comment')}\n\n")
             
             parts.append("Use the path, text content, and element details to precisely locate these elements in the code above. ")
@@ -218,7 +221,6 @@ class FeedbackApplier:
         parts.append("## Designer Taste Model (DTM)\n")
         parts.append("Use these values when applying changes:\n\n")
         
-        # Extract key DTM values
         designer_systems = dtm.get("designer_systems", {})
         
         if "spacing" in designer_systems:
@@ -235,7 +237,7 @@ class FeedbackApplier:
         if "color_system" in designer_systems:
             colors = designer_systems["color_system"].get("common_palette", [])
             if colors:
-                parts.append(f"**Color Palette:** {colors[:10]}\n")  # First 10
+                parts.append(f"**Color Palette:** {colors[:10]}\n")
         
         if "form_language" in designer_systems:
             radii = designer_systems["form_language"].get("common_radii", [])
@@ -253,7 +255,7 @@ class FeedbackApplier:
             transitions = flow_context.get("outgoing_transitions", [])
             if transitions:
                 parts.append(f"**Transitions:** {len(transitions)} outgoing\n")
-                for trans in transitions[:3]:  # Show first 3
+                for trans in transitions[:3]:
                     parts.append(f"  - {trans.get('trigger', 'Unknown')} → {trans.get('to_screen_name', 'Unknown')}\n")
             
             parts.append("\n")

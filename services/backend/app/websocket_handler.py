@@ -37,7 +37,6 @@ from app.progressive_streaming import generate_screen_ui_progressive
 
 from app.feedback_router import FeedbackRouter
 from app.feedback_applier import FeedbackApplier
-from app.feedback_logger import FeedbackLogger
 
 async def send_progress(websocket: WebSocket, stage: str, message: str, data: Dict[str, Any] = None):
     """Send progress update to client"""
@@ -1178,13 +1177,6 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
         # Get current version
         current_version = project.get("metadata", {}).get("flow_version", 1)
         
-        # Initialize logger
-        from datetime import datetime
-        start_time = datetime.utcnow()
-        logger = FeedbackLogger(project_id, user_id)
-        logger.log_user_feedback(user_feedback, conversation_history)
-        logger.log_flow_state(flow_graph, current_version)
-        
         # Initialize services
         llm = get_llm_service()
         router = FeedbackRouter(llm)
@@ -1209,16 +1201,12 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
             for screen in flow_graph["screens"]
         }
         
-        logger.log_router_input(user_feedback, flow_summary)
-        
         routing_result = await router.route_feedback(
             user_feedback=user_feedback,
             conversation_history=conversation_history,
             flow_summary=flow_summary,
             annotations=annotations  # NEW: Pass annotations
         )
-        
-        logger.log_router_output(routing_result)
         
         # Check if conversation only
         if routing_result.get("conversation_only", False):
@@ -1337,14 +1325,6 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
                 "common_sizes": dtm.get("designer_systems", {}).get("typography", {}).get("common_sizes", []),
                 "color_palette_count": len(dtm.get("designer_systems", {}).get("color_system", {}).get("common_palette", []))
             }
-            logger.log_applier_input(
-                screen_id=screen_id,
-                screen_name=screen_name,
-                current_code=current_code,
-                contextualized_feedback=contextualized_feedback,
-                dtm_summary=dtm_summary,
-                flow_context=flow_context
-            )
             
             # Apply feedback and stream updates
             conversation_chunks = []
@@ -1366,18 +1346,6 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
                     chunk_text = chunk_data.get("chunk", "")
                     conversation_chunks.append(chunk_text)
                     
-                    # Log streaming
-                    logger.log_applier_streaming(
-                        screen_id=screen_id,
-                        chunk_type="conversation",
-                        chunk_content=chunk_text,
-                        buffer_state={
-                            "delimiter_found": delimiter_detected,
-                            "conversation_length": len("".join(conversation_chunks)),
-                            "code_length": len("".join(code_chunks))
-                        }
-                    )
-                    
                     await websocket.send_json({
                         "type": "screen_conversation_chunk",
                         "data": {
@@ -1390,22 +1358,11 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
                     # Delimiter found, notify frontend to show "generating" state
                     delimiter_detected = True
                     
-                    logger.log_applier_streaming(
-                        screen_id=screen_id,
-                        chunk_type="delimiter_detected",
-                        chunk_content="",
-                        buffer_state={
-                            "delimiter_found": True,
-                            "conversation_length": len("".join(conversation_chunks)),
-                            "code_length": 0
-                        }
-                    )
-                    
                     await websocket.send_json({
                         "type": "screen_generating",
                         "data": {
                             "screen_id": screen_id,
-                            "screen_name": screen_name,  # ✅ ADD: Send screen_name for display
+                            "screen_name": screen_name,
                             "message": "Generating updated code..."
                         }
                     })
@@ -1413,33 +1370,11 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
                 elif chunk_type == "code":
                     # Accumulate code chunks (don't send to frontend yet)
                     code_chunks.append(chunk_data.get("chunk", ""))
-                    
-                    # Log every 10th code chunk to avoid excessive logging
-                    if len(code_chunks) % 10 == 0:
-                        logger.log_applier_streaming(
-                            screen_id=screen_id,
-                            chunk_type="code",
-                            chunk_content=chunk_data.get("chunk", ""),
-                            buffer_state={
-                                "delimiter_found": delimiter_detected,
-                                "conversation_length": len("".join(conversation_chunks)),
-                                "code_length": len("".join(code_chunks))
-                            }
-                        )
                 
                 elif chunk_type == "complete":
                     # Final complete response
                     full_conversation = chunk_data.get("conversation", "")
                     full_code = chunk_data.get("code", "")
-                    
-                    # Log completion
-                    logger.log_applier_complete(
-                        screen_id=screen_id,
-                        screen_name=screen_name,
-                        full_conversation=full_conversation,
-                        full_code=full_code,
-                        original_code=current_code
-                    )
                     
                     # Update screen in flow graph
                     screen["ui_code"] = full_code
@@ -1492,9 +1427,6 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
         # Update DynamoDB with Decimal version
         db.update_project_flow_graph(project_id, flow_graph_for_db)
         
-        # Log version save
-        logger.log_version_save(new_version, [s["screen_id"] for s in updated_screens])
-        
         # Step 5: Send completion
         await websocket.send_json({
             "type": "iteration_complete",
@@ -1513,27 +1445,10 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
             "screens_updated": len(updated_screens)
         })
         
-        # Log session completion
-        duration = (datetime.utcnow() - start_time).total_seconds()
-        logger.log_session_complete("success", duration)
-        
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
-        
-        # Log error
-        try:
-            logger.log_error(
-                stage="handle_iterate_ui",
-                error_type=type(e).__name__,
-                error_message=str(e),
-                stack_trace=error_trace
-            )
-            duration = (datetime.utcnow() - start_time).total_seconds()
-            logger.log_session_complete("error", duration)
-        except:
-            pass
-        
+        print(f"Error in handle_iterate_ui: {e}")
         traceback.print_exc()
         await send_error(websocket, str(e))
 
