@@ -577,9 +577,15 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       }
       onMouseUp={isDragging ? handleMouseUp : undefined}
       // FIX 3: Universal event blocking in Concept mode
+      // BUT: Allow annotation UI to work (popup, markers)
       onMouseDownCapture={
         isConceptMode
           ? e => {
+              // Allow annotation UI to work
+              const target = e.target as HTMLElement
+              if (target.closest('[data-annotation-ui]')) {
+                return // Don't block
+              }
               e.preventDefault()
               e.stopPropagation()
             }
@@ -588,6 +594,11 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       onChangeCapture={
         isConceptMode
           ? e => {
+              // Allow annotation UI to work
+              const target = e.target as HTMLElement
+              if (target.closest('[data-annotation-ui]')) {
+                return // Don't block
+              }
               e.preventDefault()
               e.stopPropagation()
             }

@@ -220,7 +220,8 @@ export const CodeAnnotator: React.FC<CodeAnnotatorProps> = ({
             position: 'absolute',
             top: `${20 + (selectedLines.start - 1) * lineHeight}px`, // 20px for padding offset
             left: '60px', // Position just after line numbers (typically ~3em = ~48px)
-            zIndex: 30,
+            zIndex: 10000, // FIXED: Above interactive overlay (9999)
+            pointerEvents: 'auto', // FIXED: Enable clicks
           }}
           className="w-80"
         >
