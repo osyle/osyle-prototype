@@ -274,7 +274,7 @@ export default function RightPanel({
             <>
               {/* User Profile - Top Right */}
               {userInfo && (
-                <div className="flex justify-end">
+                <div className="flex justify-end mb-2">
                   <div className="relative group">
                     <button
                       className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all hover:scale-110"
@@ -1525,19 +1525,26 @@ export default function RightPanel({
       {!isCollapsed && (
         <button
           onClick={onCollapse}
-          className="fixed bottom-1/6 right-0 -translate-y-1/2 w-10 h-16 rounded-l-xl flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg z-50 group"
+          className="fixed top-1/2 right-0 -translate-y-1/2 w-8 h-20 rounded-l-2xl flex items-center justify-center transition-all hover:shadow-xl z-50 group"
           style={{
-            backgroundColor: '#FFFFFF',
-            boxShadow: '-4px 4px 12px rgba(0,0,0,0.12)',
+            background: 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+            boxShadow: '-2px 4px 16px rgba(102, 126, 234, 0.3)',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.transform =
+              'translateY(-50%) translateX(-4px)'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.transform = 'translateY(-50%) translateX(0)'
           }}
         >
           <ChevronDown
-            size={20}
+            size={18}
             style={{
-              color: '#3B3B3B',
+              color: '#FFFFFF',
               transform: 'rotate(-90deg)',
             }}
-            className="group-hover:scale-110 transition-transform"
+            className="transition-transform"
           />
         </button>
       )}
