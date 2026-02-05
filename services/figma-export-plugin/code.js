@@ -1,646 +1,450 @@
-// ============================================================================
-// OSYLE FIGMA PLUGIN v3 - DESIGN INTELLIGENCE EXTRACTION
-// ============================================================================
-// Ultra-defensive version for maximum Figma API compatibility
-// ============================================================================
+// Show the plugin UI
+figma.showUI(__html__, { width: 360, height: 400 });
 
-// ============================================================================
-// SAFE VALUE HELPERS
-// ============================================================================
-
-function safeNumber(value, defaultValue) {
-  if (value === null || value === undefined) return defaultValue;
-  if (typeof value === "symbol") return defaultValue;
-  var num = Number(value);
-  if (isNaN(num)) return defaultValue;
-  return num;
-}
-
-function safeString(value, defaultValue) {
-  if (value === null || value === undefined) return defaultValue;
-  if (typeof value === "symbol") return defaultValue;
-  return String(value);
-}
-
-function safeObject(value) {
-  if (value === null || value === undefined) return null;
-  if (typeof value === "symbol") return null;
-  if (typeof value !== "object") return null;
-  return value;
-}
-
-function safeArray(value) {
-  if (!value) return [];
-  if (typeof value === "symbol") return [];
-  if (!Array.isArray(value)) return [];
-  return value;
-}
-
-// ============================================================================
-// DESIGN INTELLIGENCE EXTRACTION
-// ============================================================================
-
-function extractDesignIntelligence(node) {
-  // Safety check
-  if (!node || typeof node !== "object") {
-    return { type: "UNKNOWN", name: "error" };
-  }
-
-  // Parse fills to color string
-  function extractColor(fills) {
-    try {
-      if (!fills || !fills.length) return null;
-      var fill = fills[0];
-      if (!fill || fill.type !== "SOLID") return null;
-
-      var paint = safeObject(fill);
-      if (!paint) return null;
-
-      var c = safeObject(paint.color) || {};
-      var r = Math.round(safeNumber(c.r, 0) * 255);
-      var g = Math.round(safeNumber(c.g, 0) * 255);
-      var b = Math.round(safeNumber(c.b, 0) * 255);
-      var opacity = safeNumber(paint.opacity, 1);
-
-      if (opacity < 1) {
-        return "rgba(" + r + "," + g + "," + b + "," + opacity.toFixed(2) + ")";
-      }
-      return "rgb(" + r + "," + g + "," + b + ")";
-    } catch (e) {
-      return null;
-    }
-  }
-
-  // Extract gradient information
-  function extractGradient(fills) {
-    try {
-      if (!fills || !fills.length) return null;
-
-      var gradientFill = null;
-      for (var i = 0; i < fills.length; i++) {
-        var f = fills[i];
-        if (!f) continue;
-        var type = safeString(f.type, "");
-        if (
-          type === "GRADIENT_LINEAR" ||
-          type === "GRADIENT_RADIAL" ||
-          type === "GRADIENT_ANGULAR"
-        ) {
-          gradientFill = f;
-          break;
-        }
-      }
-
-      if (!gradientFill) return null;
-
-      var stops = [];
-      var gradStops = safeArray(gradientFill.gradientStops);
-
-      for (var j = 0; j < gradStops.length; j++) {
-        var stop = safeObject(gradStops[j]);
-        if (!stop) continue;
-
-        var c = safeObject(stop.color) || {};
-        var r = Math.round(safeNumber(c.r, 0) * 255);
-        var g = Math.round(safeNumber(c.g, 0) * 255);
-        var b = Math.round(safeNumber(c.b, 0) * 255);
-
-        stops.push({
-          position: safeNumber(stop.position, 0),
-          color: "rgb(" + r + "," + g + "," + b + ")",
-          alpha: safeNumber(c.a, 1),
-        });
-      }
-
-      return {
-        type: safeString(gradientFill.type, "unknown"),
-        stops: stops,
-        angle: null,
-      };
-    } catch (e) {
-      return null;
-    }
-  }
-
-  // Build layout intelligence
-  var layout = {};
-
+// Handle messages from the UI
+figma.ui.onmessage = async (msg) => {
   try {
-    var layoutMode = safeString(node.layoutMode, "NONE");
-    if (layoutMode && layoutMode !== "NONE") {
-      layout.mode = layoutMode;
-      layout.spacing = safeNumber(node.itemSpacing, 0);
-
-      var primaryAlign = safeString(node.primaryAxisAlignItems, "");
-      if (primaryAlign) {
-        layout.primary_align = primaryAlign;
-      }
-
-      var counterAlign = safeString(node.counterAxisAlignItems, "");
-      if (counterAlign) {
-        layout.counter_align = counterAlign;
-      }
-
-      var primarySizing = safeString(node.primaryAxisSizingMode, "");
-      if (primarySizing) {
-        layout.primary_sizing = primarySizing;
-      }
-
-      var counterSizing = safeString(node.counterAxisSizingMode, "");
-      if (counterSizing) {
-        layout.counter_sizing = counterSizing;
-      }
-
-      var padTop = safeNumber(node.paddingTop, 0);
-      var padRight = safeNumber(node.paddingRight, 0);
-      var padBottom = safeNumber(node.paddingBottom, 0);
-      var padLeft = safeNumber(node.paddingLeft, 0);
-
-      if (padTop || padRight || padBottom || padLeft) {
-        layout.padding = [padTop, padRight, padBottom, padLeft];
-      }
-    }
-  } catch (e) {
-    // Skip layout if error
-  }
-
-  // Build style intelligence
-  var style = {};
-
-  try {
-    var width = safeNumber(node.width, null);
-    if (width !== null) {
-      style.width = Math.round(width);
-    }
-
-    var height = safeNumber(node.height, null);
-    if (height !== null) {
-      style.height = Math.round(height);
-    }
-
-    var x = safeNumber(node.x, null);
-    var y = safeNumber(node.y, null);
-    if (x !== null && y !== null) {
-      style.position = {
-        x: Math.round(x),
-        y: Math.round(y),
-      };
-    }
-
-    var fillColor = extractColor(safeArray(node.fills));
-    if (fillColor) {
-      style.fill = fillColor;
-    }
-
-    var gradient = extractGradient(safeArray(node.fills));
-    if (gradient) {
-      style.gradient = gradient;
-    }
-
-    var strokeColor = extractColor(safeArray(node.strokes));
-    var strokeWeight = safeNumber(node.strokeWeight, 0);
-    if (strokeColor && strokeWeight) {
-      style.stroke = {
-        color: strokeColor,
-        weight: strokeWeight,
-      };
-    }
-
-    var cornerRadius = safeNumber(node.cornerRadius, 0);
-    if (cornerRadius > 0) {
-      style.corner_radius = cornerRadius;
-    }
-
-    var tlr = safeNumber(node.topLeftRadius, 0);
-    var trr = safeNumber(node.topRightRadius, 0);
-    var brr = safeNumber(node.bottomRightRadius, 0);
-    var blr = safeNumber(node.bottomLeftRadius, 0);
-
-    if (tlr || trr || brr || blr) {
-      style.corner_radii = [tlr, trr, brr, blr];
-    }
-  } catch (e) {
-    // Skip style if error
-  }
-
-  // Typography
-  var nodeType = safeString(node.type, "");
-  if (nodeType === "TEXT") {
-    try {
-      var fontSize = safeNumber(node.fontSize, null);
-      if (fontSize !== null) {
-        style.font_size = fontSize;
-      }
-
-      var fontName = safeObject(node.fontName);
-      if (fontName) {
-        var family = safeString(fontName.family, "");
-        var weight = safeString(fontName.style, "");
-        if (family) style.font_family = family;
-        if (weight) style.font_weight = weight;
-      }
-
-      // Handle lineHeight which can be an object or number
-      var lineHeight = node.lineHeight;
-      if (
-        lineHeight !== null &&
-        lineHeight !== undefined &&
-        typeof lineHeight !== "symbol"
-      ) {
-        if (typeof lineHeight === "object" && lineHeight.value !== undefined) {
-          style.line_height = safeNumber(lineHeight.value, null);
-        } else {
-          style.line_height = safeNumber(lineHeight, null);
-        }
-      }
-
-      // Handle letterSpacing which can be an object or number
-      var letterSpacing = node.letterSpacing;
-      if (
-        letterSpacing !== null &&
-        letterSpacing !== undefined &&
-        typeof letterSpacing !== "symbol"
-      ) {
-        if (
-          typeof letterSpacing === "object" &&
-          letterSpacing.value !== undefined
-        ) {
-          style.letter_spacing = safeNumber(letterSpacing.value, null);
-        } else {
-          style.letter_spacing = safeNumber(letterSpacing, null);
-        }
-      }
-
-      var textAlign = safeString(node.textAlignHorizontal, "");
-      if (textAlign) {
-        style.text_align = textAlign;
-      }
-
-      var textColor = extractColor(safeArray(node.fills));
-      if (textColor) {
-        style.color = textColor;
-      }
-    } catch (e) {
-      // Skip typography if error
-    }
-  }
-
-  // Effects
-  try {
-    var effects = safeArray(node.effects);
-    if (effects.length > 0) {
-      var effectsList = [];
-
-      for (var k = 0; k < effects.length; k++) {
-        var effect = safeObject(effects[k]);
-        if (!effect) continue;
-
-        var visible = effect.visible;
-        if (visible === false) continue;
-
-        var effectType = safeString(effect.type, "");
-        if (!effectType) continue;
-
-        var e = { type: effectType };
-
-        if (effectType.indexOf("SHADOW") >= 0) {
-          var offset = safeObject(effect.offset);
-          if (offset) {
-            e.offset = {
-              x: safeNumber(offset.x, 0),
-              y: safeNumber(offset.y, 0),
-            };
-          } else {
-            e.offset = { x: 0, y: 0 };
-          }
-
-          e.radius = safeNumber(effect.radius, 0);
-          e.spread = safeNumber(effect.spread, 0);
-
-          var effectColor = safeObject(effect.color);
-          if (effectColor) {
-            var r = Math.round(safeNumber(effectColor.r, 0) * 255);
-            var g = Math.round(safeNumber(effectColor.g, 0) * 255);
-            var b = Math.round(safeNumber(effectColor.b, 0) * 255);
-            var a = safeNumber(effectColor.a, 1);
-            e.color = "rgba(" + r + "," + g + "," + b + "," + a + ")";
-          }
-        } else if (effectType.indexOf("BLUR") >= 0) {
-          e.radius = safeNumber(effect.radius, 0);
-        }
-
-        effectsList.push(e);
-      }
-
-      if (effectsList.length > 0) {
-        style.effects = effectsList;
-      }
-    }
-  } catch (e) {
-    // Skip effects if error
-  }
-
-  try {
-    var opacity = safeNumber(node.opacity, 1);
-    if (opacity < 1) {
-      style.opacity = Math.round(opacity * 100) / 100;
-    }
-
-    var blendMode = safeString(node.blendMode, "NORMAL");
-    if (blendMode && blendMode !== "NORMAL") {
-      style.blend_mode = blendMode;
-    }
-  } catch (e) {
-    // Skip if error
-  }
-
-  // Build compressed node
-  var compressed = {
-    type: safeString(node.type, "UNKNOWN"),
-    name: safeString(node.name, "unnamed"),
-  };
-
-  if (Object.keys(layout).length > 0) {
-    compressed.layout = layout;
-  }
-
-  if (Object.keys(style).length > 0) {
-    compressed.style = style;
-  }
-
-  // Text content
-  if (nodeType === "TEXT") {
-    try {
-      var chars = safeString(node.characters, "");
-      if (chars) {
-        compressed.text =
-          chars.length > 200 ? chars.substring(0, 200) + "..." : chars;
-      }
-    } catch (e) {
-      // Skip text if error
-    }
-  }
-
-  // Constraints
-  try {
-    var constraints = safeObject(node.constraints);
-    if (constraints) {
-      var horizontal = safeString(constraints.horizontal, "MIN");
-      var vertical = safeString(constraints.vertical, "MIN");
-
-      if (horizontal !== "MIN" || vertical !== "MIN") {
-        compressed.constraints = {
-          horizontal: horizontal,
-          vertical: vertical,
-        };
-      }
-    }
-  } catch (e) {
-    // Skip constraints if error
-  }
-
-  // Children (recursive)
-  try {
-    var children = safeArray(node.children);
-    if (children.length > 0) {
-      compressed.children = [];
-      for (var m = 0; m < children.length; m++) {
-        var child = children[m];
-        if (child) {
-          compressed.children.push(extractDesignIntelligence(child));
-        }
-      }
-    }
-  } catch (e) {
-    // Skip children if error
-  }
-
-  return compressed;
-}
-
-// ============================================================================
-// METADATA EXTRACTION
-// ============================================================================
-
-function extractDesignMetadata(node) {
-  var metadata = {
-    name: safeString(node.name, "unnamed"),
-    dimensions: {
-      width: Math.round(safeNumber(node.width, 0)),
-      height: Math.round(safeNumber(node.height, 0)),
-    },
-    total_nodes: 0,
-    depth: 0,
-    has_auto_layout: false,
-    has_gradients: false,
-    has_effects: false,
-    has_text: false,
-  };
-
-  function analyzeNode(n, depth) {
-    if (!n) return;
-    if (depth === undefined) depth = 0;
-
-    try {
-      metadata.total_nodes++;
-      metadata.depth = Math.max(metadata.depth, depth);
-
-      var layoutMode = safeString(n.layoutMode, "NONE");
-      if (layoutMode && layoutMode !== "NONE") {
-        metadata.has_auto_layout = true;
-      }
-
-      var fills = safeArray(n.fills);
-      for (var i = 0; i < fills.length; i++) {
-        var f = fills[i];
-        if (!f) continue;
-        var type = safeString(f.type, "");
-        if (
-          type === "GRADIENT_LINEAR" ||
-          type === "GRADIENT_RADIAL" ||
-          type === "GRADIENT_ANGULAR"
-        ) {
-          metadata.has_gradients = true;
-          break;
-        }
-      }
-
-      var effects = safeArray(n.effects);
-      if (effects.length > 0) {
-        metadata.has_effects = true;
-      }
-
-      var nodeType = safeString(n.type, "");
-      if (nodeType === "TEXT") {
-        metadata.has_text = true;
-      }
-
-      var children = safeArray(n.children);
-      for (var j = 0; j < children.length; j++) {
-        if (children[j]) {
-          analyzeNode(children[j], depth + 1);
-        }
-      }
-    } catch (e) {
-      // Continue even if error
-    }
-  }
-
-  analyzeNode(node);
-
-  return metadata;
-}
-
-// ============================================================================
-// HELPER: Encode string to Uint8Array
-// ============================================================================
-
-function encodeUTF8(str) {
-  try {
-    if (typeof TextEncoder !== "undefined") {
-      var encoder = new TextEncoder();
-      return encoder.encode(str);
-    }
-  } catch (e) {
-    // Fall through to manual encoding
-  }
-
-  // Manual encoding fallback
-  var arr = [];
-  for (var i = 0; i < str.length; i++) {
-    var code = str.charCodeAt(i);
-    if (code < 128) {
-      arr.push(code);
-    } else if (code < 2048) {
-      arr.push(192 | (code >> 6));
-      arr.push(128 | (code & 63));
-    } else if (code < 65536) {
-      arr.push(224 | (code >> 12));
-      arr.push(128 | ((code >> 6) & 63));
-      arr.push(128 | (code & 63));
-    } else {
-      arr.push(240 | (code >> 18));
-      arr.push(128 | ((code >> 12) & 63));
-      arr.push(128 | ((code >> 6) & 63));
-      arr.push(128 | (code & 63));
-    }
-  }
-  return new Uint8Array(arr);
-}
-
-// ============================================================================
-// PLUGIN UI LOGIC
-// ============================================================================
-
-figma.showUI(__html__, {
-  visible: true,
-  width: 360,
-  height: 520,
-  themeColors: true,
-});
-
-figma.ui.onmessage = async function (msg) {
-  if (msg.type === "export") {
-    var selection = figma.currentPage.selection;
-    var exportJson = msg.exportJson;
-    var exportPng = msg.exportPng;
-
-    if (!selection.length) {
-      figma.ui.postMessage({
-        type: "error",
-        message: "Please select at least one frame or component.",
-      });
+    if (msg.type === "cancel") {
+      figma.closePlugin();
       return;
     }
 
-    if (!exportJson && !exportPng) {
-      figma.ui.postMessage({
-        type: "error",
-        message: "Select at least one export option (JSON and/or PNG).",
-      });
+    if (msg.type === "send-to-osyle") {
+      await handleSendToOsyle();
       return;
     }
 
-    for (var i = 0; i < selection.length; i++) {
-      var node = selection[i];
-      var nodeName = safeString(node.name, "unnamed").replace(
-        /[\\/:*?"<>|]/g,
-        "_"
-      );
-      var files = [];
-
-      try {
-        figma.ui.postMessage({
-          type: "progress",
-          message: "Processing " + nodeName + "...",
-        });
-
-        // JSON export with design intelligence
-        if (exportJson) {
-          var metadata = extractDesignMetadata(node);
-          var designData = extractDesignIntelligence(node);
-
-          var output = {
-            version: "3.0",
-            metadata: metadata,
-            design: designData,
-          };
-
-          var jsonString = JSON.stringify(output, null, 2);
-          var jsonBytes = encodeUTF8(jsonString);
-          files.push({ name: "figma.json", content: jsonBytes });
-
-          figma.ui.postMessage({
-            type: "info",
-            message:
-              "JSON: " +
-              Math.round(jsonBytes.length / 1024) +
-              "KB, " +
-              metadata.total_nodes +
-              " nodes",
-          });
-        }
-
-        // PNG export
-        if (exportPng) {
-          var pngBytes = await node.exportAsync({
-            format: "PNG",
-            constraint: { type: "SCALE", value: 2 },
-          });
-          files.push({ name: "image.png", content: pngBytes });
-
-          figma.ui.postMessage({
-            type: "info",
-            message: "PNG: " + Math.round(pngBytes.length / 1024) + "KB",
-          });
-        }
-
-        // Send all files for this node
-        figma.ui.postMessage({
-          type: "files-ready",
-          nodeName: nodeName,
-          files: files,
-        });
-      } catch (err) {
-        figma.ui.postMessage({
-          type: "error",
-          message:
-            "Failed to export " +
-            nodeName +
-            ": " +
-            (err.message || "Unknown error"),
-        });
-        console.error("Export error:", err);
-      }
+    if (msg.type === "export") {
+      await handleExport(msg.exportJson, msg.exportPng);
+      return;
     }
-
+  } catch (error) {
+    console.error("Plugin error:", error);
     figma.ui.postMessage({
-      type: "export-complete",
-      message: "Successfully exported " + selection.length + " design(s)!",
+      type: "error",
+      message: error.message || "An error occurred",
+    });
+  }
+};
+
+// NEW: Handle "Send to Osyle" flow
+async function handleSendToOsyle() {
+  const selection = figma.currentPage.selection;
+
+  if (selection.length === 0) {
+    figma.ui.postMessage({
+      type: "error",
+      message: "Please select a frame or component",
+    });
+    return;
+  }
+
+  if (selection.length > 1) {
+    figma.ui.postMessage({
+      type: "error",
+      message: "Please select only one frame or component",
+    });
+    return;
+  }
+
+  const node = selection[0];
+
+  // Get file key from current file
+  const fileKey = figma.fileKey;
+  if (!fileKey) {
+    figma.ui.postMessage({
+      type: "error",
+      message:
+        "Could not get file key. Please ensure the file is saved to Figma.",
+    });
+    return;
+  }
+
+  // Get node ID
+  const nodeId = node.id;
+  const fileName = node.name || "Untitled";
+
+  figma.ui.postMessage({
+    type: "progress",
+    message: "Sending to Osyle...",
+  });
+
+  // Send data to UI, which will forward to React app
+  figma.ui.postMessage({
+    type: "send-to-osyle-data",
+    fileKey: fileKey,
+    nodeId: nodeId,
+    fileName: fileName,
+  });
+}
+
+// Handle ZIP export flow (backward compatibility)
+async function handleExport(exportJson, exportPng) {
+  const selection = figma.currentPage.selection;
+
+  if (selection.length === 0) {
+    figma.ui.postMessage({
+      type: "error",
+      message: "Please select a frame or component",
+    });
+    return;
+  }
+
+  if (selection.length > 1) {
+    figma.ui.postMessage({
+      type: "error",
+      message: "Please select only one frame or component",
+    });
+    return;
+  }
+
+  const node = selection[0];
+  const nodeName = node.name.replace(/[^a-zA-Z0-9]/g, "_");
+  const timestamp = new Date().getTime();
+  const files = [];
+
+  // Export JSON
+  if (exportJson) {
+    figma.ui.postMessage({
+      type: "progress",
+      message: "Serializing Figma JSON...",
+    });
+
+    // Serialize the complete node tree (NO COMPRESSION)
+    const jsonData = serializeFigmaNode(node);
+    const jsonString = JSON.stringify(jsonData, null, 2);
+
+    // Convert string to UTF-8 byte array (TextEncoder not available in Figma)
+    const bytes = [];
+    for (let i = 0; i < jsonString.length; i++) {
+      const charCode = jsonString.charCodeAt(i);
+      if (charCode < 128) {
+        bytes.push(charCode);
+      } else if (charCode < 2048) {
+        bytes.push((charCode >> 6) | 192, (charCode & 63) | 128);
+      } else {
+        bytes.push(
+          (charCode >> 12) | 224,
+          ((charCode >> 6) & 63) | 128,
+          (charCode & 63) | 128
+        );
+      }
+    }
+
+    files.push({
+      name: "figma.json",
+      content: bytes,
     });
   }
 
-  if (msg.type === "cancel") {
-    figma.closePlugin();
+  // Export PNG
+  if (exportPng) {
+    figma.ui.postMessage({
+      type: "progress",
+      message: "Rendering PNG...",
+    });
+
+    const imageData = await node.exportAsync({
+      format: "PNG",
+      constraint: { type: "SCALE", value: 2 },
+    });
+
+    files.push({
+      name: "image.png",
+      content: Array.from(imageData),
+    });
   }
-};
+
+  figma.ui.postMessage({
+    type: "files-ready",
+    nodeName,
+    timestamp,
+    files,
+  });
+
+  figma.ui.postMessage({ type: "export-complete" });
+}
+
+/**
+ * Serialize a Figma node to JSON (COMPLETE, RAW, NO COMPRESSION)
+ * This creates a JSON structure similar to what you'd get from Figma's REST API
+ */
+function serializeFigmaNode(node) {
+  const data = {
+    id: node.id,
+    name: node.name,
+    type: node.type,
+    visible: node.visible,
+  };
+
+  // Basic geometric properties
+  if ("x" in node) data.x = node.x;
+  if ("y" in node) data.y = node.y;
+  if ("width" in node) data.width = node.width;
+  if ("height" in node) data.height = node.height;
+  if ("rotation" in node) data.rotation = node.rotation;
+
+  // Layout properties
+  if ("layoutMode" in node) data.layoutMode = node.layoutMode;
+  if ("primaryAxisSizingMode" in node)
+    data.primaryAxisSizingMode = node.primaryAxisSizingMode;
+  if ("counterAxisSizingMode" in node)
+    data.counterAxisSizingMode = node.counterAxisSizingMode;
+  if ("primaryAxisAlignItems" in node)
+    data.primaryAxisAlignItems = node.primaryAxisAlignItems;
+  if ("counterAxisAlignItems" in node)
+    data.counterAxisAlignItems = node.counterAxisAlignItems;
+  if ("paddingLeft" in node) data.paddingLeft = node.paddingLeft;
+  if ("paddingRight" in node) data.paddingRight = node.paddingRight;
+  if ("paddingTop" in node) data.paddingTop = node.paddingTop;
+  if ("paddingBottom" in node) data.paddingBottom = node.paddingBottom;
+  if ("itemSpacing" in node) data.itemSpacing = node.itemSpacing;
+  if ("layoutGrow" in node) data.layoutGrow = node.layoutGrow;
+  if ("layoutAlign" in node) data.layoutAlign = node.layoutAlign;
+  if ("clipsContent" in node) data.clipsContent = node.clipsContent;
+
+  // Constraints
+  if ("constraints" in node) {
+    data.constraints = {
+      horizontal: node.constraints.horizontal,
+      vertical: node.constraints.vertical,
+    };
+  }
+
+  // Fills
+  if ("fills" in node && node.fills !== figma.mixed) {
+    data.fills = node.fills.map((fill) => serializePaint(fill));
+  }
+
+  // Strokes
+  if ("strokes" in node && node.strokes !== figma.mixed) {
+    data.strokes = node.strokes.map((stroke) => serializePaint(stroke));
+  }
+  if ("strokeWeight" in node) data.strokeWeight = node.strokeWeight;
+  if ("strokeAlign" in node) data.strokeAlign = node.strokeAlign;
+  if ("strokeCap" in node) data.strokeCap = node.strokeCap;
+  if ("strokeJoin" in node) data.strokeJoin = node.strokeJoin;
+  if ("dashPattern" in node) data.dashPattern = node.dashPattern;
+
+  // Corner radius
+  if ("cornerRadius" in node) {
+    if (typeof node.cornerRadius === "number") {
+      data.cornerRadius = node.cornerRadius;
+    } else {
+      data.cornerRadius = node.cornerRadius;
+    }
+  }
+  if ("topLeftRadius" in node) data.topLeftRadius = node.topLeftRadius;
+  if ("topRightRadius" in node) data.topRightRadius = node.topRightRadius;
+  if ("bottomLeftRadius" in node) data.bottomLeftRadius = node.bottomLeftRadius;
+  if ("bottomRightRadius" in node)
+    data.bottomRightRadius = node.bottomRightRadius;
+
+  // Effects (shadows, blurs)
+  if ("effects" in node && node.effects.length > 0) {
+    data.effects = node.effects.map((effect) => serializeEffect(effect));
+  }
+
+  // Opacity and blend mode
+  if ("opacity" in node) data.opacity = node.opacity;
+  if ("blendMode" in node) data.blendMode = node.blendMode;
+  if ("isMask" in node) data.isMask = node.isMask;
+
+  // Text-specific properties
+  if (node.type === "TEXT") {
+    data.characters = node.characters;
+
+    // Font properties (may be mixed)
+    try {
+      if (node.fontName !== figma.mixed) {
+        data.fontName = {
+          family: node.fontName.family,
+          style: node.fontName.style,
+        };
+      }
+    } catch (e) {}
+
+    try {
+      if (node.fontSize !== figma.mixed) {
+        data.fontSize = node.fontSize;
+      }
+    } catch (e) {}
+
+    try {
+      if (node.fontWeight !== figma.mixed) {
+        data.fontWeight = node.fontWeight;
+      }
+    } catch (e) {}
+
+    try {
+      if (node.letterSpacing !== figma.mixed) {
+        data.letterSpacing = node.letterSpacing;
+      }
+    } catch (e) {}
+
+    try {
+      if (node.lineHeight !== figma.mixed) {
+        data.lineHeight = node.lineHeight;
+      }
+    } catch (e) {}
+
+    try {
+      if (node.textAlignHorizontal !== figma.mixed) {
+        data.textAlignHorizontal = node.textAlignHorizontal;
+      }
+    } catch (e) {}
+
+    try {
+      if (node.textAlignVertical !== figma.mixed) {
+        data.textAlignVertical = node.textAlignVertical;
+      }
+    } catch (e) {}
+
+    try {
+      if (node.textCase !== figma.mixed) {
+        data.textCase = node.textCase;
+      }
+    } catch (e) {}
+
+    try {
+      if (node.textDecoration !== figma.mixed) {
+        data.textDecoration = node.textDecoration;
+      }
+    } catch (e) {}
+
+    try {
+      if (node.textAutoResize !== undefined) {
+        data.textAutoResize = node.textAutoResize;
+      }
+    } catch (e) {}
+  }
+
+  // Component/Instance properties
+  if (node.type === "COMPONENT") {
+    data.component = {
+      id: node.id,
+      name: node.name,
+      description: node.description || "",
+    };
+  }
+
+  if (node.type === "INSTANCE") {
+    try {
+      const mainComponent = node.mainComponent;
+      if (mainComponent) {
+        data.mainComponent = {
+          id: mainComponent.id,
+          name: mainComponent.name,
+        };
+      }
+    } catch (e) {}
+  }
+
+  // Boolean operation
+  if ("booleanOperation" in node) {
+    data.booleanOperation = node.booleanOperation;
+  }
+
+  // Export settings
+  if ("exportSettings" in node && node.exportSettings.length > 0) {
+    data.exportSettings = node.exportSettings.map((setting) => ({
+      format: setting.format,
+      suffix: setting.suffix,
+      constraint: setting.constraint,
+    }));
+  }
+
+  // Recursively serialize children
+  if ("children" in node && node.children.length > 0) {
+    data.children = node.children.map((child) => serializeFigmaNode(child));
+  }
+
+  return data;
+}
+
+/**
+ * Serialize a paint/fill object
+ */
+function serializePaint(paint) {
+  const result = {
+    type: paint.type,
+    visible: paint.visible,
+    opacity: paint.opacity,
+    blendMode: paint.blendMode,
+  };
+
+  if (paint.type === "SOLID") {
+    result.color = {
+      r: paint.color.r,
+      g: paint.color.g,
+      b: paint.color.b,
+    };
+  }
+
+  if (
+    paint.type === "GRADIENT_LINEAR" ||
+    paint.type === "GRADIENT_RADIAL" ||
+    paint.type === "GRADIENT_ANGULAR" ||
+    paint.type === "GRADIENT_DIAMOND"
+  ) {
+    result.gradientStops = paint.gradientStops.map((stop) => ({
+      position: stop.position,
+      color: {
+        r: stop.color.r,
+        g: stop.color.g,
+        b: stop.color.b,
+        a: stop.color.a,
+      },
+    }));
+
+    if (paint.gradientTransform) {
+      result.gradientTransform = paint.gradientTransform;
+    }
+  }
+
+  if (paint.type === "IMAGE") {
+    result.scaleMode = paint.scaleMode;
+    if (paint.imageHash) {
+      result.imageHash = paint.imageHash;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Serialize an effect (shadow, blur, etc.)
+ */
+function serializeEffect(effect) {
+  const result = {
+    type: effect.type,
+    visible: effect.visible,
+    radius: effect.radius,
+  };
+
+  if ("color" in effect) {
+    result.color = {
+      r: effect.color.r,
+      g: effect.color.g,
+      b: effect.color.b,
+      a: effect.color.a,
+    };
+  }
+
+  if ("offset" in effect) {
+    result.offset = {
+      x: effect.offset.x,
+      y: effect.offset.y,
+    };
+  }
+
+  if ("spread" in effect) {
+    result.spread = effect.spread;
+  }
+
+  if ("blendMode" in effect) {
+    result.blendMode = effect.blendMode;
+  }
+
+  return result;
+}
