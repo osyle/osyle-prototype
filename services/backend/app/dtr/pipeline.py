@@ -6,7 +6,7 @@ Handles progress tracking, error handling, and result storage.
 """
 from typing import Dict, Any, Optional, Callable, Awaitable
 import asyncio
-from .passes import run_pass_1
+from .passes import run_pass_1, run_pass_2
 from .storage import (
     save_pass_result,
     save_complete_dtr,
@@ -228,3 +228,79 @@ async def extract_pass_1_only(
     """
     pipeline = ExtractionPipeline(resource_id, taste_id, progress_callback)
     return await pipeline.run_pass_1_only(figma_json, image_bytes, image_format)
+
+
+async def extract_pass_2_only(
+    resource_id: str,
+    taste_id: str,
+    figma_json: Optional[Dict[str, Any]] = None,
+    image_bytes: Optional[bytes] = None,
+    image_format: str = "png",
+    progress_callback: Optional[ProgressCallback] = None
+) -> Dict[str, Any]:
+    """
+    Extract only Pass 2 (surface treatment)
+    
+    Convenience function for Pass 2 extraction.
+    
+    Args:
+        resource_id: Resource UUID
+        taste_id: Taste UUID
+        figma_json: Optional Figma JSON document
+        image_bytes: Optional image data
+        image_format: Image format
+        progress_callback: Optional async callback for progress updates
+    
+    Returns:
+        Pass 2 results
+    """
+    try:
+        # Update status
+        save_extraction_status(
+            resource_id,
+            status="processing",
+            current_pass="pass_2_surface"
+        )
+        
+        # Report progress
+        if progress_callback:
+            await progress_callback("pass-2", "Extracting surface treatment...")
+        
+        # Run Pass 2
+        result = await run_pass_2(
+            figma_json=figma_json,
+            image_bytes=image_bytes,
+            image_format=image_format
+        )
+        
+        # Convert to dict
+        result_dict = result.model_dump(by_alias=True)
+        
+        # Save result
+        save_pass_result(
+            resource_id,
+            "pass_2_surface",
+            result_dict
+        )
+        
+        # Update status
+        save_extraction_status(
+            resource_id,
+            status="completed",
+            current_pass="pass_2_surface"
+        )
+        
+        if progress_callback:
+            await progress_callback("pass-2", "Surface treatment extraction complete")
+        
+        return result_dict
+    
+    except Exception as e:
+        # Update status to failed
+        save_extraction_status(
+            resource_id,
+            status="failed",
+            current_pass="pass_2_surface",
+            error=str(e)
+        )
+        raise

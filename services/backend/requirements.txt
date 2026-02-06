@@ -30,6 +30,9 @@ python-dotenv==1.2.1
 # Image processing (for wireframe mode)
 Pillow==10.4.0
 
+# Machine learning (for color clustering in DTR extraction)
+scikit-learn==1.5.2
+
 # Playwright - DISABLED: Too large for Lambda zip, causes 250MB limit issues
 # playwright==1.49.1
 # playwright-stealth==1.0.6

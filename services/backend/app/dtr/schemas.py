@@ -58,6 +58,7 @@ class Pass1StructureDTR(BaseModel):
     Pass 1: Structural Skeleton
     
     Extracts layout topology, hierarchy, density, and spacing system.
+    Captures the designer's spatial thinking and structural philosophy.
     """
     authority: Literal["code", "vision", "hybrid"] = Field(
         ..., 
@@ -69,18 +70,107 @@ class Pass1StructureDTR(BaseModel):
     density: DensitySchema
     spacing: SpacingSchema
     
+    # Rich contextual analysis - captures the designer's structural thinking
+    spatial_philosophy: str = Field(
+        ...,
+        description="Multi-sentence description of how this designer thinks about space, breathing room, and layout rhythm"
+    )
+    
+    whitespace_ratios: Optional[str] = Field(
+        default=None,
+        description="Relationships between padding, margins, and content sizing. How spacing scales with hierarchy."
+    )
+    
+    hierarchy_logic: str = Field(
+        ...,
+        description="Rich description of WHY this hierarchy system works and how it guides attention"
+    )
+    
+    rhythm_description: str = Field(
+        ...,
+        description="How density variations, spacing, and nesting create visual rhythm and guide the eye through the design"
+    )
+    
     # Metadata
     extracted_at: Optional[str] = None
     extraction_time_ms: Optional[int] = None
 
 
 # ============================================================================
-# PASS 2: SURFACE TREATMENT (TODO)
+# PASS 2: SURFACE TREATMENT
 # ============================================================================
 
+class ColorEntry(BaseModel):
+    """Single color in the palette"""
+    hex: str = Field(..., description="Hex color value")
+    role: str = Field(..., description="Semantic role: background, surface, primary_accent, etc.")
+    frequency: int = Field(..., description="Number of times this color appears")
+    contexts: List[str] = Field(default_factory=list, description="Where this color is used: text, fill, border, shadow")
+    source: Literal["figma", "vision", "kmeans"] = Field(..., description="Extraction source")
+
+
+class ColorSystem(BaseModel):
+    """Complete color system analysis"""
+    exact_palette: List[ColorEntry] = Field(..., description="All colors found in the design")
+    temperature: str = Field(..., description="Rich description of color temperature distribution")
+    saturation_profile: str = Field(..., description="Rich description of saturation characteristics")
+    relationships: str = Field(..., description="Multi-sentence narrative describing how colors interact")
+    interaction_states: Optional[Dict[str, str]] = Field(
+        default=None,
+        description="Interaction state variants: primary-hover, primary-active, etc."
+    )
+    transformation_rules: Optional[str] = Field(
+        default=None,
+        description="How colors transform for interaction states"
+    )
+
+
+class DepthPlane(BaseModel):
+    """Single depth plane in the visual hierarchy"""
+    level: int = Field(..., description="Depth level (0 = background, higher = more elevated)")
+    treatment: str = Field(..., description="Treatment name: solid_background, frosted_surface, elevated_card, etc.")
+    css: str = Field(..., description="Complete CSS implementation for this plane")
+
+
+class MaterialSystem(BaseModel):
+    """Material and depth system"""
+    primary_language: str = Field(..., description="Rich description of material language used")
+    depth_planes: List[DepthPlane] = Field(..., description="Ordered depth planes from back to front")
+
+
+class Effect(BaseModel):
+    """Visual effect with complete CSS"""
+    type: str = Field(..., description="Effect type: shadow, blur, gradient, border, overlay, etc.")
+    css: str = Field(..., description="Complete CSS implementation")
+    usage: str = Field(..., description="Where this effect is used")
+    source: Literal["figma", "vision"] = Field(..., description="Extraction source")
+    params: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Structured parameters (for gradients: stops, angle; for shadows: x, y, blur, spread, color)"
+    )
+
+
 class Pass2SurfaceDTR(BaseModel):
-    """Pass 2: Surface Treatment - TODO"""
-    pass
+    """
+    Pass 2: Surface Treatment
+    
+    Extracts colors, materials, depth, atmosphere, and effects.
+    Captures the visual treatment layer that gives design its emotional quality.
+    """
+    authority: Literal["code", "vision", "hybrid"] = Field(
+        ...,
+        description="Source of extraction: code (Figma JSON), vision (image), or hybrid (both)"
+    )
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score (0-1)")
+    
+    colors: ColorSystem
+    materials: MaterialSystem
+    effects_vocabulary: List[Effect] = Field(..., description="All visual effects found")
+    atmosphere: str = Field(..., description="Multi-sentence description of overall visual feeling")
+    
+    # Metadata
+    extracted_at: Optional[str] = None
+    extraction_time_ms: Optional[int] = None
 
 
 # ============================================================================

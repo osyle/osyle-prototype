@@ -584,6 +584,337 @@ class FigmaParser:
         )
         
         return aligned_count / len(self.spacing_values)
+    
+    # ========================================================================
+    # PASS 2: SURFACE TREATMENT EXTRACTION
+    # ========================================================================
+    
+    def extract_surface(self) -> Dict[str, Any]:
+        """
+        Main Pass 2 extraction method.
+        
+        Extracts colors, effects, gradients, shadows from Figma JSON.
+        
+        Returns:
+            Dict with colors, effects, materials data (to be analyzed by LLM)
+        """
+        colors = self._extract_colors()
+        effects = self._extract_effects()
+        gradients = self._extract_gradients()
+        shadows = self._extract_shadows()
+        
+        return {
+            "colors": colors,
+            "effects": effects,
+            "gradients": gradients,
+            "shadows": shadows
+        }
+    
+    def _extract_colors(self) -> Dict[str, Any]:
+        """
+        Extract all colors with exact hex values, frequency, and contexts.
+        
+        Returns:
+            Dict with palette, frequency map, context map
+        """
+        color_frequency = Counter()
+        color_contexts = {}  # hex -> list of contexts (fill, text, border, shadow)
+        
+        for node in self.all_nodes:
+            # Fills (backgrounds, shape fills)
+            fills = node.get('fills', [])
+            for fill in fills:
+                if isinstance(fill, dict) and fill.get('type') == 'SOLID':
+                    color = fill.get('color')
+                    if color:
+                        hex_color = self._rgba_to_hex(color)
+                        color_frequency[hex_color] += 1
+                        if hex_color not in color_contexts:
+                            color_contexts[hex_color] = set()
+                        color_contexts[hex_color].add('fill')
+            
+            # Strokes (borders)
+            strokes = node.get('strokes', [])
+            for stroke in strokes:
+                if isinstance(stroke, dict) and stroke.get('type') == 'SOLID':
+                    color = stroke.get('color')
+                    if color:
+                        hex_color = self._rgba_to_hex(color)
+                        color_frequency[hex_color] += 1
+                        if hex_color not in color_contexts:
+                            color_contexts[hex_color] = set()
+                        color_contexts[hex_color].add('border')
+            
+            # Text colors
+            if node.get('type') == 'TEXT':
+                fills = node.get('fills', [])
+                for fill in fills:
+                    if isinstance(fill, dict) and fill.get('type') == 'SOLID':
+                        color = fill.get('color')
+                        if color:
+                            hex_color = self._rgba_to_hex(color)
+                            color_frequency[hex_color] += 1
+                            if hex_color not in color_contexts:
+                                color_contexts[hex_color] = set()
+                            color_contexts[hex_color].add('text')
+            
+            # Effects (shadow colors)
+            effects = node.get('effects', [])
+            for effect in effects:
+                if isinstance(effect, dict) and 'color' in effect:
+                    color = effect.get('color')
+                    if color:
+                        hex_color = self._rgba_to_hex(color)
+                        color_frequency[hex_color] += 1
+                        if hex_color not in color_contexts:
+                            color_contexts[hex_color] = set()
+                        color_contexts[hex_color].add('shadow')
+        
+        # Build palette sorted by frequency
+        palette = []
+        for hex_color, freq in color_frequency.most_common():
+            palette.append({
+                "hex": hex_color,
+                "frequency": freq,
+                "contexts": sorted(list(color_contexts.get(hex_color, set())))
+            })
+        
+        return {
+            "palette": palette,
+            "total_colors": len(palette)
+        }
+    
+    def _extract_effects(self) -> List[Dict[str, Any]]:
+        """
+        Extract all effects (shadows, blurs) with complete parameters.
+        
+        Returns:
+            List of effect definitions
+        """
+        effects_list = []
+        seen_effects = set()  # To avoid duplicates
+        
+        for node in self.all_nodes:
+            effects = node.get('effects', [])
+            for effect in effects:
+                if not isinstance(effect, dict):
+                    continue
+                
+                effect_type = effect.get('type')
+                if not effect_type:
+                    continue
+                
+                # Extract effect based on type
+                if effect_type == 'DROP_SHADOW' or effect_type == 'INNER_SHADOW':
+                    effect_data = self._parse_shadow_effect(effect)
+                    effect_key = effect_data.get('css', '')
+                    if effect_key and effect_key not in seen_effects:
+                        effects_list.append(effect_data)
+                        seen_effects.add(effect_key)
+                
+                elif effect_type == 'LAYER_BLUR' or effect_type == 'BACKGROUND_BLUR':
+                    effect_data = self._parse_blur_effect(effect)
+                    effect_key = effect_data.get('css', '')
+                    if effect_key and effect_key not in seen_effects:
+                        effects_list.append(effect_data)
+                        seen_effects.add(effect_key)
+        
+        return effects_list
+    
+    def _extract_gradients(self) -> List[Dict[str, Any]]:
+        """
+        Extract all gradient definitions with complete stops and parameters.
+        
+        Returns:
+            List of gradient definitions
+        """
+        gradients_list = []
+        seen_gradients = set()
+        
+        for node in self.all_nodes:
+            fills = node.get('fills', [])
+            for fill in fills:
+                if not isinstance(fill, dict):
+                    continue
+                
+                fill_type = fill.get('type')
+                if fill_type in ['GRADIENT_LINEAR', 'GRADIENT_RADIAL', 'GRADIENT_ANGULAR']:
+                    gradient_data = self._parse_gradient(fill)
+                    gradient_key = gradient_data.get('css', '')
+                    if gradient_key and gradient_key not in seen_gradients:
+                        gradients_list.append(gradient_data)
+                        seen_gradients.add(gradient_key)
+        
+        return gradients_list
+    
+    def _extract_shadows(self) -> List[Dict[str, Any]]:
+        """
+        Extract shadow effects separately for easier access.
+        
+        Returns:
+            List of shadow definitions with CSS
+        """
+        shadows = []
+        seen_shadows = set()
+        
+        for node in self.all_nodes:
+            effects = node.get('effects', [])
+            for effect in effects:
+                if not isinstance(effect, dict):
+                    continue
+                
+                effect_type = effect.get('type')
+                if effect_type in ['DROP_SHADOW', 'INNER_SHADOW']:
+                    shadow_data = self._parse_shadow_effect(effect)
+                    shadow_key = shadow_data.get('css', '')
+                    if shadow_key and shadow_key not in seen_shadows:
+                        shadows.append(shadow_data)
+                        seen_shadows.add(shadow_key)
+        
+        return shadows
+    
+    def _parse_shadow_effect(self, effect: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Parse a shadow effect into CSS.
+        
+        Args:
+            effect: Figma effect object
+        
+        Returns:
+            Dict with type, css, and params
+        """
+        effect_type = effect.get('type')
+        offset_x = effect.get('offset', {}).get('x', 0)
+        offset_y = effect.get('offset', {}).get('y', 0)
+        radius = effect.get('radius', 0)
+        spread = effect.get('spread', 0)
+        color = effect.get('color', {})
+        
+        # Convert color to rgba
+        r = int(color.get('r', 0) * 255)
+        g = int(color.get('g', 0) * 255)
+        b = int(color.get('b', 0) * 255)
+        a = color.get('a', 1)
+        
+        # Build CSS
+        if effect_type == 'INNER_SHADOW':
+            css = f"box-shadow: inset {offset_x}px {offset_y}px {radius}px {spread}px rgba({r},{g},{b},{a});"
+        else:
+            css = f"box-shadow: {offset_x}px {offset_y}px {radius}px {spread}px rgba({r},{g},{b},{a});"
+        
+        return {
+            "type": "shadow",
+            "css": css,
+            "params": {
+                "x": offset_x,
+                "y": offset_y,
+                "blur": radius,
+                "spread": spread,
+                "color": f"rgba({r},{g},{b},{a})"
+            }
+        }
+    
+    def _parse_blur_effect(self, effect: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Parse a blur effect into CSS.
+        
+        Args:
+            effect: Figma effect object
+        
+        Returns:
+            Dict with type, css, and params
+        """
+        effect_type = effect.get('type')
+        radius = effect.get('radius', 0)
+        
+        if effect_type == 'BACKGROUND_BLUR':
+            css = f"backdrop-filter: blur({radius}px);"
+        else:
+            css = f"filter: blur({radius}px);"
+        
+        return {
+            "type": "blur",
+            "css": css,
+            "params": {
+                "radius": radius
+            }
+        }
+    
+    def _parse_gradient(self, fill: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Parse a gradient fill into CSS.
+        
+        Args:
+            fill: Figma gradient fill object
+        
+        Returns:
+            Dict with type, css, params
+        """
+        fill_type = fill.get('type')
+        stops = fill.get('gradientStops', [])
+        
+        # Convert stops to CSS format
+        css_stops = []
+        for stop in stops:
+            color = stop.get('color', {})
+            position = stop.get('position', 0) * 100
+            
+            r = int(color.get('r', 0) * 255)
+            g = int(color.get('g', 0) * 255)
+            b = int(color.get('b', 0) * 255)
+            a = color.get('a', 1)
+            
+            css_stops.append(f"rgba({r},{g},{b},{a}) {position:.1f}%")
+        
+        stops_str = ", ".join(css_stops)
+        
+        # Build CSS based on gradient type
+        if fill_type == 'GRADIENT_LINEAR':
+            # Default to 135deg if no handle vectors
+            css = f"background: linear-gradient(135deg, {stops_str});"
+        elif fill_type == 'GRADIENT_RADIAL':
+            css = f"background: radial-gradient(circle, {stops_str});"
+        elif fill_type == 'GRADIENT_ANGULAR':
+            css = f"background: conic-gradient({stops_str});"
+        else:
+            css = f"background: linear-gradient({stops_str});"
+        
+        return {
+            "type": "gradient",
+            "css": css,
+            "params": {
+                "gradient_type": fill_type,
+                "stops": [
+                    {
+                        "color": f"rgba({int(s.get('color', {}).get('r', 0)*255)},{int(s.get('color', {}).get('g', 0)*255)},{int(s.get('color', {}).get('b', 0)*255)},{s.get('color', {}).get('a', 1)})",
+                        "position": f"{s.get('position', 0) * 100:.1f}%"
+                    }
+                    for s in stops
+                ]
+            }
+        }
+    
+    def _rgba_to_hex(self, color: Dict[str, float]) -> str:
+        """
+        Convert Figma RGBA color (0-1 range) to hex.
+        
+        Args:
+            color: Dict with r, g, b, a keys (0-1 range)
+        
+        Returns:
+            Hex color string (e.g., '#0A0A1A' or '#0A0A1AFF' if alpha < 1)
+        """
+        r = int(color.get('r', 0) * 255)
+        g = int(color.get('g', 0) * 255)
+        b = int(color.get('b', 0) * 255)
+        a = color.get('a', 1)
+        
+        if a < 1:
+            # Include alpha in hex
+            a_hex = int(a * 255)
+            return f"#{r:02X}{g:02X}{b:02X}{a_hex:02X}"
+        else:
+            return f"#{r:02X}{g:02X}{b:02X}"
 
 
 # ============================================================================
@@ -602,3 +933,17 @@ def parse_figma_structure(figma_json: Dict[str, Any]) -> Dict[str, Any]:
     """
     parser = FigmaParser(figma_json)
     return parser.extract_structure()
+
+
+def parse_figma_surface(figma_json: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Parse surface treatment from Figma JSON (Pass 2).
+    
+    Args:
+        figma_json: Root FRAME node from Figma plugin export
+    
+    Returns:
+        Dict with colors, effects, gradients, shadows data
+    """
+    parser = FigmaParser(figma_json)
+    return parser.extract_surface()
