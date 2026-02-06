@@ -4,7 +4,7 @@ Pass 1: Structural Skeleton
 Extract layout topology, hierarchy, density, and spacing system from design.
 
 Handles three scenarios:
-1. Figma JSON only → Code extraction (high confidence)
+1. Figma JSON only → Code extraction + LLM analysis (high confidence)
 2. Image only → Vision analysis (lower confidence)
 3. Both → Hybrid (code + vision validation, highest confidence)
 """
@@ -12,6 +12,7 @@ from typing import Dict, Any, Optional
 from .base import BasePass, PassRegistry
 from ..schemas import Pass1StructureDTR
 from ..extractors import parse_figma_structure, analyze_structure_from_image, validate_hierarchy
+from app.llm import LLMService, Message, MessageRole
 
 
 class Pass1Structure(BasePass):
@@ -21,6 +22,10 @@ class Pass1Structure(BasePass):
     Extracts the design's information architecture, spatial organization,
     and hierarchy logic, stripping away visual treatment.
     """
+    
+    def __init__(self):
+        super().__init__()
+        self.llm = LLMService()
     
     async def execute(
         self,
@@ -81,20 +86,24 @@ class Pass1Structure(BasePass):
         figma_json: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Extract structure from Figma JSON (code-driven)
+        Extract structure from Figma JSON (code-driven + LLM analysis)
         
-        High confidence, exact measurements.
+        High confidence, exact measurements from code.
+        Then LLM analyzes to add rich contextual narratives.
         
         Args:
             figma_json: Figma JSON document
         
         Returns:
-            Structure data dict
+            Structure data dict with rich narratives
         """
-        # Use code parser
-        result = parse_figma_structure(figma_json)
+        # Step 1: Code extraction (deterministic)
+        code_result = parse_figma_structure(figma_json)
         
-        return result
+        # Step 2: LLM analysis to add rich narratives
+        analyzed = await self._llm_analyze_extracted_structure(code_result)
+        
+        return analyzed
     
     async def _extract_from_vision(
         self,
@@ -127,8 +136,8 @@ class Pass1Structure(BasePass):
         """
         Extract structure using both Figma JSON and image (hybrid)
         
-        Highest confidence. Code extraction for measurements,
-        vision validation for visual hierarchy.
+        Highest confidence. Code extraction for exact measurements,
+        vision analysis for rich contextual narratives and validation.
         
         Args:
             figma_json: Figma JSON document
@@ -136,7 +145,7 @@ class Pass1Structure(BasePass):
             image_format: Image format
         
         Returns:
-            Combined structure data dict
+            Combined structure data dict with measurements + narratives
         """
         import asyncio
         
@@ -144,14 +153,20 @@ class Pass1Structure(BasePass):
         # Figma parsing is synchronous, so wrap in thread to avoid blocking
         figma_task = asyncio.to_thread(parse_figma_structure, figma_json)
         
-        # Vision analysis runs independently
+        # Vision analysis runs independently (now includes rich narratives)
         vision_task = analyze_structure_from_image(image_bytes, image_format)
         
         # Wait for both to complete in parallel
         figma_data, vision_data = await asyncio.gather(figma_task, vision_task)
         
-        # Use Figma as primary source (higher confidence for measurements)
+        # Use Figma as primary source for measurements (higher confidence)
         result = figma_data.copy()
+        
+        # Add rich narratives from vision (vision sees the full picture)
+        result["spatial_philosophy"] = vision_data.get("spatial_philosophy", "")
+        result["whitespace_ratios"] = vision_data.get("whitespace_ratios")
+        result["hierarchy_logic"] = vision_data.get("hierarchy_logic", "")
+        result["rhythm_description"] = vision_data.get("rhythm_description", "")
         
         # Cross-validate hierarchy from vision
         # Compare code hierarchy vs visual hierarchy
@@ -177,6 +192,126 @@ class Pass1Structure(BasePass):
             }
         
         return result
+    
+    async def _llm_analyze_extracted_structure(
+        self,
+        code_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        LLM analyzes code-extracted structure to add rich contextual narratives.
+        
+        Takes exact measurements from code and generates insights about:
+        - Spatial philosophy
+        - Whitespace ratios
+        - Hierarchy logic
+        - Rhythm description
+        
+        Args:
+            code_data: Structure extracted from Figma JSON
+        
+        Returns:
+            Structure data with added narratives
+        """
+        # Build prompt with extracted data
+        layout = code_data.get("layout", {})
+        hierarchy = code_data.get("hierarchy", {})
+        density = code_data.get("density", {})
+        spacing = code_data.get("spacing", {})
+        
+        prompt = f"""You have extracted the following structural properties from Figma JSON:
+
+LAYOUT:
+- Type: {layout.get('type')}
+- Direction: {layout.get('direction')}
+- Nesting depth: {layout.get('nesting_depth')}
+- Columns: {layout.get('columns')}
+
+HIERARCHY:
+{self._format_hierarchy_for_llm(hierarchy)}
+
+DENSITY:
+- Global: {density.get('global')}
+- Per section: {density.get('per_section')}
+
+SPACING:
+- Quantum: {spacing.get('quantum')}
+- Scale: {spacing.get('scale')}
+- Consistency: {spacing.get('consistency')}
+
+Now analyze this structural data and provide rich contextual insights:
+
+1. SPATIAL PHILOSOPHY: Write 2-3 sentences describing:
+   - How this designer thinks about space and breathing room
+   - Whether they favor generous whitespace or efficient density
+   - How spacing creates rhythm and guides the eye
+
+2. WHITESPACE RATIOS: Describe any patterns in spacing relationships:
+   - How container padding relates to internal gaps
+   - How spacing scales with hierarchy (larger elements → more space?)
+   - Mathematical relationships (2:1 ratios, consistent multipliers, etc.)
+
+3. HIERARCHY LOGIC: Write 2-3 sentences explaining:
+   - WHY this hierarchy system works
+   - How it guides attention through the design
+   - The logic behind the size/position/nesting choices
+
+4. RHYTHM DESCRIPTION: Write 2-3 sentences about:
+   - How density variations create visual rhythm
+   - Push-pull between sparse and dense zones
+   - How this guides the eye through the design
+
+Respond with a JSON object:
+{{
+  "spatial_philosophy": "Multi-sentence description...",
+  "whitespace_ratios": "Description of spacing relationships...",
+  "hierarchy_logic": "Multi-sentence explanation...",
+  "rhythm_description": "Multi-sentence description..."
+}}"""
+        
+        schema = {
+            "type": "object",
+            "properties": {
+                "spatial_philosophy": {"type": "string"},
+                "whitespace_ratios": {"type": "string"},
+                "hierarchy_logic": {"type": "string"},
+                "rhythm_description": {"type": "string"}
+            },
+            "required": ["spatial_philosophy", "whitespace_ratios", "hierarchy_logic", "rhythm_description"]
+        }
+        
+        response = await self.llm.generate(
+            model="claude-sonnet-4.5",
+            messages=[
+                Message(role=MessageRole.USER, content=prompt)
+            ],
+            structured_output_schema=schema,
+            max_tokens=2048,
+            temperature=0.2
+        )
+        
+        analysis = response.structured_output if response.structured_output else {}
+        
+        # Merge code data with LLM analysis
+        result = {
+            **code_data,
+            "spatial_philosophy": analysis.get("spatial_philosophy", ""),
+            "whitespace_ratios": analysis.get("whitespace_ratios"),
+            "hierarchy_logic": analysis.get("hierarchy_logic", ""),
+            "rhythm_description": analysis.get("rhythm_description", "")
+        }
+        
+        return result
+    
+    def _format_hierarchy_for_llm(self, hierarchy: Dict[str, Any]) -> str:
+        """Format hierarchy data for LLM prompt"""
+        levels = hierarchy.get("levels", [])
+        lines = []
+        for level in levels:
+            rank = level.get("rank")
+            elements = ", ".join(level.get("elements", []))
+            established_by = level.get("established_by", "")
+            lines.append(f"- Rank {rank}: {elements} (established by: {established_by})")
+        return "\n".join(lines) if lines else "No hierarchy levels"
 
 
 # Register this pass
