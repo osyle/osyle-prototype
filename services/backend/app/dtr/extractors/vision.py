@@ -397,43 +397,23 @@ The more specific and insightful you are, the better the generation quality."""
    - For each color, describe:
      * Its semantic role (background, surface, primary accent, text, border, etc.)
      * How frequently it appears
-     * Where it's used (in what contexts)
+     * Where it's used (in what contexts - as comma-separated string)
    - Describe the temperature distribution (cool vs warm tones)
    - Describe the saturation profile (muted, vibrant, mixed)
-   - Write a detailed paragraph about color RELATIONSHIPS:
-     * How do colors interact to create hierarchy?
-     * What emotional quality do the color choices convey?
-     * Are there any sophisticated color techniques (color overlays, subtle tints, etc.)?
+   - Write a detailed paragraph about color RELATIONSHIPS
 
 2. MATERIALS & DEPTH: Identify the material language
-   - What is the primary material language? (Describe richly - don't just use labels)
-     Examples: "Glassmorphic with heavy blur and transparency creating atmospheric depth"
-              "Flat design with subtle shadows for minimal elevation"
-              "Neumorphic with soft inset shadows creating tactile surfaces"
-   - How many depth planes exist? For each plane:
-     * Level number (0 = background, higher = more elevated)
-     * Treatment description
-     * Approximate CSS if visible (background, backdrop-filter, box-shadow, border)
-   - How does the design establish depth? (shadows, blur, opacity, overlays)
+   - Primary material language (rich description)
+   - Depth planes with level, treatment, CSS, and notes
+   - How depth is established
 
 3. EFFECTS VOCABULARY: Identify all visual effects
-   - For each distinct effect you see:
-     * Type (shadow, blur, gradient, border, overlay)
-     * Approximate CSS implementation
-     * Where it's used (usage context)
-   - Pay special attention to:
-     * Shadow styles (soft, hard, colored, layered)
-     * Blur effects (backdrop blur for glassmorphism)
-     * Gradient overlays (especially on images or backgrounds)
-     * Border treatments
-     * Opacity and transparency
+   - Type (shadow, blur, gradient, border, overlay)
+   - Approximate CSS implementation
+   - Usage context
+   - Brief notes
 
-4. ATMOSPHERE: Describe the overall visual feeling
-   - Write 2-3 detailed sentences capturing:
-     * The emotional quality this visual treatment creates
-     * The sophistication level and design maturity
-     * Any distinctive visual personality traits
-     * What makes this feel cohesive and intentional
+4. ATMOSPHERE: Overall visual feeling (2-3 sentences)
 
 Respond with a JSON object:{kmeans_reference}
 
@@ -443,7 +423,7 @@ Respond with a JSON object:{kmeans_reference}
       {{
         "hex": "#0A0A1A",
         "role": "background",
-        "contexts": ["fill", "surface"],
+        "contexts_string": "fill, surface",
         "notes": "Deep navy background providing contrast"
       }}
     ],
@@ -474,7 +454,7 @@ Respond with a JSON object:{kmeans_reference}
   "atmosphere": "Multi-sentence description of the overall visual feeling and emotional quality this treatment creates"
 }}"""
         
-        # Define schema
+        # Define schema - use contexts_string instead of array to avoid Gemini issues
         schema = {
             "type": "object",
             "properties": {
@@ -488,13 +468,10 @@ Respond with a JSON object:{kmeans_reference}
                                 "properties": {
                                     "hex": {"type": "string"},
                                     "role": {"type": "string"},
-                                    "contexts": {
-                                        "type": "array",
-                                        "items": {"type": "string"}
-                                    },
+                                    "contexts_string": {"type": "string"},
                                     "notes": {"type": "string"}
                                 },
-                                "required": ["hex", "role"]
+                                "required": ["hex", "role", "contexts_string", "notes"]
                             }
                         },
                         "temperature": {"type": "string"},
@@ -517,12 +494,12 @@ Respond with a JSON object:{kmeans_reference}
                                     "css": {"type": "string"},
                                     "notes": {"type": "string"}
                                 },
-                                "required": ["level", "treatment", "css"]
+                                "required": ["level", "treatment", "css", "notes"]
                             }
                         },
                         "depth_technique": {"type": "string"}
                     },
-                    "required": ["primary_language", "depth_planes"]
+                    "required": ["primary_language", "depth_planes", "depth_technique"]
                 },
                 "effects": {
                     "type": "array",
@@ -534,7 +511,7 @@ Respond with a JSON object:{kmeans_reference}
                             "usage": {"type": "string"},
                             "notes": {"type": "string"}
                         },
-                        "required": ["type", "css", "usage"]
+                        "required": ["type", "css", "usage", "notes"]
                     }
                 },
                 "atmosphere": {"type": "string"}
@@ -563,17 +540,31 @@ Respond with a JSON object:{kmeans_reference}
             ],
             structured_output_schema=schema,
             max_tokens=8192,
-            temperature=0.1  # Slightly higher for richer descriptions
+            temperature=0.1
         )
         
         # Use structured output
         if response.structured_output:
-            return response.structured_output
+            result = response.structured_output
+            # Convert contexts_string back to list
+            if "colors" in result and "palette" in result["colors"]:
+                for color in result["colors"]["palette"]:
+                    if "contexts_string" in color:
+                        contexts_str = color.pop("contexts_string")
+                        color["contexts"] = [c.strip() for c in contexts_str.split(",") if c.strip()]
+            return result
         
         # Fallback: parse text
         import json
         try:
-            return json.loads(response.text)
+            result = json.loads(response.text)
+            # Same conversion for fallback
+            if "colors" in result and "palette" in result["colors"]:
+                for color in result["colors"]["palette"]:
+                    if "contexts_string" in color:
+                        contexts_str = color.pop("contexts_string")
+                        color["contexts"] = [c.strip() for c in contexts_str.split(",") if c.strip()]
+            return result
         except json.JSONDecodeError as e:
             print(f"Failed to parse surface analysis: {e}")
             print(f"Response: {response.text[:500]}")
