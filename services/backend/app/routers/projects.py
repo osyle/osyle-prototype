@@ -979,3 +979,167 @@ async def clear_screen_mutations(
         "success": True,
         "deletedCount": deleted_count
     }
+
+
+# ============================================================================
+# FLOW VERSIONING ENDPOINTS
+# ============================================================================
+
+@router.get("/{project_id}/flow")
+async def get_project_flow(
+    project_id: str,
+    version: Optional[int] = None,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Get a specific version of a flow for a project
+    If version is not specified, returns the latest version
+    """
+    user_id = user.get("user_id")
+    
+    try:
+        project = db.get_project(project_id)
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        if project.get("owner_id") != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        # Get list of versions
+        versions = storage.list_project_flow_versions(user_id, project_id)
+        
+        if not versions:
+            raise HTTPException(status_code=404, detail="No flow versions found")
+        
+        # Use specified version or latest
+        target_version = version if version is not None else max(versions)
+        
+        if target_version not in versions:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Version {target_version} not found"
+            )
+        
+        # Load flow from S3
+        flow_graph = storage.get_project_flow(user_id, project_id, target_version)
+        
+        if not flow_graph:
+            raise HTTPException(status_code=404, detail="Flow data not found")
+        
+        return {
+            "status": "success",
+            "flow_graph": flow_graph,
+            "version": target_version
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to get flow: {str(e)}")
+
+
+@router.get("/{project_id}/flow/versions")
+async def get_project_flow_versions(
+    project_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Get all flow versions for a project"""
+    user_id = user.get("user_id")
+    
+    try:
+        project = db.get_project(project_id)
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        if project.get("owner_id") != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        # Get list of versions
+        versions = storage.list_project_flow_versions(user_id, project_id)
+        
+        current_version = max(versions) if versions else 0
+        
+        return {
+            "status": "success",
+            "current_version": current_version,
+            "versions": versions
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get flow versions: {str(e)}"
+        )
+
+
+@router.post("/{project_id}/flow/revert")
+async def revert_project_flow_version(
+    project_id: str,
+    version: int,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Revert to a previous flow version by creating a new version as a copy
+    This preserves history - the old version becomes the newest version
+    """
+    user_id = user.get("user_id")
+    
+    try:
+        project = db.get_project(project_id)
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        if project.get("owner_id") != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        # Get list of versions
+        versions = storage.list_project_flow_versions(user_id, project_id)
+        
+        if not versions:
+            raise HTTPException(status_code=404, detail="No flow versions found")
+        
+        if version not in versions:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Version {version} not found"
+            )
+        
+        # Load the old version
+        old_flow_graph = storage.get_project_flow(user_id, project_id, version)
+        
+        if not old_flow_graph:
+            raise HTTPException(status_code=404, detail="Flow data not found")
+        
+        # Create new version number (max + 1)
+        new_version = max(versions) + 1
+        
+        # Save as new version
+        storage.put_project_flow(user_id, project_id, old_flow_graph, new_version)
+        
+        # Update project's flow_graph in database
+        db.update_project_flow_graph(project_id, old_flow_graph)
+        
+        return {
+            "status": "success",
+            "message": f"Reverted to version {version} as new version {new_version}",
+            "old_version": version,
+            "new_version": new_version,
+            "flow_graph": old_flow_graph
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to revert flow version: {str(e)}"
+        )

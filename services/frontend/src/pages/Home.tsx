@@ -588,8 +588,8 @@ export default function Home() {
 
       setIsDtrLearningModalOpen(true)
 
-      // Trigger DTR learning (backend will decide if DTM is needed)
-      buildDtrForResource(selectedTasteId, resource.resource_id, resourceCount)
+      // Trigger DTR learning (Phase 1: Pass 1 extraction only)
+      buildDtrForResource(selectedTasteId, resource.resource_id)
     } catch (err) {
       console.error('Failed to create resource:', err)
 
@@ -603,33 +603,22 @@ export default function Home() {
   // DTR LEARNING HANDLERS
   // ============================================================================
 
-  const buildDtrForResource = async (
-    tasteId: string,
-    resourceId: string,
-    resourceCount: number,
-  ) => {
+  const buildDtrForResource = async (tasteId: string, resourceId: string) => {
     try {
-      // Check if DTR already exists
-      const dtrCheck = await api.llm.checkDtrExists(resourceId, tasteId)
+      // Build DTR via WebSocket (always - it will skip if exists)
+      console.log('Building DTR for resource:', resourceId)
+      await api.llm.buildDtr(resourceId, tasteId)
 
-      if (dtrCheck.dtr_exists) {
-        console.log('DTR already exists for this resource')
-        setDtrLearningState('success')
-      } else {
-        // Build DTR
-        console.log('Building DTR for resource:', resourceId)
-        await api.llm.buildDtr(resourceId, tasteId)
-
-        // Success!
-        setDtrLearningState('success')
-        console.log('DTR learning completed successfully')
-      }
+      // Success!
+      setDtrLearningState('success')
+      console.log('DTR learning completed successfully')
 
       // Wait 2 seconds for user to see success state
       await new Promise(resolve => setTimeout(resolve, 2000))
 
-      // Phase 2: Try DTM training (backend decides if needed)
-      await trainDtmAfterDtr(tasteId, resourceId, resourceCount)
+      // Phase 2: DTM training is now deferred to later phases
+      // For Phase 1, we only do Pass 1 extraction
+      console.log('Phase 1 complete - DTM will be built in later phases')
     } catch (err) {
       console.error('Failed to build DTR:', err)
       setDtrLearningState('error')
@@ -718,7 +707,6 @@ export default function Home() {
     await buildDtrForResource(
       pendingResourceData.tasteId,
       pendingResourceData.resourceId,
-      pendingResourceData.resourceCount,
     )
   }
 

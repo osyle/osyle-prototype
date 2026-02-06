@@ -771,18 +771,6 @@ export const projectsAPI = {
 
 export const llmAPI = {
   /**
-   * Check if DTR exists for a resource
-   */
-  checkDtrExists: async (
-    resourceId: string,
-    tasteId: string,
-  ): Promise<DTRExistsResponse> => {
-    return apiRequest<DTRExistsResponse>(
-      `/api/llm/resource/${resourceId}/dtr-exists?taste_id=${tasteId}`,
-    )
-  },
-
-  /**
    * Build DTR from resource files (WebSocket for long-running operation)
    */
   buildDtr: async (
@@ -929,14 +917,12 @@ export const llmAPI = {
     flow_graph: FlowGraph
     version: number
   }> => {
-    const query = version
-      ? `?project_id=${projectId}&version=${version}`
-      : `?project_id=${projectId}`
+    const query = version ? `?version=${version}` : ''
     return apiRequest<{
       status: string
       flow_graph: FlowGraph
       version: number
-    }>(`/api/llm/flow/get${query}`)
+    }>(`/api/projects/${projectId}/flow${query}`)
   },
 
   /**
@@ -953,7 +939,7 @@ export const llmAPI = {
       status: string
       current_version: number
       versions: number[]
-    }>(`/api/llm/flow/versions?project_id=${projectId}`)
+    }>(`/api/projects/${projectId}/flow/versions`)
   },
 
   /**
@@ -975,7 +961,7 @@ export const llmAPI = {
       old_version: number
       new_version: number
       flow_graph: FlowGraph
-    }>(`/api/llm/flow/revert?project_id=${projectId}&version=${version}`, {
+    }>(`/api/projects/${projectId}/flow/revert?version=${version}`, {
       method: 'POST',
     })
   },

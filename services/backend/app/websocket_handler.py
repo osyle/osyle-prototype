@@ -13,17 +13,14 @@ from typing import Dict, Any, List
 from app.llm import get_llm_service
 from app import db, storage
 from app.db import convert_decimals  # Import for Decimal conversion
-from app.code_based_analyzer import analyze_figma_design
 
-# NEW V2 imports
-from app.dtr_builder_v5 import DTRBuilderV5
-from app.dtr_builder_v6 import DTRBuilderV6
-from app.dtm_builder_v2 import DTMBuilderV2
-from app.dtm_updater_v3 import DTMUpdaterV3
+# Generation imports (keep for other handlers)
 from app.generation_orchestrator import GenerationOrchestrator
 from app.parametric import ParametricGenerator
+from app.dtm_builder_v2 import DTMBuilderV2  # Keep for smart_dtm_update (TODO)
+from app.dtm_updater_v3 import DTMUpdaterV3  # Keep for smart_dtm_update (TODO)
 
-# Import helper for Figma compression
+# Import helper for Figma compression (used by other handlers)
 from app.unified_dtr_builder import prepare_figma_for_llm
 
 # Import wireframe processor for redesign mode
@@ -84,120 +81,141 @@ def convert_floats_to_decimals(obj):
 
 async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: str):
     """
-    Handle build-dtr WebSocket request using DTR v5
+    Handle build-dtr WebSocket request using NEW Pass 1 extraction
+    
+    Replaces old DTR v5/v6 system with clean Pass 1 structural skeleton.
     """
     try:
+        # Extract parameters
         resource_id = data.get("resource_id")
         taste_id = data.get("taste_id")
-        context_override = data.get("context_override")  # Optional manual context
         
-        if not resource_id or not taste_id:
-            await send_error(websocket, "Missing resource_id or taste_id")
+        if not resource_id:
+            await send_error(websocket, "resource_id is required")
             return
         
-        # Get resource
+        if not taste_id:
+            await send_error(websocket, "taste_id is required")
+            return
+        
+        # Get resource from database
         await send_progress(websocket, "init", "Loading resource...")
         resource = db.get_resource(resource_id)
         
         if not resource:
-            await send_error(websocket, "Resource not found")
+            await send_error(websocket, f"Resource {resource_id} not found")
             return
         
-        # Check if DTR exists
-        if storage.resource_dtr_exists(user_id, taste_id, resource_id):
-            await send_complete(websocket, {
-                "status": "skipped",
-                "reason": "DTR already exists for this resource"
-            })
+        # Verify ownership
+        if resource.get("owner_id") != user_id:
+            await send_error(websocket, "Access denied")
             return
         
-        # Load Figma JSON
-        await send_progress(websocket, "loading", "Loading Figma JSON from S3...")
-        figma_json_str = storage.get_resource_figma(user_id, taste_id, resource_id)
-        
-        if not figma_json_str:
-            await send_error(websocket, "Figma JSON not found")
-            return
-        
-        # Parse JSON
-        await send_progress(websocket, "parsing", "Parsing Figma data...")
-        if isinstance(figma_json_str, bytes):
-            figma_json_str = figma_json_str.decode('utf-8', errors='replace')
-        figma_json_str = re.sub(r'[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]', '', figma_json_str)
-        figma_json = json.loads(figma_json_str)
-        
-        # Load image if available
-        await send_progress(websocket, "loading_image", "Loading image...")
-        image_base64 = None
+        # Check if files are uploaded
+        has_figma = resource.get("has_figma", False)
         has_image = resource.get("has_image", False)
         
+        if not has_figma and not has_image:
+            await send_error(websocket, "Resource has no files uploaded. Please upload at least one file.")
+            return
+        
+        # Send progress: Downloading files
+        await send_progress(websocket, "download", "Downloading resource files from S3...")
+        
+        # Download files from S3
+        figma_json = None
+        image_bytes = None
+        image_format = "png"
+        
+        if has_figma:
+            figma_key = resource.get("figma_key")
+            if figma_key:
+                try:
+                    print(f"Downloading Figma JSON from S3: {figma_key}")
+                    figma_obj = storage.s3_client.get_object(
+                        Bucket=storage.S3_BUCKET,
+                        Key=figma_key
+                    )
+                    figma_content = figma_obj['Body'].read()
+                    figma_json = json.loads(figma_content)
+                    print(f"✅ Downloaded Figma JSON ({len(figma_content)} bytes)")
+                except Exception as e:
+                    print(f"❌ Failed to download Figma JSON: {e}")
+                    # Continue anyway if we have image
+        
         if has_image:
-            try:
-                image_bytes = storage.get_resource_image(user_id, taste_id, resource_id)
-                if image_bytes:
-                    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-            except Exception:
-                has_image = False
+            image_key = resource.get("image_key")
+            if image_key:
+                try:
+                    print(f"Downloading image from S3: {image_key}")
+                    image_obj = storage.s3_client.get_object(
+                        Bucket=storage.S3_BUCKET,
+                        Key=image_key
+                    )
+                    image_bytes = image_obj['Body'].read()
+                    
+                    # Detect format
+                    if image_key.endswith('.jpg') or image_key.endswith('.jpeg'):
+                        image_format = "jpeg"
+                    elif image_key.endswith('.webp'):
+                        image_format = "webp"
+                    else:
+                        image_format = "png"
+                    
+                    print(f"✅ Downloaded image ({len(image_bytes)} bytes, format: {image_format})")
+                except Exception as e:
+                    print(f"❌ Failed to download image: {e}")
+                    # Continue anyway if we have Figma
         
-        # Run code analysis
-        await send_progress(websocket, "analyzing", "Running code-based analysis...")
-        code_analysis = analyze_figma_design(figma_json)
+        # Verify at least one file downloaded
+        if figma_json is None and image_bytes is None:
+            await send_error(websocket, "Failed to download files from S3")
+            return
         
-        # Build DTR v5
-        await send_progress(
-            websocket,
-            "building_dtr",
-            "Building DTR v6 with quirk analysis (this may take 1-2 minutes)..."
-        )
+        # Send progress: Starting extraction
+        await send_progress(websocket, "extraction", "Starting DTR extraction...")
         
-        llm = get_llm_service()
-        v5_builder = DTRBuilderV5(llm)
-        dtr_builder = DTRBuilderV6(llm, v5_builder)
+        # Progress callback for extraction pipeline
+        async def progress_callback(stage: str, message: str):
+            await send_progress(websocket, stage, message)
         
-        dtr_v6 = await dtr_builder.build_dtr(
-            figma_json=figma_json,
-            code_analysis=code_analysis,
+        # Run Pass 1 extraction using new DTR module
+        from app.dtr import extract_pass_1_only
+        
+        print(f"Starting Pass 1 extraction for resource {resource_id}")
+        
+        result = await extract_pass_1_only(
             resource_id=resource_id,
             taste_id=taste_id,
-            has_image=has_image,
-            image_base64=image_base64,
-            context_override=context_override
+            figma_json=figma_json,
+            image_bytes=image_bytes,
+            image_format=image_format,
+            progress_callback=progress_callback
         )
         
-        # Save DTR v6
-        await send_progress(websocket, "saving_dtr", "Saving DTR v6...")
-        storage.put_resource_dtr(user_id, taste_id, resource_id, dtr_v6)
+        print(f"✅ Pass 1 extraction completed!")
+        print(f"   Authority: {result.get('authority')}")
+        print(f"   Confidence: {result.get('confidence')}")
+        print(f"   Layout type: {result.get('layout', {}).get('type')}")
         
-        # Update resource metadata
-        metadata = resource.get("metadata", {})
-        metadata["has_dtr"] = True
-        metadata["dtr_version"] = "5.0"
-        db.update_resource(resource_id, metadata=metadata)
-        
-        # Smart DTM update
-        await send_progress(websocket, "updating_dtm", "Updating Designer Taste Model...")
-        dtm_result = await smart_dtm_update(
-            user_id=user_id,
-            taste_id=taste_id,
-            new_resource_id=resource_id,
-            llm=llm,
-            websocket=websocket
-        )
-        
-        # Complete
+        # Send completion
         await send_complete(websocket, {
             "status": "success",
-            "version": "6.0",
-            "dtr": dtr_v6,
-            "confidence": dtr_v6.get('meta', {}).get('confidence_scores', {}),
-            "context": dtr_v6.get('meta', {}).get('context', {}),
-            "dtm_update": dtm_result
+            "resource_id": resource_id,
+            "taste_id": taste_id,
+            "pass_1_completed": True,
+            "authority": result.get("authority"),
+            "confidence": result.get("confidence"),
+            "extraction_time_ms": result.get("extraction_time_ms"),
+            "layout_type": result.get("layout", {}).get("type"),
+            "spacing_quantum": result.get("spacing", {}).get("quantum")
         })
         
     except Exception as e:
         import traceback
-        traceback.print_exc()
-        await send_error(websocket, str(e))
+        error_msg = f"Extraction failed: {str(e)}"
+        print(f"❌ ERROR in build-dtr: {traceback.format_exc()}")
+        await send_error(websocket, error_msg)
 
 
 async def smart_dtm_update(

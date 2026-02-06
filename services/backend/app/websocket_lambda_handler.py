@@ -1,6 +1,8 @@
 """
 WebSocket Lambda Handler for API Gateway WebSocket Events
 Handles $connect, $disconnect, and $default routes
+
+UPDATED: Integrated with new DTR Pass 1 system
 """
 import boto3
 import json
@@ -273,78 +275,181 @@ def send_error(apigw_management: Any, connection_id: str, error: str):
 
 
 def handle_build_dtr(data: Dict[str, Any], apigw_management: Any, connection_id: str):
-    """Handle build-dtr action"""
-    # Import your existing handler
-    from app.websocket_handler import handle_build_dtr as build_dtr_logic
+    """
+    Handle build-dtr action with new Pass 1 DTR system
     
-    # Create a wrapper that sends messages via API Gateway Management API
-    class WebSocketWrapper:
-        def __init__(self, apigw, conn_id):
-            self.apigw = apigw
-            self.conn_id = conn_id
-        
-        async def send_json(self, data):
-            send_message(self.apigw, self.conn_id, data)
-        
-        async def accept(self):
-            pass
-        
-        async def close(self):
-            pass
+    UPDATED: Now uses app.dtr module instead of old DTR/DTM logic
+    """
+    import asyncio
+    from app import storage, db
     
-    websocket = WebSocketWrapper(apigw_management, connection_id)
-    
-    # TODO: Get user_id from connection mapping in DynamoDB
-    # For now, require it in the message data
+    # Get user_id from message data (required for Lambda)
     user_id = data.get("user_id")
     
     if not user_id:
         send_error(apigw_management, connection_id, "user_id required in message data")
         return
     
-    # Run the handler
-    import asyncio
+    async def run_extraction():
+        """Async extraction function"""
+        try:
+            # Extract parameters
+            resource_id = data.get("resource_id")
+            taste_id = data.get("taste_id")
+            
+            if not resource_id:
+                send_error(apigw_management, connection_id, "resource_id is required")
+                return
+            
+            if not taste_id:
+                send_error(apigw_management, connection_id, "taste_id is required")
+                return
+            
+            # Get resource from database
+            resource = db.get_resource(resource_id)
+            
+            if not resource:
+                send_error(apigw_management, connection_id, f"Resource {resource_id} not found")
+                return
+            
+            # Verify ownership
+            if resource.get("owner_id") != user_id:
+                send_error(apigw_management, connection_id, "Access denied")
+                return
+            
+            # Check if files are uploaded
+            has_figma = resource.get("has_figma", False)
+            has_image = resource.get("has_image", False)
+            
+            if not has_figma and not has_image:
+                send_error(apigw_management, connection_id, "Resource has no files uploaded")
+                return
+            
+            # Send progress: Downloading files
+            send_message(apigw_management, connection_id, {
+                "type": "progress",
+                "stage": "download",
+                "message": "Downloading resource files from S3..."
+            })
+            
+            # Download files from S3
+            figma_json = None
+            image_bytes = None
+            image_format = "png"
+            
+            if has_figma:
+                figma_key = resource.get("figma_key")
+                if figma_key:
+                    try:
+                        print(f"Downloading Figma JSON from S3: {figma_key}")
+                        figma_obj = storage.s3_client.get_object(
+                            Bucket=storage.S3_BUCKET,
+                            Key=figma_key
+                        )
+                        figma_content = figma_obj['Body'].read()
+                        figma_json = json.loads(figma_content)
+                        print(f"✅ Downloaded Figma JSON ({len(figma_content)} bytes)")
+                    except Exception as e:
+                        print(f"❌ Failed to download Figma JSON: {e}")
+            
+            if has_image:
+                image_key = resource.get("image_key")
+                if image_key:
+                    try:
+                        print(f"Downloading image from S3: {image_key}")
+                        image_obj = storage.s3_client.get_object(
+                            Bucket=storage.S3_BUCKET,
+                            Key=image_key
+                        )
+                        image_bytes = image_obj['Body'].read()
+                        
+                        # Detect format
+                        if image_key.endswith('.jpg') or image_key.endswith('.jpeg'):
+                            image_format = "jpeg"
+                        elif image_key.endswith('.webp'):
+                            image_format = "webp"
+                        else:
+                            image_format = "png"
+                        
+                        print(f"✅ Downloaded image ({len(image_bytes)} bytes, format: {image_format})")
+                    except Exception as e:
+                        print(f"❌ Failed to download image: {e}")
+            
+            # Verify at least one file downloaded
+            if figma_json is None and image_bytes is None:
+                send_error(apigw_management, connection_id, "Failed to download files from S3")
+                return
+            
+            # Send progress: Starting extraction
+            send_message(apigw_management, connection_id, {
+                "type": "progress",
+                "stage": "extraction",
+                "message": "Starting DTR extraction..."
+            })
+            
+            # Progress callback
+            async def progress_callback(stage: str, message: str):
+                send_message(apigw_management, connection_id, {
+                    "type": "progress",
+                    "stage": stage,
+                    "message": message
+                })
+            
+            # Run Pass 1 extraction using new DTR module
+            from app.dtr import extract_pass_1_only
+            
+            print(f"Starting Pass 1 extraction for resource {resource_id}")
+            
+            result = await extract_pass_1_only(
+                resource_id=resource_id,
+                taste_id=taste_id,
+                figma_json=figma_json,
+                image_bytes=image_bytes,
+                image_format=image_format,
+                progress_callback=progress_callback
+            )
+            
+            print(f"✅ Pass 1 extraction completed!")
+            print(f"   Authority: {result.get('authority')}")
+            print(f"   Confidence: {result.get('confidence')}")
+            print(f"   Layout type: {result.get('layout', {}).get('type')}")
+            
+            # Send completion
+            send_message(apigw_management, connection_id, {
+                "type": "complete",
+                "result": {
+                    "status": "success",
+                    "resource_id": resource_id,
+                    "taste_id": taste_id,
+                    "pass_1_completed": True,
+                    "authority": result.get("authority"),
+                    "confidence": result.get("confidence"),
+                    "extraction_time_ms": result.get("extraction_time_ms"),
+                    "layout_type": result.get("layout", {}).get("type"),
+                    "spacing_quantum": result.get("spacing", {}).get("quantum")
+                }
+            })
+            
+        except Exception as e:
+            import traceback
+            error_msg = f"Extraction failed: {str(e)}"
+            print(f"❌ ERROR in build_dtr: {traceback.format_exc()}")
+            send_error(apigw_management, connection_id, error_msg)
+    
+    # Run async extraction
     try:
-        asyncio.run(build_dtr_logic(websocket, data, user_id))
+        asyncio.run(run_extraction())
     except Exception as e:
-        print(f"Error in build_dtr_logic: {e}")
+        print(f"Error running extraction: {e}")
         import traceback
         traceback.print_exc()
         send_error(apigw_management, connection_id, str(e))
 
 
 def handle_generate_ui(data: Dict[str, Any], apigw_management: Any, connection_id: str):
-    """Handle generate-ui action"""
-    # Similar to build_dtr
-    from app.websocket_handler import handle_generate_ui as generate_ui_logic
+    """
+    Handle generate-ui action
     
-    class WebSocketWrapper:
-        def __init__(self, apigw, conn_id):
-            self.apigw = apigw
-            self.conn_id = conn_id
-        
-        async def send_json(self, data):
-            send_message(self.apigw, self.conn_id, data)
-        
-        async def accept(self):
-            pass
-        
-        async def close(self):
-            pass
-    
-    websocket = WebSocketWrapper(apigw_management, connection_id)
-    
-    user_id = data.get("user_id")
-    
-    if not user_id:
-        send_error(apigw_management, connection_id, "user_id required in message data")
-        return
-    
-    import asyncio
-    try:
-        asyncio.run(generate_ui_logic(websocket, data, user_id))
-    except Exception as e:
-        print(f"Error in generate_ui_logic: {e}")
-        import traceback
-        traceback.print_exc()
-        send_error(apigw_management, connection_id, str(e))
+    TODO: Update with new system
+    """
+    send_error(apigw_management, connection_id, "generate-ui not yet implemented with new system")
