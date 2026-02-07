@@ -573,14 +573,18 @@ class FigmaParser:
         """
         Calculate how consistently the spacing system is used.
         
-        Returns: ratio of spacing values that align to quantum
+        Returns: ratio of spacing values that align to quantum (with tolerance)
         """
         if not self.spacing_values:
             return 0.5
         
+        # Allow 2px tolerance for real-world designs
+        # (designers often make tiny manual adjustments)
+        tolerance = 2.0
+        
         aligned_count = sum(
             1 for v in self.spacing_values
-            if v == 0 or v % quantum == 0
+            if v == 0 or abs(v % quantum) <= tolerance or abs(v % quantum - quantum) <= tolerance
         )
         
         return aligned_count / len(self.spacing_values)
@@ -602,12 +606,14 @@ class FigmaParser:
         effects = self._extract_effects()
         gradients = self._extract_gradients()
         shadows = self._extract_shadows()
+        interactions = self._extract_interactions()
         
         return {
             "colors": colors,
             "effects": effects,
             "gradients": gradients,
-            "shadows": shadows
+            "shadows": shadows,
+            "interactions": interactions
         }
     
     def _extract_colors(self) -> Dict[str, Any]:
@@ -813,6 +819,119 @@ class FigmaParser:
                 "color": f"rgba({r},{g},{b},{a})"
             }
         }
+    
+    def _extract_interactions(self) -> Dict[str, Any]:
+        """
+        Extract interaction states from Figma component variants.
+        
+        Looks for:
+        - Component sets with variants (hover, pressed, active, etc.)
+        - Interactive prototypes with state changes
+        - Repeated button/card patterns that suggest interactive design
+        
+        Returns:
+            Dict with component_states and patterns found
+        """
+        component_states = {}
+        component_patterns = []
+        
+        # Track components by name to find variants
+        components_by_base_name = {}
+        
+        for node in self.all_nodes:
+            node_type = node.get('type')
+            node_name = node.get('name', '')
+            
+            # Look for component variants (e.g., "Button/Primary/Hover")
+            if node_type in ['COMPONENT', 'INSTANCE', 'COMPONENT_SET']:
+                # Check if name contains state keywords
+                name_lower = node_name.lower()
+                state_keywords = ['hover', 'pressed', 'active', 'disabled', 'focus', 'default', 'normal']
+                
+                for keyword in state_keywords:
+                    if keyword in name_lower:
+                        # Extract base component name
+                        base_name = node_name.lower().replace(keyword, '').replace('/', '').replace('\\', '').strip()
+                        
+                        if base_name not in components_by_base_name:
+                            components_by_base_name[base_name] = {}
+                        
+                        # Store this variant
+                        components_by_base_name[base_name][keyword] = {
+                            'node_id': node.get('id'),
+                            'name': node_name,
+                            'effects': node.get('effects', []),
+                            'fills': node.get('fills', []),
+                            'opacity': node.get('opacity', 1.0),
+                            'transform': node.get('relativeTransform')
+                        }
+                        
+                        component_patterns.append({
+                            'base_name': base_name,
+                            'state': keyword,
+                            'component_name': node_name
+                        })
+                        break
+        
+        # Analyze variants to extract state differences
+        for base_name, states in components_by_base_name.items():
+            if len(states) > 1:
+                # We have multiple states for this component
+                component_states[base_name] = self._analyze_state_differences(states)
+        
+        return {
+            'component_states': component_states,
+            'patterns': component_patterns,
+            'has_variants': len(component_states) > 0
+        }
+    
+    def _analyze_state_differences(self, states: Dict[str, Dict]) -> Dict[str, str]:
+        """
+        Analyze differences between component states to generate CSS.
+        
+        Args:
+            states: Dict mapping state names to component data
+        
+        Returns:
+            Dict mapping state names to CSS strings
+        """
+        state_css = {}
+        
+        # Get default/normal state as baseline
+        baseline = states.get('default') or states.get('normal') or list(states.values())[0]
+        
+        for state_name, state_data in states.items():
+            if state_name in ['default', 'normal']:
+                continue
+            
+            css_changes = []
+            
+            # Compare opacity
+            baseline_opacity = baseline.get('opacity', 1.0)
+            state_opacity = state_data.get('opacity', 1.0)
+            if abs(baseline_opacity - state_opacity) > 0.01:
+                css_changes.append(f"opacity: {state_opacity}")
+            
+            # Compare effects (shadows, blurs)
+            baseline_effects = baseline.get('effects', [])
+            state_effects = state_data.get('effects', [])
+            if len(state_effects) != len(baseline_effects):
+                # Effect count changed - likely shadow added/removed
+                for effect in state_effects:
+                    if effect.get('type') == 'DROP_SHADOW':
+                        shadow = self._parse_shadow_effect(effect)
+                        css_changes.append(shadow['css'].replace('box-shadow: ', ''))
+            
+            # Look for transform hints (scale, position changes)
+            # Note: Figma doesn't always export these, but we can infer from size changes
+            
+            if css_changes:
+                state_css[f"{state_name}"] = "; ".join(css_changes) + ";"
+            else:
+                # No detectable changes, use placeholder
+                state_css[f"{state_name}"] = "/* No visual changes detected */"
+        
+        return state_css
     
     def _parse_blur_effect(self, effect: Dict[str, Any]) -> Dict[str, Any]:
         """

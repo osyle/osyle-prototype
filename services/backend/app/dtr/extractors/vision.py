@@ -64,14 +64,21 @@ Your analysis should capture not just WHAT you see, but WHY these choices work a
    - Estimate nesting depth (how many levels of containers)
 
 2. COLUMN STRUCTURE: If grid-like layout exists
-   - Approximate number of columns
+   - Approximate number of columns (0 if NOT a grid layout)
    - Are columns equal width or varied?
-   - Estimate gap between columns (in pixels)
+   - Estimate gap between columns (in pixels, or leave empty if no grid)
+   - IMPORTANT: If not a grid, set count=0, widths_string="", gap=""
 
 3. VISUAL HIERARCHY: What catches the eye first, second, third?
-   - List the top 3-4 hierarchy levels
-   - For each level, describe: what elements, and how is hierarchy established?
-   - Examples: "size + position", "weight + spacing", "color + size"
+   - List the top 3-5 hierarchy levels (do NOT repeat the same elements)
+   - For each level, be SPECIFIC about:
+     * What unique elements are at this level (e.g., "main heading", "user score badge", "section titles")
+     * How hierarchy is established (e.g., "size + weight", "color + position")
+   - Each rank should describe DIFFERENT elements - avoid duplication
+   - Examples: 
+     * Rank 1: "main greeting heading" (size + weight)
+     * Rank 2: "user score badge in yellow circle" (color + size)
+     * Rank 3: "task count with underline" (position + decoration)
 
 4. CONTENT DENSITY: How much content vs empty space?
    - Overall density (0-1 scale, where 1 is very dense)
@@ -110,17 +117,27 @@ Respond with a JSON object matching this structure:
     "direction": "vertical | horizontal",
     "nesting_depth": <number>,
     "columns": {
-      "count": <number or null>,
-      "widths": <array of widths or null>,
-      "gap": "<value>px or null"
+      "count": <number> (set to 0 if layout is NOT grid-based),
+      "widths_string": "" (empty string if no grid, otherwise "200, 400, 200"),
+      "gap": "" (empty string if no grid, otherwise "16px")
     }
   },
   "hierarchy": {
     "levels": [
       {
         "rank": 1,
-        "elements": ["hero_heading"],
-        "established_by": "size + position"
+        "elements_string": "main_page_heading" (SPECIFIC, not generic),
+        "established_by": "size + weight"
+      },
+      {
+        "rank": 2,
+        "elements_string": "user_profile_avatar, score_badge" (DIFFERENT from rank 1),
+        "established_by": "color + position"
+      },
+      {
+        "rank": 3,
+        "elements_string": "section_titles" (DIFFERENT from ranks 1 & 2),
+        "established_by": "size + spacing"
       }
     ]
   },
@@ -132,7 +149,7 @@ Respond with a JSON object matching this structure:
   },
   "spacing": {
     "quantum": "8px",
-    "scale": [8, 16, 24, 32, 48],
+    "scale_string": "8, 16, 24, 32, 48" (comma-separated integers),
     "consistency": <0-1>
   },
   "spatial_philosophy": "Multi-sentence description...",
@@ -141,7 +158,7 @@ Respond with a JSON object matching this structure:
   "rhythm_description": "Multi-sentence description..."
 }"""
         
-        # Schema for structured output
+        # Schema for structured output - use strings instead of arrays to avoid Gemini issues
         schema = {
             "type": "object",
             "properties": {
@@ -152,15 +169,16 @@ Respond with a JSON object matching this structure:
                         "direction": {"type": "string"},
                         "nesting_depth": {"type": "integer"},
                         "columns": {
-                            "type": ["object", "null"],
+                            "type": "object",
                             "properties": {
-                                "count": {"type": ["integer", "null"]},
-                                "widths": {"type": ["array", "null"]},
-                                "gap": {"type": ["string", "null"]}
-                            }
+                                "count": {"type": "integer"},
+                                "widths_string": {"type": "string"},
+                                "gap": {"type": "string"}
+                            },
+                            "required": ["count", "widths_string", "gap"]
                         }
                     },
-                    "required": ["type", "direction", "nesting_depth"]
+                    "required": ["type", "direction", "nesting_depth", "columns"]
                 },
                 "hierarchy": {
                     "type": "object",
@@ -171,10 +189,10 @@ Respond with a JSON object matching this structure:
                                 "type": "object",
                                 "properties": {
                                     "rank": {"type": "integer"},
-                                    "elements": {"type": "array", "items": {"type": "string"}},
+                                    "elements_string": {"type": "string"},
                                     "established_by": {"type": "string"}
                                 },
-                                "required": ["rank", "elements", "established_by"]
+                                "required": ["rank", "elements_string", "established_by"]
                             }
                         }
                     },
@@ -202,10 +220,10 @@ Respond with a JSON object matching this structure:
                     "type": "object",
                     "properties": {
                         "quantum": {"type": "string"},
-                        "scale": {"type": "array", "items": {"type": "integer"}},
+                        "scale_string": {"type": "string"},
                         "consistency": {"type": "number"}
                     },
-                    "required": ["quantum", "scale", "consistency"]
+                    "required": ["quantum", "scale_string", "consistency"]
                 },
                 "spatial_philosophy": {"type": "string"},
                 "whitespace_ratios": {"type": "string"},
@@ -232,19 +250,55 @@ Respond with a JSON object matching this structure:
                 )
             ],
             structured_output_schema=schema,
+            max_tokens=8192,  # Ensure enough space for complete response
             temperature=0.0  # Deterministic for analysis
         )
         
         # Parse structured output
         if response.structured_output:
-            return response.structured_output
+            result = response.structured_output
+            # Convert string fields back to lists/arrays
+            self._convert_structure_strings_to_lists(result)
+            return result
         
         # Fallback: try parsing text
         import json
         try:
-            return json.loads(response.text)
+            result = json.loads(response.text)
+            self._convert_structure_strings_to_lists(result)
+            return result
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse LLM response as JSON: {e}\nResponse: {response.text[:500]}")
+    
+    def _convert_structure_strings_to_lists(self, result: Dict[str, Any]) -> None:
+        """Convert string fields back to lists in structure analysis result"""
+        # Convert hierarchy elements_string to elements list
+        if "hierarchy" in result and "levels" in result["hierarchy"]:
+            for level in result["hierarchy"]["levels"]:
+                if "elements_string" in level:
+                    elements_str = level.pop("elements_string")
+                    level["elements"] = [e.strip() for e in elements_str.split(",") if e.strip()]
+        
+        # Convert spacing scale_string to scale list
+        if "spacing" in result and "scale_string" in result["spacing"]:
+            scale_str = result["spacing"].pop("scale_string")
+            try:
+                # Parse comma-separated integers
+                result["spacing"]["scale"] = [int(s.strip()) for s in scale_str.split(",") if s.strip()]
+            except ValueError:
+                result["spacing"]["scale"] = []
+        
+        # Convert columns widths_string to widths list
+        if "layout" in result and "columns" in result["layout"] and result["layout"]["columns"]:
+            if "widths_string" in result["layout"]["columns"]:
+                widths_str = result["layout"]["columns"].pop("widths_string")
+                if widths_str:
+                    try:
+                        result["layout"]["columns"]["widths"] = [int(w.strip()) for w in widths_str.split(",") if w.strip()]
+                    except ValueError:
+                        result["layout"]["columns"]["widths"] = None
+                else:
+                    result["layout"]["columns"]["widths"] = None
     
     async def validate_visual_hierarchy(
         self,
@@ -413,7 +467,24 @@ The more specific and insightful you are, the better the generation quality."""
    - Usage context
    - Brief notes
 
-4. ATMOSPHERE: Overall visual feeling (2-3 sentences)
+4. INTERACTION PATTERNS: Analyze how elements respond to interaction
+   - Look for visual cues that suggest hover/active states:
+     * Do shadows get stronger or softer on interactive elements?
+     * Do elements scale or lift when hovered?
+     * Do colors brighten or darken?
+     * Are there subtle animations or transitions?
+   - For each interactive element type (buttons, cards, links):
+     * Estimate hover state CSS
+     * Estimate active/pressed state CSS
+   - Note: If no clear interactive elements, return empty object
+
+5. TRANSFORMATION RULES: Describe the interaction philosophy (2-3 sentences)
+   - How does this designer approach hover states?
+   - What's the transition style (instant, smooth, bouncy)?
+   - How aggressive or subtle are the state changes?
+   - Examples: "Soft elevation on hover, gentle 200ms transitions"
+
+6. ATMOSPHERE: Overall visual feeling (2-3 sentences)
 
 Respond with a JSON object:{kmeans_reference}
 
@@ -451,6 +522,12 @@ Respond with a JSON object:{kmeans_reference}
       "notes": "Soft, present but not harsh"
     }}
   ],
+  "interaction_states": [
+    {{"state": "button-primary-hover", "css": "transform: scale(1.02); box-shadow: 0px 8px 24px rgba(0,0,0,0.15);"}},
+    {{"state": "button-primary-active", "css": "transform: scale(0.98); box-shadow: 0px 2px 8px rgba(0,0,0,0.1);"}},
+    {{"state": "card-hover", "css": "transform: translateY(-2px); box-shadow: 0px 8px 32px rgba(0,0,0,0.12);"}}
+  ],
+  "transformation_rules": "Hover states use subtle scale (1.02) and shadow elevation (+4px). Active states compress to 0.98 scale. All transitions are smooth 200ms ease-out. Material approach favors gentle elevation over dramatic effects.",
   "atmosphere": "Multi-sentence description of the overall visual feeling and emotional quality this treatment creates"
 }}"""
         
@@ -471,7 +548,7 @@ Respond with a JSON object:{kmeans_reference}
                                     "contexts_string": {"type": "string"},
                                     "notes": {"type": "string"}
                                 },
-                                "required": ["hex", "role", "contexts_string", "notes"]
+                                "required": ["hex", "role", "contexts_string"]
                             }
                         },
                         "temperature": {"type": "string"},
@@ -494,12 +571,12 @@ Respond with a JSON object:{kmeans_reference}
                                     "css": {"type": "string"},
                                     "notes": {"type": "string"}
                                 },
-                                "required": ["level", "treatment", "css", "notes"]
+                                "required": ["level", "treatment", "css"]
                             }
                         },
                         "depth_technique": {"type": "string"}
                     },
-                    "required": ["primary_language", "depth_planes", "depth_technique"]
+                    "required": ["primary_language", "depth_planes"]
                 },
                 "effects": {
                     "type": "array",
@@ -511,12 +588,24 @@ Respond with a JSON object:{kmeans_reference}
                             "usage": {"type": "string"},
                             "notes": {"type": "string"}
                         },
-                        "required": ["type", "css", "usage", "notes"]
+                        "required": ["type", "css", "usage"]
                     }
                 },
+                "interaction_states": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "state": {"type": "string"},
+                            "css": {"type": "string"}
+                        },
+                        "required": ["state", "css"]
+                    }
+                },
+                "transformation_rules": {"type": "string"},
                 "atmosphere": {"type": "string"}
             },
-            "required": ["colors", "materials", "effects", "atmosphere"]
+            "required": ["colors", "materials", "effects", "interaction_states", "transformation_rules", "atmosphere"]
         }
         
         # Call LLM with vision
@@ -532,7 +621,7 @@ Respond with a JSON object:{kmeans_reference}
                     content=[
                         ImageContent(
                             data=image_base64,
-                            format=image_format
+                            media_type=f"image/{image_format}"
                         ),
                         TextContent(text=user_prompt)
                     ]

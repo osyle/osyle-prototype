@@ -179,12 +179,14 @@ async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: 
         async def progress_callback(stage: str, message: str):
             await send_progress(websocket, stage, message)
         
-        # Run Pass 1 extraction using new DTR module
-        from app.dtr import extract_pass_1_only
+        # Run Pass 1 and Pass 2 in parallel (they're independent)
+        from app.dtr import extract_pass_1_only, extract_pass_2_only
+        import asyncio
         
-        print(f"Starting Pass 1 extraction for resource {resource_id}")
+        print(f"Starting Pass 1 and Pass 2 extraction in parallel for resource {resource_id}")
         
-        result = await extract_pass_1_only(
+        # Run both passes concurrently
+        pass_1_task = extract_pass_1_only(
             resource_id=resource_id,
             taste_id=taste_id,
             figma_json=figma_json,
@@ -193,10 +195,27 @@ async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: 
             progress_callback=progress_callback
         )
         
+        pass_2_task = extract_pass_2_only(
+            resource_id=resource_id,
+            taste_id=taste_id,
+            figma_json=figma_json,
+            image_bytes=image_bytes,
+            image_format=image_format,
+            progress_callback=progress_callback
+        )
+        
+        # Wait for both to complete
+        pass_1_result, pass_2_result = await asyncio.gather(pass_1_task, pass_2_task)
+        
         print(f"✅ Pass 1 extraction completed!")
-        print(f"   Authority: {result.get('authority')}")
-        print(f"   Confidence: {result.get('confidence')}")
-        print(f"   Layout type: {result.get('layout', {}).get('type')}")
+        print(f"   Authority: {pass_1_result.get('authority')}")
+        print(f"   Confidence: {pass_1_result.get('confidence')}")
+        print(f"   Layout type: {pass_1_result.get('layout', {}).get('type')}")
+        
+        print(f"✅ Pass 2 extraction completed!")
+        print(f"   Authority: {pass_2_result.get('authority')}")
+        print(f"   Confidence: {pass_2_result.get('confidence')}")
+        print(f"   Colors found: {len(pass_2_result.get('colors', {}).get('exact_palette', []))}")
         
         # Send completion
         await send_complete(websocket, {
@@ -204,11 +223,15 @@ async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: 
             "resource_id": resource_id,
             "taste_id": taste_id,
             "pass_1_completed": True,
-            "authority": result.get("authority"),
-            "confidence": result.get("confidence"),
-            "extraction_time_ms": result.get("extraction_time_ms"),
-            "layout_type": result.get("layout", {}).get("type"),
-            "spacing_quantum": result.get("spacing", {}).get("quantum")
+            "pass_2_completed": True,
+            "pass_1_authority": pass_1_result.get("authority"),
+            "pass_1_confidence": pass_1_result.get("confidence"),
+            "pass_2_authority": pass_2_result.get("authority"),
+            "pass_2_confidence": pass_2_result.get("confidence"),
+            "extraction_time_ms": pass_1_result.get("extraction_time_ms", 0) + pass_2_result.get("extraction_time_ms", 0),
+            "layout_type": pass_1_result.get("layout", {}).get("type"),
+            "spacing_quantum": pass_1_result.get("spacing", {}).get("quantum"),
+            "colors_count": len(pass_2_result.get("colors", {}).get("exact_palette", []))
         })
         
     except Exception as e:

@@ -202,6 +202,16 @@ class Pass2Surface(BasePass):
         effects = figma_data.get("effects", [])
         gradients = figma_data.get("gradients", [])
         shadows = figma_data.get("shadows", [])
+        interactions = figma_data.get("interactions", {})
+        
+        # Format interactions for prompt
+        interactions_text = ""
+        if interactions and interactions.get("has_variants"):
+            interactions_text = "\nINTERACTION STATES DETECTED:\n"
+            for component, states in interactions.get("component_states", {}).items():
+                interactions_text += f"Component: {component}\n"
+                for state, css in states.items():
+                    interactions_text += f"  - {state}: {css}\n"
         
         prompt = f"""You have extracted the following surface design properties from Figma JSON:
 
@@ -216,7 +226,7 @@ GRADIENTS ({len(gradients)} gradients):
 
 SHADOWS ({len(shadows)} shadows):
 {self._format_shadows_for_llm(shadows)}
-
+{interactions_text}
 Now analyze this data and provide:
 
 1. SEMANTIC ROLES: For each color, assign a semantic role
@@ -300,6 +310,7 @@ Respond with a JSON object:
             effects=effects,
             gradients=gradients,
             shadows=shadows,
+            interactions=interactions,
             analysis=analysis,
             source="figma"
         )
@@ -389,12 +400,47 @@ Respond with a JSON object:
                 css=plane["css"]
             ))
         
+        # Merge interaction states: prefer Figma if available, fall back to vision
+        figma_interactions = figma_data.get("interactions", {})
+        vision_interaction_states_raw = vision_data.get("interaction_states", [])
+        vision_transformation_rules = vision_data.get("transformation_rules", "")
+        
+        # Convert vision interaction_states from array to dict
+        vision_interaction_states = {}
+        if isinstance(vision_interaction_states_raw, list):
+            for item in vision_interaction_states_raw:
+                if isinstance(item, dict) and "state" in item and "css" in item:
+                    vision_interaction_states[item["state"]] = item["css"]
+        elif isinstance(vision_interaction_states_raw, dict):
+            # Fallback if it's already a dict (shouldn't happen)
+            vision_interaction_states = vision_interaction_states_raw
+        
+        # Use Figma component states if available, otherwise vision analysis
+        interaction_states = {}
+        if figma_interactions and figma_interactions.get("has_variants"):
+            # Convert Figma component states to flat dict
+            for component_name, states in figma_interactions.get("component_states", {}).items():
+                for state_name, css in states.items():
+                    key = f"{component_name}-{state_name}"
+                    interaction_states[key] = css
+        
+        # Add vision interaction states if not already covered
+        if vision_interaction_states:
+            for key, css in vision_interaction_states.items():
+                if key not in interaction_states:
+                    interaction_states[key] = css
+        
+        # Use vision transformation rules (they're better for perceptual qualities)
+        transformation_rules = vision_transformation_rules or None
+        
         return {
             "colors": ColorSystem(
                 exact_palette=color_entries,
                 temperature=vision_colors.get("temperature", ""),
                 saturation_profile=vision_colors.get("saturation_profile", ""),
-                relationships=vision_colors.get("relationships", "")
+                relationships=vision_colors.get("relationships", ""),
+                interaction_states=interaction_states if interaction_states else None,
+                transformation_rules=transformation_rules
             ),
             "materials": MaterialSystem(
                 primary_language=materials.get("primary_language", ""),
@@ -456,12 +502,24 @@ Respond with a JSON object:
                 source="vision"
             ))
         
+        # Convert interaction_states from array to dict
+        interaction_states_raw = vision_data.get("interaction_states", [])
+        interaction_states_dict = {}
+        if isinstance(interaction_states_raw, list):
+            for item in interaction_states_raw:
+                if isinstance(item, dict) and "state" in item and "css" in item:
+                    interaction_states_dict[item["state"]] = item["css"]
+        elif isinstance(interaction_states_raw, dict):
+            interaction_states_dict = interaction_states_raw
+        
         return {
             "colors": ColorSystem(
                 exact_palette=color_entries,
                 temperature=colors_data.get("temperature", ""),
                 saturation_profile=colors_data.get("saturation_profile", ""),
-                relationships=colors_data.get("relationships", "")
+                relationships=colors_data.get("relationships", ""),
+                interaction_states=interaction_states_dict if interaction_states_dict else None,
+                transformation_rules=vision_data.get("transformation_rules")
             ),
             "materials": MaterialSystem(
                 primary_language=materials_data.get("primary_language", ""),
@@ -477,6 +535,7 @@ Respond with a JSON object:
         effects: list,
         gradients: list,
         shadows: list,
+        interactions: Dict[str, Any],
         analysis: Dict[str, Any],
         source: str
     ) -> Dict[str, Any]:
@@ -527,12 +586,21 @@ Respond with a JSON object:
                 css=plane["css"]
             ))
         
+        # Extract interaction states from Figma component variants
+        interaction_states = {}
+        if interactions and interactions.get("has_variants"):
+            for component_name, states in interactions.get("component_states", {}).items():
+                for state_name, css in states.items():
+                    key = f"{component_name}-{state_name}"
+                    interaction_states[key] = css
+        
         return {
             "colors": ColorSystem(
                 exact_palette=color_entries,
                 temperature=analysis.get("temperature", ""),
                 saturation_profile=analysis.get("saturation_profile", ""),
                 relationships=analysis.get("relationships", ""),
+                interaction_states=interaction_states if interaction_states else None,
                 transformation_rules=analysis.get("transformation_rules")
             ),
             "materials": MaterialSystem(
