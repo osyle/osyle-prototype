@@ -78,6 +78,14 @@ class Pass1Structure(BasePass):
         # Add metadata
         data_with_metadata = self._add_metadata(data, authority, confidence)
         
+        # Final safety check: ensure columns is always set
+        if "layout" in data_with_metadata and not data_with_metadata["layout"].get("columns"):
+            data_with_metadata["layout"]["columns"] = {
+                "count": 0,
+                "widths_string": "",
+                "gap": ""
+            }
+        
         # Validate and return as Pydantic model
         return Pass1StructureDTR(**data_with_metadata)
     
@@ -125,6 +133,9 @@ class Pass1Structure(BasePass):
         # Use vision analyzer
         result = await analyze_structure_from_image(image_bytes, image_format)
         
+        # Post-process to fix common issues
+        result = self._postprocess_vision_data(result)
+        
         return result
     
     async def _extract_hybrid(
@@ -159,6 +170,9 @@ class Pass1Structure(BasePass):
         # Wait for both to complete in parallel
         figma_data, vision_data = await asyncio.gather(figma_task, vision_task)
         
+        # Post-process vision data to fix common issues
+        vision_data = self._postprocess_vision_data(vision_data)
+        
         # Use Figma as primary source for measurements (higher confidence)
         result = figma_data.copy()
         
@@ -192,6 +206,56 @@ class Pass1Structure(BasePass):
             }
         
         return result
+    
+    def _postprocess_vision_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Post-process vision data to fix common issues.
+        
+        Fixes:
+        1. columns being null → set default empty structure
+        2. Hierarchy duplicates → deduplicate by element names
+        
+        Args:
+            data: Raw vision extraction data
+        
+        Returns:
+            Cleaned data
+        """
+        # Fix 1: Ensure columns is always present
+        layout = data.get("layout", {})
+        if not layout.get("columns"):
+            layout["columns"] = {
+                "count": 0,
+                "widths_string": "",
+                "gap": ""
+            }
+        
+        # Fix 2: Deduplicate hierarchy levels
+        hierarchy = data.get("hierarchy", {})
+        levels = hierarchy.get("levels", [])
+        
+        if levels:
+            seen_elements = set()
+            deduped_levels = []
+            
+            for level in levels:
+                # Get elements as string or list
+                elements = level.get("elements", [])
+                if isinstance(elements, str):
+                    elements = [e.strip() for e in elements.split(",")]
+                
+                # Create a key from elements
+                elements_key = ",".join(sorted(elements))
+                
+                # Only keep if we haven't seen these exact elements
+                if elements_key not in seen_elements:
+                    seen_elements.add(elements_key)
+                    deduped_levels.append(level)
+            
+            # Update hierarchy with deduped levels
+            hierarchy["levels"] = deduped_levels
+        
+        return data
     
     async def _llm_analyze_extracted_structure(
         self,
