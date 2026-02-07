@@ -362,7 +362,10 @@ You have been given EXACT MEASUREMENTS extracted from the design. Your task is t
 
 Your narratives should be multi-sentence paragraphs that help an AI understand how to apply this typographic system to NEW designs.
 
-CRITICAL: You must respond with ONLY a valid JSON object. No preamble, no explanations before or after, no markdown code blocks. Just the raw JSON."""
+CRITICAL: 
+- You must respond with ONLY a valid JSON object. No preamble, no explanations before or after, no markdown code blocks. Just the raw JSON.
+- Use ONLY the exact font family names provided in the data. Do NOT substitute other fonts.
+- Reference specific measurements from the data (sizes, weights, ratios)."""
 
             user_prompt = f"""Analyze this typography data and generate rich narratives.
 
@@ -489,7 +492,10 @@ You have EXACT MEASUREMENTS from code extraction AND VISUAL PERCEPTION feedback 
 
 Your task: Generate RICH NARRATIVES that synthesize both sources, explaining the designer's typographic logic.
 
-CRITICAL: You must respond with ONLY a valid JSON object. No preamble, no explanations before or after, no markdown code blocks. Just the raw JSON."""
+CRITICAL: 
+- You must respond with ONLY a valid JSON object. No preamble, no explanations before or after, no markdown code blocks. Just the raw JSON.
+- Use ONLY the exact font family names provided in the code extraction data.
+- Reference specific measurements from the data."""
 
             user_prompt = f"""Analyze this typography data and generate rich narratives.
 
