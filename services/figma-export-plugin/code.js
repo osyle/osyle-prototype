@@ -103,15 +103,51 @@ async function handleExport(exportJson, exportPng) {
   const timestamp = new Date().getTime();
   const files = [];
 
-  // Export JSON
+  // Export JSON with embedded images
   if (exportJson) {
     figma.ui.postMessage({
       type: "progress",
       message: "Serializing Figma JSON...",
     });
 
-    // Serialize the complete node tree (NO COMPRESSION)
+    // Find all image nodes and export them as base64
+    const imageNodes = findImageNodes(node);
+    const imageExports = {};
+
+    figma.ui.postMessage({
+      type: "progress",
+      message: `Exporting ${imageNodes.length} images...`,
+    });
+
+    for (let i = 0; i < imageNodes.length; i++) {
+      const imgNode = imageNodes[i];
+      try {
+        const imgData = await imgNode.exportAsync({
+          format: "PNG",
+          constraint: { type: "SCALE", value: 2 },
+        });
+
+        // Convert to base64
+        const base64 = arrayBufferToBase64(imgData);
+        imageExports[imgNode.id] = base64;
+
+        if ((i + 1) % 5 === 0 || i === imageNodes.length - 1) {
+          figma.ui.postMessage({
+            type: "progress",
+            message: `Exported ${i + 1}/${imageNodes.length} images...`,
+          });
+        }
+      } catch (e) {
+        console.error(`Failed to export image node ${imgNode.id}:`, e);
+      }
+    }
+
+    // Serialize the complete node tree with embedded images
     const jsonData = serializeFigmaNode(node);
+
+    // Add image exports to JSON root
+    jsonData._imageExports = imageExports;
+
     const jsonString = JSON.stringify(jsonData, null, 2);
 
     // Convert string to UTF-8 byte array (TextEncoder not available in Figma)
@@ -163,6 +199,65 @@ async function handleExport(exportJson, exportPng) {
   });
 
   figma.ui.postMessage({ type: "export-complete" });
+}
+
+/**
+ * Convert Uint8Array to base64 string
+ * Manual implementation as btoa may not be available in Figma plugin sandbox
+ */
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  let binary = "";
+
+  const base64chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+  for (let i = 0; i < len; i += 3) {
+    const byte1 = bytes[i];
+    const byte2 = i + 1 < len ? bytes[i + 1] : 0;
+    const byte3 = i + 2 < len ? bytes[i + 2] : 0;
+
+    const encoded1 = byte1 >> 2;
+    const encoded2 = ((byte1 & 3) << 4) | (byte2 >> 4);
+    const encoded3 = ((byte2 & 15) << 2) | (byte3 >> 6);
+    const encoded4 = byte3 & 63;
+
+    binary += base64chars[encoded1] + base64chars[encoded2];
+    binary += i + 1 < len ? base64chars[encoded3] : "=";
+    binary += i + 2 < len ? base64chars[encoded4] : "=";
+  }
+
+  return binary;
+}
+
+/**
+ * Find all nodes with IMAGE fills in the tree
+ */
+function findImageNodes(node) {
+  const imageNodes = [];
+
+  function traverse(n) {
+    // Check if this node has an IMAGE fill
+    if ("fills" in n && n.fills !== figma.mixed && Array.isArray(n.fills)) {
+      for (const fill of n.fills) {
+        if (fill.type === "IMAGE" && fill.visible !== false) {
+          imageNodes.push(n);
+          break; // Only add once per node
+        }
+      }
+    }
+
+    // Recurse into children
+    if ("children" in n) {
+      for (const child of n.children) {
+        traverse(child);
+      }
+    }
+  }
+
+  traverse(node);
+  return imageNodes;
 }
 
 /**
@@ -406,6 +501,7 @@ function serializePaint(paint) {
     result.scaleMode = paint.scaleMode;
     if (paint.imageHash) {
       result.imageHash = paint.imageHash;
+      result.imageRef = paint.imageHash; // Backend expects imageRef
     }
   }
 
