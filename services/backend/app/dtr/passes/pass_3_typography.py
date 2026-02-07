@@ -188,29 +188,44 @@ class Pass3Typography(BasePass):
         
         Flow:
         1. Code extracts exact values (ground truth from Figma)
-        2. Vision validates and enriches with perceptual feedback (now using Claude Sonnet)
-        3. Synthesize narratives using both sources
+        2. Vision analyzes image and generates rich narratives (using Claude Sonnet 4.5)
+        3. Combine exact metrics from code with narratives from vision
         
-        Vision now uses Claude Sonnet 4.5 instead of Gemini for better reliability.
+        The vision analyzer (Claude Sonnet 4.5 with vision) already generates rich narratives,
+        so we use those directly rather than re-generating with another LLM call.
         """
         # Get code extraction (exact values from Figma)
         extracted = parse_figma_typography(figma_json)
         metrics = self._compute_metrics(extracted)
         
-        # Get vision analysis (perceptual validation + enrichment)
-        # Now using Claude Sonnet 4.5 which handles structured output reliably
+        # Get vision analysis (perceptual validation + rich narratives)
+        # Using Claude Sonnet 4.5 which generates high-quality narratives
         try:
             vision_result = await analyze_typography_from_image(image_bytes, image_format)
             
-            # Synthesize narratives using both exact data and visual perception
-            narratives = await self._generate_narratives_hybrid(
-                code_data=metrics,
-                code_extracted=extracted,
-                vision_data=vision_result
-            )
+            # Extract narratives directly from vision result
+            # Vision analyzer already generated rich narratives, so use them directly
+            narratives = {
+                "family_usage_philosophy": vision_result.get("family_usage_philosophy", ""),
+                "scale_philosophy": vision_result.get("scale_philosophy", ""),
+                "weight_hierarchy_logic": vision_result.get("weight_hierarchy_logic", ""),
+                "case_and_spacing_relationships": vision_result.get("case_and_spacing_relationships", ""),
+                "line_height_philosophy": vision_result.get("line_height_philosophy", ""),
+                "alignment_patterns": vision_result.get("alignment_patterns", ""),
+                "contextual_rules": vision_result.get("contextual_rules", ""),
+                "system_narrative": vision_result.get("system_narrative", "")
+            }
+            
+            # If any narrative is empty, fall back to code-only generation
+            if not all(narratives.values()):
+                print(f"WARNING: Some vision narratives are empty, generating from code data")
+                narratives = await self._generate_narratives_from_data(metrics, extracted)
+                
         except Exception as e:
             # If vision fails for any reason, fall back to code-only narratives
             print(f"WARNING: Vision analysis failed, using code-only: {e}")
+            import traceback
+            traceback.print_exc()
             narratives = await self._generate_narratives_from_data(metrics, extracted)
         
         return {
@@ -334,6 +349,9 @@ class Pass3Typography(BasePass):
             # Prepare data summary for LLM
             data_summary = self._prepare_data_summary(metrics, extracted)
             
+            print(f"DEBUG: Generating narratives from data...")
+            print(f"DEBUG: Data summary length: {len(data_summary)} chars")
+            
             system_prompt = """You are a typography expert analyzing a design's type system.
 
 You have been given EXACT MEASUREMENTS extracted from the design. Your task is to generate RICH, DETAILED NARRATIVES that explain:
@@ -373,6 +391,8 @@ Generate a JSON object with these narrative fields (all must be multi-sentence p
 
 CRITICAL: Every field must be a rich, multi-sentence explanation of LOGIC and RELATIONSHIPS, not just descriptions."""
 
+            print(f"DEBUG: Calling LLM for narrative generation...")
+            
             # Call LLM
             response = await self.llm.generate(
                 model="claude-sonnet-4.5",
@@ -403,16 +423,21 @@ CRITICAL: Every field must be a rich, multi-sentence explanation of LOGIC and RE
                 temperature=0.2
             )
             
+            print(f"DEBUG: LLM response received, processing...")
+            
             if response.structured_output:
+                print(f"DEBUG: Using structured output from LLM")
                 return response.structured_output
             
             # Fallback: parse JSON from text
             import json
             import re
             try:
+                print(f"DEBUG: No structured output, trying to parse JSON from text")
                 # Try direct parsing first
                 return json.loads(response.text)
             except json.JSONDecodeError:
+                print(f"DEBUG: Direct JSON parse failed, trying regex extraction")
                 # Try extracting JSON from markdown code blocks
                 try:
                     # Look for ```json ... ``` or ``` ... ```
@@ -426,9 +451,13 @@ CRITICAL: Every field must be a rich, multi-sentence explanation of LOGIC and RE
                         return json.loads(match.group(0))
                     
                     # Give up and return fallback
+                    print(f"WARNING: Could not extract JSON from response, using fallback")
+                    print(f"Response text (first 500 chars): {response.text[:500]}")
                     return self._generate_fallback_narratives()
-                except (json.JSONDecodeError, AttributeError):
+                except (json.JSONDecodeError, AttributeError) as parse_error:
                     # Return minimal narratives if all parsing attempts fail
+                    print(f"WARNING: All JSON parsing attempts failed: {parse_error}")
+                    print(f"Response text (first 500 chars): {response.text[:500]}")
                     return self._generate_fallback_narratives()
         
         except Exception as e:
