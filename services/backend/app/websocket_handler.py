@@ -81,9 +81,13 @@ def convert_floats_to_decimals(obj):
 
 async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: str):
     """
-    Handle build-dtr WebSocket request using NEW Pass 1 extraction
+    Handle build-dtr WebSocket request using NEW Passes 1-4 extraction
     
-    Replaces old DTR v5/v6 system with clean Pass 1 structural skeleton.
+    Runs all four passes in parallel:
+    - Pass 1: Structural Skeleton
+    - Pass 2: Surface Treatment
+    - Pass 3: Typography System
+    - Pass 4: Image Usage Patterns
     """
     try:
         # Extract parameters
@@ -179,13 +183,13 @@ async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: 
         async def progress_callback(stage: str, message: str):
             await send_progress(websocket, stage, message)
         
-        # Run Pass 1, Pass 2, and Pass 3 in parallel (they're independent)
-        from app.dtr import extract_pass_1_only, extract_pass_2_only, extract_pass_3_only
+        # Run Passes 1-4 in parallel (they're independent)
+        from app.dtr import extract_pass_1_only, extract_pass_2_only, extract_pass_3_only, extract_pass_4_only
         import asyncio
         
-        print(f"Starting Pass 1, Pass 2, and Pass 3 extraction in parallel for resource {resource_id}")
+        print(f"Starting Passes 1-4 extraction in parallel for resource {resource_id}")
         
-        # Run all three passes concurrently
+        # Run all four passes concurrently
         pass_1_task = extract_pass_1_only(
             resource_id=resource_id,
             taste_id=taste_id,
@@ -213,11 +217,21 @@ async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: 
             progress_callback=progress_callback
         )
         
-        # Wait for all three to complete
-        pass_1_result, pass_2_result, pass_3_result = await asyncio.gather(
+        pass_4_task = extract_pass_4_only(
+            resource_id=resource_id,
+            taste_id=taste_id,
+            figma_json=figma_json,
+            image_bytes=image_bytes,
+            image_format=image_format,
+            progress_callback=progress_callback
+        )
+        
+        # Wait for all four to complete
+        pass_1_result, pass_2_result, pass_3_result, pass_4_result = await asyncio.gather(
             pass_1_task, 
             pass_2_task,
-            pass_3_task
+            pass_3_task,
+            pass_4_task
         )
         
         print(f"✅ Pass 1 extraction completed!")
@@ -235,6 +249,13 @@ async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: 
         print(f"   Confidence: {pass_3_result.get('confidence')}")
         print(f"   Families found: {len(pass_3_result.get('families', []))}")
         
+        print(f"✅ Pass 4 extraction completed!")
+        print(f"   Authority: {pass_4_result.get('authority')}")
+        print(f"   Confidence: {pass_4_result.get('confidence')}")
+        print(f"   Has images: {pass_4_result.get('has_images')}")
+        print(f"   Image density: {pass_4_result.get('image_density')}")
+        print(f"   Placements found: {len(pass_4_result.get('placements', []))}")
+        
         # Send completion
         await send_complete(websocket, {
             "status": "success",
@@ -243,21 +264,28 @@ async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: 
             "pass_1_completed": True,
             "pass_2_completed": True,
             "pass_3_completed": True,
+            "pass_4_completed": True,
             "pass_1_authority": pass_1_result.get("authority"),
             "pass_1_confidence": pass_1_result.get("confidence"),
             "pass_2_authority": pass_2_result.get("authority"),
             "pass_2_confidence": pass_2_result.get("confidence"),
             "pass_3_authority": pass_3_result.get("authority"),
             "pass_3_confidence": pass_3_result.get("confidence"),
+            "pass_4_authority": pass_4_result.get("authority"),
+            "pass_4_confidence": pass_4_result.get("confidence"),
             "extraction_time_ms": (
                 pass_1_result.get("extraction_time_ms", 0) + 
                 pass_2_result.get("extraction_time_ms", 0) +
-                pass_3_result.get("extraction_time_ms", 0)
+                pass_3_result.get("extraction_time_ms", 0) +
+                pass_4_result.get("extraction_time_ms", 0)
             ),
             "layout_type": pass_1_result.get("layout", {}).get("type"),
             "spacing_quantum": pass_1_result.get("spacing", {}).get("quantum"),
             "colors_count": len(pass_2_result.get("colors", {}).get("exact_palette", [])),
-            "families_count": len(pass_3_result.get("families", []))
+            "families_count": len(pass_3_result.get("families", [])),
+            "has_images": pass_4_result.get("has_images"),
+            "image_density": pass_4_result.get("image_density"),
+            "placements_count": len(pass_4_result.get("placements", []))
         })
         
     except Exception as e:

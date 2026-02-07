@@ -6,7 +6,7 @@ Handles progress tracking, error handling, and result storage.
 """
 from typing import Dict, Any, Optional, Callable, Awaitable
 import asyncio
-from .passes import run_pass_1, run_pass_2, run_pass_3
+from .passes import run_pass_1, run_pass_2, run_pass_3, run_pass_4
 from .storage import (
     save_pass_result,
     save_complete_dtr,
@@ -377,6 +377,191 @@ async def extract_pass_3_only(
             resource_id,
             status="failed",
             current_pass="pass_3_typography",
+            error=str(e)
+        )
+        raise
+
+
+async def extract_pass_4_only(
+    resource_id: str,
+    taste_id: str,
+    figma_json: Optional[Dict[str, Any]] = None,
+    image_bytes: Optional[bytes] = None,
+    image_format: str = "png",
+    progress_callback: Optional[ProgressCallback] = None
+) -> Dict[str, Any]:
+    """
+    Extract only Pass 4 (image usage patterns)
+    
+    Convenience function for Pass 4 extraction.
+    
+    Args:
+        resource_id: Resource UUID
+        taste_id: Taste UUID
+        figma_json: Optional Figma JSON document
+        image_bytes: Image data (required for content analysis)
+        image_format: Image format
+        progress_callback: Optional async callback for progress updates
+    
+    Returns:
+        Pass 4 results
+    """
+    try:
+        # Update status
+        save_extraction_status(
+            resource_id,
+            status="processing",
+            current_pass="pass_4_image_usage"
+        )
+        
+        # Report progress
+        if progress_callback:
+            await progress_callback("pass-4", "Analyzing image usage patterns...")
+        
+        # Run Pass 4
+        result = await run_pass_4(
+            figma_json=figma_json,
+            image_bytes=image_bytes,
+            image_format=image_format,
+            resource_id=resource_id
+        )
+        
+        # Convert to dict
+        result_dict = result.model_dump(by_alias=True)
+        
+        # Save result
+        save_pass_result(
+            resource_id,
+            "pass_4_image_usage",
+            result_dict
+        )
+        
+        # Update status
+        save_extraction_status(
+            resource_id,
+            status="completed",
+            current_pass="pass_4_image_usage"
+        )
+        
+        if progress_callback:
+            await progress_callback("pass-4", "Image usage analysis complete")
+        
+        return result_dict
+    
+    except Exception as e:
+        # Update status to failed
+        save_extraction_status(
+            resource_id,
+            status="failed",
+            current_pass="pass_4_image_usage",
+            error=str(e)
+        )
+        raise
+
+
+async def extract_all_passes_parallel(
+    resource_id: str,
+    taste_id: str,
+    figma_json: Optional[Dict[str, Any]] = None,
+    image_bytes: Optional[bytes] = None,
+    image_format: str = "png",
+    progress_callback: Optional[ProgressCallback] = None
+) -> Dict[str, Any]:
+    """
+    Run Passes 1-4 in parallel
+    
+    Passes 1-4 are independent and can run simultaneously for faster extraction.
+    
+    Args:
+        resource_id: Resource UUID
+        taste_id: Taste UUID
+        figma_json: Optional Figma JSON document
+        image_bytes: Optional image data
+        image_format: Image format
+        progress_callback: Optional async callback for progress updates
+    
+    Returns:
+        Dict with results from all passes
+    """
+    # Update status to processing
+    save_extraction_status(
+        resource_id,
+        status="processing",
+        current_pass="all_passes_parallel"
+    )
+    
+    if progress_callback:
+        await progress_callback("start", "Running all extraction passes in parallel...")
+    
+    try:
+        # Launch all passes in parallel
+        pass_1_task = extract_pass_1_only(
+            resource_id, taste_id, figma_json, image_bytes, image_format, progress_callback
+        )
+        pass_2_task = extract_pass_2_only(
+            resource_id, taste_id, figma_json, image_bytes, image_format, progress_callback
+        )
+        pass_3_task = extract_pass_3_only(
+            resource_id, taste_id, figma_json, image_bytes, image_format, progress_callback
+        )
+        pass_4_task = extract_pass_4_only(
+            resource_id, taste_id, figma_json, image_bytes, image_format, progress_callback
+        )
+        
+        # Wait for all to complete
+        results = await asyncio.gather(
+            pass_1_task,
+            pass_2_task,
+            pass_3_task,
+            pass_4_task,
+            return_exceptions=True
+        )
+        
+        pass_1_result, pass_2_result, pass_3_result, pass_4_result = results
+        
+        # Check for errors
+        errors = []
+        if isinstance(pass_1_result, Exception):
+            errors.append(f"Pass 1: {str(pass_1_result)}")
+        if isinstance(pass_2_result, Exception):
+            errors.append(f"Pass 2: {str(pass_2_result)}")
+        if isinstance(pass_3_result, Exception):
+            errors.append(f"Pass 3: {str(pass_3_result)}")
+        if isinstance(pass_4_result, Exception):
+            errors.append(f"Pass 4: {str(pass_4_result)}")
+        
+        if errors:
+            error_msg = "; ".join(errors)
+            save_extraction_status(
+                resource_id,
+                status="failed",
+                current_pass="all_passes_parallel",
+                error=error_msg
+            )
+            raise Exception(f"One or more passes failed: {error_msg}")
+        
+        # All passes succeeded
+        save_extraction_status(
+            resource_id,
+            status="completed",
+            current_pass="all_passes_parallel"
+        )
+        
+        if progress_callback:
+            await progress_callback("complete", "All extraction passes completed")
+        
+        return {
+            "pass_1_structure": pass_1_result,
+            "pass_2_surface": pass_2_result,
+            "pass_3_typography": pass_3_result,
+            "pass_4_image_usage": pass_4_result
+        }
+    
+    except Exception as e:
+        save_extraction_status(
+            resource_id,
+            status="failed",
+            current_pass="all_passes_parallel",
             error=str(e)
         )
         raise

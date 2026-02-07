@@ -276,20 +276,99 @@ class Pass3TypographyDTR(BaseModel):
 
 
 # ============================================================================
-# PASS 4: COMPONENT VOCABULARY (TODO)
+# PASS 4: IMAGE USAGE PATTERNS
 # ============================================================================
 
-class Pass4ComponentsDTR(BaseModel):
-    """Pass 4: Component Vocabulary - TODO"""
+class ImageTreatment(BaseModel):
+    """Visual treatment applied to an image"""
+    sizing: str = Field(..., description="Sizing approach: full-bleed/contained/cover/contain/fixed-aspect")
+    border_radius: str = Field(..., description="Border radius value (e.g., '0', '12px', '50%')")
+    overlay: Optional[str] = Field(None, description="Overlay gradient or color (e.g., 'linear-gradient(...)', 'none')")
+    border: Optional[str] = Field(None, description="Border specification if present")
+    shadow: Optional[str] = Field(None, description="Shadow applied to image container")
+    mask: str = Field("rectangle", description="Mask shape: rectangle/circle/custom")
+    effects: List[str] = Field(default_factory=list, description="Additional effects: blur, desaturate, etc.")
+
+
+class ImagePlacement(BaseModel):
+    """Single instance of image usage"""
+    role: str = Field(..., description="Semantic role: hero_background, card_thumbnail, avatar, decorative_graphic, etc.")
+    position: str = Field(..., description="Position description: 'top, full-width', 'within card', etc.")
+    frequency: str = Field(..., description="How often this pattern appears: 'single instance', 'repeating (6 instances)', etc.")
+    context: str = Field(..., description="Usage context: 'behind headline', 'in grid layout', etc.")
+    coordinates: Optional[Dict[str, float]] = Field(None, description="Exact position from Figma: x, y, width, height")
+    treatment: ImageTreatment
+    asset_path: Optional[str] = Field(None, description="Path to extracted image asset (e.g., 'assets/hero_background.png')")
+
+
+class PhotographyDetails(BaseModel):
+    """Details about photography style"""
+    tone: str = Field(..., description="Color temperature: warm/cool")
+    contrast: str = Field(..., description="Contrast level: high/low/medium")
+    saturation: str = Field(..., description="Saturation level: vibrant/desaturated/muted")
+    lighting: str = Field(..., description="Lighting style: bright/moody/natural/dramatic")
+    subject_matter: str = Field(..., description="Subject focus: people/architecture/nature/abstract/products")
+    processing: str = Field(..., description="Processing style: natural/stylized/edited")
+
+
+class ContentStyle(BaseModel):
+    """Style of image content"""
+    primary_type: str = Field(..., description="Primary type: photography/3d_renders/flat_illustrations/abstract_graphics/mixed")
+    secondary_type: Optional[str] = Field(None, description="Secondary type if mixed")
+    photography_details: Optional[PhotographyDetails] = Field(None, description="Photography-specific details")
+    illustration_notes: Optional[str] = Field(None, description="Notes on illustration style if applicable")
+    generation_prompt_hint: str = Field(..., description="Ready-to-use prompt for image generation APIs to match this style")
+
+
+class Pass4ImageUsageDTR(BaseModel):
+    """
+    Pass 4: Image Usage Patterns
+    
+    Analyzes how and where the designer uses imagery - photographs, illustrations,
+    3D renders, abstract graphics. Captures placement patterns, visual treatments,
+    content style, and density to guide image usage in generated UIs.
+    """
+    authority: Literal["vision", "hybrid"] = Field(
+        ...,
+        description="Source: vision (image analysis), hybrid (vision + Figma image nodes)"
+    )
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score (0-1)")
+    
+    has_images: bool = Field(..., description="Whether design contains imagery beyond icons/logos")
+    image_density: str = Field(..., description="Overall image density: minimal/sparse/moderate/heavy/dominant")
+    
+    placements: List[ImagePlacement] = Field(default_factory=list, description="All detected image placements")
+    content_style: Optional[ContentStyle] = Field(None, description="Image content style analysis")
+    
+    rhythm: str = Field(..., description="Overall image usage rhythm and pattern")
+    image_to_text_ratio: Optional[str] = Field(None, description="Approximate visual vs text balance")
+    
+    # Rich narrative synthesis
+    narrative: str = Field(
+        ...,
+        description="Multi-paragraph synthesis of the designer's image philosophy and usage strategy"
+    )
+    
+    # Metadata
+    extracted_at: Optional[str] = None
+    extraction_time_ms: Optional[int] = None
+
+
+# ============================================================================
+# PASS 5: COMPONENT VOCABULARY (TODO - was Pass 4)
+# ============================================================================
+
+class Pass5ComponentsDTR(BaseModel):
+    """Pass 5: Component Vocabulary - TODO"""
     pass
 
 
 # ============================================================================
-# PASS 4B: IMAGE USAGE (TODO)
+# PASS 6: PERSONALITY (TODO - was Pass 5)
 # ============================================================================
 
-class Pass4bImagesDTR(BaseModel):
-    """Pass 4b: Image Usage Patterns - TODO"""
+class Pass6PersonalityDTR(BaseModel):
+    """Pass 6: Personality and Philosophy - TODO"""
     pass
 
 
@@ -319,9 +398,9 @@ class CompleteDTR(BaseModel):
     pass_1_structure: Optional[Pass1StructureDTR] = None
     pass_2_surface: Optional[Pass2SurfaceDTR] = None
     pass_3_typography: Optional[Pass3TypographyDTR] = None
-    pass_4_components: Optional[Pass4ComponentsDTR] = None
-    pass_4b_images: Optional[Pass4bImagesDTR] = None
-    pass_5_personality: Optional[Pass5PersonalityDTR] = None
+    pass_4_image_usage: Optional[Pass4ImageUsageDTR] = None
+    pass_5_components: Optional[Pass5ComponentsDTR] = None
+    pass_6_personality: Optional[Pass6PersonalityDTR] = None
     
     # Metadata
     extraction_tier: Literal["base", "corrected", "approved"] = "base"
