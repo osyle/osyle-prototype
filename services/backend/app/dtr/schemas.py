@@ -174,12 +174,105 @@ class Pass2SurfaceDTR(BaseModel):
 
 
 # ============================================================================
-# PASS 3: TYPOGRAPHY SYSTEM (TODO)
+# PASS 3: TYPOGRAPHY SYSTEM
 # ============================================================================
 
+class FontFamily(BaseModel):
+    """Font family usage information"""
+    name: str = Field(..., description="Font family name (e.g., 'Inter', 'JetBrains Mono')")
+    weights_used: List[int] = Field(..., description="Font weights used (e.g., [400, 600, 700])")
+    source: Literal["figma", "vision", "inferred"] = Field(..., description="Extraction source")
+
+
+class ScaleMetrics(BaseModel):
+    """Type scale mathematical metrics"""
+    ratio_mean: float = Field(..., description="Mean ratio between consecutive sizes")
+    ratio_consistency: float = Field(..., ge=0.0, le=1.0, description="0-1, higher = more systematic")
+
+
+class WeightDistribution(BaseModel):
+    """Weight usage distribution with contexts"""
+    frequency: int = Field(..., description="Number of times this weight is used")
+    contexts: List[str] = Field(..., description="Contexts where this weight appears (e.g., ['body', 'labels'])")
+
+
 class Pass3TypographyDTR(BaseModel):
-    """Pass 3: Typography System - TODO"""
-    pass
+    """
+    Pass 3: Typography System
+    
+    Captures the designer's complete typographic approach - fonts, scale system,
+    weight usage, spacing patterns, and the logic behind typographic choices.
+    """
+    authority: Literal["code", "vision", "hybrid"] = Field(
+        ...,
+        description="Source of extraction: code (Figma JSON), vision (image), or hybrid (both)"
+    )
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score (0-1)")
+    
+    # EXACT TOKENS (numerical precision for code generation)
+    families: List[FontFamily] = Field(..., description="Font families used in the design")
+    sizes_used: List[float] = Field(..., description="All unique font sizes found (px)")
+    scale_metrics: ScaleMetrics = Field(..., description="Type scale mathematical properties")
+    
+    weight_frequencies: Dict[str, WeightDistribution] = Field(
+        ..., 
+        description="Weight usage distribution with contexts, e.g., {'400': {'frequency': 45, 'contexts': ['body', 'descriptions']}, '600': {'frequency': 25, 'contexts': ['headings', 'buttons']}}"
+    )
+    
+    exact_line_heights: Dict[str, float] = Field(
+        ...,
+        description="Line heights by context, e.g., {'hero_headings': 1.2, 'body': 1.6, 'buttons': 1.1}"
+    )
+    
+    exact_letter_spacing: Dict[str, str] = Field(
+        ...,
+        description="Letter spacing by context, e.g., {'uppercase_labels': '0.05em', 'body': 'normal'}"
+    )
+    
+    # RICH NARRATIVES (understanding & logic for generation context)
+    family_usage_philosophy: str = Field(
+        ...,
+        description="Multi-sentence explanation of why these fonts were chosen and how they're used"
+    )
+    
+    scale_philosophy: str = Field(
+        ...,
+        description="Rich description of the type scale system, its mathematical nature, and what it reveals about the designer's thinking"
+    )
+    
+    weight_hierarchy_logic: str = Field(
+        ...,
+        description="Detailed explanation of how weight creates hierarchy, when each weight is used, and the underlying logic"
+    )
+    
+    case_and_spacing_relationships: str = Field(
+        ...,
+        description="Rich narrative explaining the relationship between text case (uppercase/sentence) and letter-spacing patterns"
+    )
+    
+    line_height_philosophy: str = Field(
+        ...,
+        description="Explanation of line-height choices, their functional purposes, and how they create visual rhythm"
+    )
+    
+    alignment_patterns: str = Field(
+        ...,
+        description="Description of text alignment usage and the logic behind when to use left/center/right"
+    )
+    
+    contextual_rules: str = Field(
+        ...,
+        description="Clear rules for when to apply each typographic treatment (e.g., 'All interactive elements use semibold + uppercase + 0.05em spacing')"
+    )
+    
+    system_narrative: str = Field(
+        ...,
+        description="Multi-paragraph synthesis of overall typographic philosophy, voice, and how it relates to the design system"
+    )
+    
+    # Metadata
+    extracted_at: Optional[str] = None
+    extraction_time_ms: Optional[int] = None
 
 
 # ============================================================================

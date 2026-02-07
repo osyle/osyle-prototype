@@ -187,17 +187,10 @@ class AnthropicProvider(BaseLLMProvider):
         # Structured outputs
         if config.structured_output and config.structured_output.enabled:
             if config.structured_output.strict and config.structured_output.schema:
-                # Use structured outputs with JSON schema
-                kwargs["output_config"] = {
-                    "format": {
-                        "type": "json_schema",
-                        "schema": config.structured_output.schema
-                    }
-                }
-                # Add beta header for structured outputs
-                if "extra_headers" not in kwargs:
-                    kwargs["extra_headers"] = {}
-                kwargs["extra_headers"]["anthropic-beta"] = "structured-outputs-2025-11-13"
+                # Anthropic SDK doesn't support output_config parameter
+                # Instead, we rely on prompt engineering to get JSON output
+                # and parse it from the text response (see lines 258-263)
+                pass
         
         # Tool use
         if config.tool_config and config.tool_config.enabled:

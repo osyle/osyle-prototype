@@ -1034,6 +1034,312 @@ class FigmaParser:
             return f"#{r:02X}{g:02X}{b:02X}{a_hex:02X}"
         else:
             return f"#{r:02X}{g:02X}{b:02X}"
+    
+    # ========================================================================
+    # PASS 3: TYPOGRAPHY EXTRACTION
+    # ========================================================================
+    
+    def extract_typography(self) -> Dict[str, Any]:
+        """
+        Main Pass 3 extraction method.
+        
+        Extracts font families, sizes, weights, line heights, letter spacing,
+        and text case patterns from Figma JSON.
+        
+        Returns:
+            Dict with families, sizes, weights, spacing data (to be analyzed by LLM)
+        """
+        text_nodes = []
+        self._collect_text_nodes(self.root, text_nodes)
+        
+        if not text_nodes:
+            # No text found - return minimal data
+            return {
+                "families": [],
+                "sizes": [],
+                "weights": {},
+                "line_heights": {},
+                "letter_spacing": {},
+                "case_patterns": {},
+                "alignments": {}
+            }
+        
+        # Extract properties from all text nodes
+        families = self._extract_font_families(text_nodes)
+        sizes = self._extract_font_sizes(text_nodes)
+        weights = self._extract_weights(text_nodes)
+        line_heights = self._extract_line_heights(text_nodes)
+        letter_spacing = self._extract_letter_spacing(text_nodes)
+        case_patterns = self._extract_case_patterns(text_nodes)
+        alignments = self._extract_alignments(text_nodes)
+        
+        return {
+            "families": families,
+            "sizes": sizes,
+            "weights": weights,
+            "line_heights": line_heights,
+            "letter_spacing": letter_spacing,
+            "case_patterns": case_patterns,
+            "alignments": alignments
+        }
+    
+    def _collect_text_nodes(self, node: Dict[str, Any], collector: List[Dict]):
+        """Recursively collect all TEXT nodes"""
+        if node.get('type') == 'TEXT' and node.get('visible', True):
+            collector.append(node)
+        
+        for child in node.get('children', []):
+            self._collect_text_nodes(child, collector)
+    
+    def _extract_font_families(self, text_nodes: List[Dict]) -> List[Dict[str, Any]]:
+        """
+        Extract font families with weights used.
+        
+        Returns:
+            List of {name, weights_used} dicts
+        """
+        families = {}
+        
+        for node in text_nodes:
+            # Figma exports fontName as {family, style} directly on TEXT nodes
+            font_name = node.get('fontName', {})
+            family = font_name.get('family')
+            weight = node.get('fontWeight', 400)
+            
+            if family:
+                if family not in families:
+                    families[family] = set()
+                families[family].add(weight)
+        
+        # Convert to sorted list format
+        result = []
+        for family, weights in sorted(families.items()):
+            result.append({
+                "name": family,
+                "weights_used": sorted(list(weights))
+            })
+        
+        return result
+    
+    def _extract_font_sizes(self, text_nodes: List[Dict]) -> List[float]:
+        """
+        Extract all unique font sizes used.
+        
+        Returns:
+            Sorted list of font sizes in px
+        """
+        sizes = set()
+        
+        for node in text_nodes:
+            # fontSize is directly on the TEXT node in Figma export
+            size = node.get('fontSize')
+            if size is not None:
+                sizes.add(float(size))
+        
+        return sorted(list(sizes))
+    
+    def _extract_weights(self, text_nodes: List[Dict]) -> Dict[str, Any]:
+        """
+        Extract weight distribution and contexts.
+        
+        Returns:
+            Dict mapping weight to {frequency, contexts}
+        """
+        weight_data = {}
+        
+        for node in text_nodes:
+            # fontWeight is directly on the TEXT node in Figma export
+            weight = str(node.get('fontWeight', 400))
+            node_name = node.get('name', '').lower()
+            
+            if weight not in weight_data:
+                weight_data[weight] = {
+                    "frequency": 0,
+                    "contexts": set()
+                }
+            
+            weight_data[weight]["frequency"] += 1
+            
+            # Infer context from node name or parent
+            context = self._infer_text_context(node, node_name)
+            weight_data[weight]["contexts"].add(context)
+        
+        # Convert sets to sorted lists
+        for weight in weight_data:
+            weight_data[weight]["contexts"] = sorted(list(weight_data[weight]["contexts"]))
+        
+        return weight_data
+    
+    def _extract_line_heights(self, text_nodes: List[Dict]) -> Dict[str, float]:
+        """
+        Extract line height values by context.
+        
+        Returns:
+            Dict mapping context to line-height value
+        """
+        line_heights = {}
+        
+        for node in text_nodes:
+            # Figma exports lineHeight as {unit, value}
+            line_height_obj = node.get('lineHeight', {})
+            font_size = node.get('fontSize', 16)
+            node_name = node.get('name', '').lower()
+            
+            # Extract line height value (in pixels if unit is PIXELS)
+            if line_height_obj and font_size > 0:
+                unit = line_height_obj.get('unit')
+                value = line_height_obj.get('value')
+                
+                if value is not None:
+                    if unit == 'PIXELS':
+                        # Calculate ratio
+                        ratio = round(value / font_size, 2)
+                    elif unit == 'PERCENT':
+                        # PERCENT is already a ratio (100 = 1.0)
+                        ratio = round(value / 100, 2)
+                    else:
+                        # AUTO or other - skip
+                        continue
+                    
+                    context = self._infer_text_context(node, node_name)
+                    
+                    # Store or average if context already exists
+                    if context in line_heights:
+                        # Average with existing value
+                        line_heights[context] = round((line_heights[context] + ratio) / 2, 2)
+                    else:
+                        line_heights[context] = ratio
+        
+        return line_heights
+    
+    def _extract_letter_spacing(self, text_nodes: List[Dict]) -> Dict[str, str]:
+        """
+        Extract letter spacing values by context.
+        
+        Returns:
+            Dict mapping context to letter-spacing value (e.g., '0.05em', 'normal')
+        """
+        letter_spacing = {}
+        
+        for node in text_nodes:
+            # Figma exports letterSpacing as {unit, value}
+            spacing_obj = node.get('letterSpacing', {})
+            font_size = node.get('fontSize', 16)
+            node_name = node.get('name', '').lower()
+            text_case = node.get('textCase', 'ORIGINAL')
+            
+            context = self._infer_text_context(node, node_name)
+            
+            # Extract letter spacing value
+            if spacing_obj:
+                unit = spacing_obj.get('unit')
+                value = spacing_obj.get('value', 0)
+                
+                if value != 0 and font_size > 0:
+                    if unit == 'PIXELS':
+                        # Convert pixels to em
+                        em_value = round(value / font_size, 3)
+                        spacing_str = f"{em_value:.3f}em"
+                    elif unit == 'PERCENT':
+                        # PERCENT is relative to font size (100 = 1em)
+                        em_value = round(value / 100, 3)
+                        spacing_str = f"{em_value:.3f}em" if em_value != 0 else "normal"
+                    else:
+                        spacing_str = "normal"
+                else:
+                    spacing_str = "normal"
+            else:
+                spacing_str = "normal"
+            
+            # Add case context if uppercase
+            if text_case == 'UPPER':
+                context = f"{context}_uppercase"
+            
+            letter_spacing[context] = spacing_str
+        
+        return letter_spacing
+    
+    def _extract_case_patterns(self, text_nodes: List[Dict]) -> Dict[str, str]:
+        """
+        Extract text case patterns by context.
+        
+        Returns:
+            Dict mapping context to text case ('uppercase', 'lowercase', 'none')
+        """
+        case_patterns = {}
+        
+        for node in text_nodes:
+            # textCase is directly on the TEXT node
+            text_case = node.get('textCase', 'ORIGINAL')
+            node_name = node.get('name', '').lower()
+            
+            context = self._infer_text_context(node, node_name)
+            
+            # Convert Figma case to CSS
+            if text_case == 'UPPER':
+                case_str = 'uppercase'
+            elif text_case == 'LOWER':
+                case_str = 'lowercase'
+            elif text_case == 'TITLE':
+                case_str = 'capitalize'
+            else:
+                case_str = 'none'
+            
+            case_patterns[context] = case_str
+        
+        return case_patterns
+    
+    def _extract_alignments(self, text_nodes: List[Dict]) -> Dict[str, int]:
+        """
+        Extract text alignment distribution.
+        
+        Returns:
+            Dict mapping alignment to frequency
+        """
+        alignments = Counter()
+        
+        for node in text_nodes:
+            # textAlignHorizontal is directly on the TEXT node
+            alignment = node.get('textAlignHorizontal', 'LEFT')
+            alignments[alignment.lower()] += 1
+        
+        return dict(alignments)
+    
+    def _infer_text_context(self, node: Dict[str, Any], node_name: str) -> str:
+        """
+        Infer text context from node properties and name.
+        
+        Returns:
+            Context string like 'body', 'heading', 'button', 'label', etc.
+        """
+        # fontSize is directly on the TEXT node
+        font_size = node.get('fontSize', 16)
+        
+        # Check name for clues
+        if any(kw in node_name for kw in ['button', 'btn', 'cta']):
+            return 'button'
+        elif any(kw in node_name for kw in ['nav', 'menu', 'tab']):
+            return 'navigation'
+        elif any(kw in node_name for kw in ['label', 'tag', 'badge']):
+            return 'label'
+        elif any(kw in node_name for kw in ['caption', 'meta', 'small']):
+            return 'caption'
+        elif any(kw in node_name for kw in ['hero', 'title', 'h1']):
+            return 'hero_heading'
+        elif any(kw in node_name for kw in ['heading', 'header', 'h2', 'h3', 'h4']):
+            return 'heading'
+        elif any(kw in node_name for kw in ['body', 'paragraph', 'text', 'description']):
+            return 'body'
+        
+        # Infer from font size if no name match
+        if font_size >= 36:
+            return 'hero_heading'
+        elif font_size >= 24:
+            return 'heading'
+        elif font_size >= 14:
+            return 'body'
+        else:
+            return 'caption'
 
 
 # ============================================================================
@@ -1066,3 +1372,17 @@ def parse_figma_surface(figma_json: Dict[str, Any]) -> Dict[str, Any]:
     """
     parser = FigmaParser(figma_json)
     return parser.extract_surface()
+
+
+def parse_figma_typography(figma_json: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Parse typography system from Figma JSON (Pass 3).
+    
+    Args:
+        figma_json: Root FRAME node from Figma plugin export
+    
+    Returns:
+        Dict with families, sizes, weights, line heights, letter spacing data
+    """
+    parser = FigmaParser(figma_json)
+    return parser.extract_typography()

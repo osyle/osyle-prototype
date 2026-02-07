@@ -658,6 +658,250 @@ Respond with a JSON object:{kmeans_reference}
             print(f"Failed to parse surface analysis: {e}")
             print(f"Response: {response.text[:500]}")
             raise ValueError(f"Failed to parse surface analysis: {e}")
+    
+    async def analyze_typography(
+        self,
+        image_bytes: bytes,
+        image_format: str = "png"
+    ) -> Dict[str, Any]:
+        """
+        Analyze typography system from image using vision LLM.
+        
+        Extracts font families, scale relationships, weight usage, spacing patterns,
+        and generates rich narratives about typographic philosophy.
+        
+        Args:
+            image_bytes: Image data as bytes
+            image_format: Image format (png, jpg, webp)
+        
+        Returns:
+            Dict with typography data including families, scale, narratives
+        """
+        # Convert to base64
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+        
+        system_prompt = """You are a typography expert analyzing a design's type system.
+
+Your task is to extract both EXACT TOKENS (for code generation) and RICH NARRATIVES (for understanding the designer's typographic thinking).
+
+Focus on:
+1. Font families used and their roles
+2. Font sizes and scale relationships (mathematical ratios)
+3. Font weight distribution and usage patterns
+4. Line height patterns by context
+5. Letter spacing relationships (especially with uppercase)
+6. Text case patterns
+7. Alignment preferences
+8. The designer's typographic philosophy and logic
+
+Be extremely thorough in your narratives - explain WHY choices were made, not just WHAT they are.
+
+CRITICAL: You must respond with ONLY a valid JSON object. No preamble, no explanations before or after, no markdown code blocks. Just the raw JSON."""
+
+        user_prompt = """Analyze the typography in this design.
+
+Return a JSON object with this EXACT structure:
+
+{
+  "families": [
+    {
+      "name": "Inter",
+      "approximate_weights": [400, 600, 700],
+      "usage_notes": "Used for all text - headings and body"
+    }
+  ],
+  "sizes_approximate": [12, 14, 16, 20, 24, 32, 48],
+  "scale_analysis": "Multi-sentence rich description of the type scale system. Explain if it appears mathematical (consistent ratios) or intuitive (varied ratios). Describe what this reveals about the designer's approach to hierarchy.",
+  
+  "weight_distribution": [
+    {"weight": "400", "estimated_frequency": "high", "contexts": "body text, descriptions, paragraphs"},
+    {"weight": "600", "estimated_frequency": "medium", "contexts": "subheadings, buttons, labels"},
+    {"weight": "700", "estimated_frequency": "low", "contexts": "hero headings, primary titles"}
+  ],
+  
+  "line_height_observations": [
+    {"context": "hero_headings", "approximate_ratio": 1.2, "notes": "Tight for impact"},
+    {"context": "body", "approximate_ratio": 1.6, "notes": "Generous for readability"},
+    {"context": "buttons", "approximate_ratio": 1.1, "notes": "Tight for compactness"}
+  ],
+  
+  "letter_spacing_patterns": [
+    {"context": "uppercase_text", "value": "increased", "notes": "Navigation and labels use generous spacing with uppercase"},
+    {"context": "headings", "value": "tight_negative", "notes": "Large headings use negative tracking"},
+    {"context": "body", "value": "normal", "notes": "Standard spacing for body text"}
+  ],
+  
+  "case_usage": [
+    {"context": "navigation", "case_style": "UPPERCASE"},
+    {"context": "hero_headings", "case_style": "Sentence case"},
+    {"context": "buttons", "case_style": "UPPERCASE"},
+    {"context": "body", "case_style": "Sentence case"}
+  ],
+  
+  "alignment_dominant": "left",
+  "alignment_notes": "Body and navigation left-aligned, hero sections centered for impact",
+  
+  "family_usage_philosophy": "Multi-sentence explanation of why these fonts were chosen and how they're used. Describe the overall character (modern? editorial? technical?) and how the single/multiple family approach creates coherence.",
+  
+  "scale_philosophy": "Rich description of the type scale system, its mathematical nature (or lack thereof), what the ratios reveal about systematic vs intuitive design thinking. Explain how the scale creates hierarchy and rhythm.",
+  
+  "weight_hierarchy_logic": "Detailed explanation of how weight creates hierarchy. When is each weight used? Is there high contrast (regular vs bold only) or nuanced gradation (many weights)? How does this guide the eye and establish importance?",
+  
+  "case_and_spacing_relationships": "Rich narrative explaining the relationship between text case and letter-spacing. Do uppercase elements get more spacing? Do headings use tight tracking? Explain the typographic logic behind these patterns.",
+  
+  "line_height_philosophy": "Explanation of line-height choices and their functional purposes. How do tight vs loose line-heights create different zones (reading vs action)? How does this affect visual rhythm and readability?",
+  
+  "alignment_patterns": "Description of alignment usage and logic. When is text centered vs left-aligned? How does alignment relate to hierarchy and function?",
+  
+  "contextual_rules": "Clear, actionable rules for when to apply each typographic treatment. Example: 'All interactive elements use semibold weight with uppercase treatment and 0.05em letter-spacing. Hero headings use bold with sentence case and negative tracking.'",
+  
+  "system_narrative": "Multi-paragraph synthesis of the overall typographic philosophy. What is the designer's typographic voice? How do all these choices work together to create meaning? How does typography relate to the overall design language? What does this reveal about the designer's values (clarity? impact? sophistication?)?"
+}
+
+CRITICAL: All narrative fields must be rich, multi-sentence paragraphs that explain the LOGIC and RELATIONSHIPS, not just describe what you see."""
+
+        # Define schema
+        schema = {
+            "type": "object",
+            "properties": {
+                "families": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "approximate_weights": {"type": "array", "items": {"type": "integer"}},
+                            "usage_notes": {"type": "string"}
+                        },
+                        "required": ["name", "approximate_weights", "usage_notes"]
+                    }
+                },
+                "sizes_approximate": {"type": "array", "items": {"type": "number"}},
+                "scale_analysis": {"type": "string"},
+                "weight_distribution": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "weight": {"type": "string"},
+                            "estimated_frequency": {"type": "string"},
+                            "contexts": {"type": "string"}
+                        },
+                        "required": ["weight", "estimated_frequency", "contexts"]
+                    }
+                },
+                "line_height_observations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "context": {"type": "string"},
+                            "approximate_ratio": {"type": "number"},
+                            "notes": {"type": "string"}
+                        },
+                        "required": ["context", "approximate_ratio", "notes"]
+                    }
+                },
+                "letter_spacing_patterns": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "context": {"type": "string"},
+                            "value": {"type": "string"},
+                            "notes": {"type": "string"}
+                        },
+                        "required": ["context", "value", "notes"]
+                    }
+                },
+                "case_usage": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "context": {"type": "string"},
+                            "case_style": {"type": "string"}
+                        },
+                        "required": ["context", "case_style"]
+                    }
+                },
+                "alignment_dominant": {"type": "string"},
+                "alignment_notes": {"type": "string"},
+                "family_usage_philosophy": {"type": "string"},
+                "scale_philosophy": {"type": "string"},
+                "weight_hierarchy_logic": {"type": "string"},
+                "case_and_spacing_relationships": {"type": "string"},
+                "line_height_philosophy": {"type": "string"},
+                "alignment_patterns": {"type": "string"},
+                "contextual_rules": {"type": "string"},
+                "system_narrative": {"type": "string"}
+            },
+            "required": [
+                "families", "sizes_approximate", "scale_analysis",
+                "weight_distribution", "family_usage_philosophy",
+                "scale_philosophy", "weight_hierarchy_logic",
+                "case_and_spacing_relationships", "line_height_philosophy",
+                "alignment_patterns", "contextual_rules", "system_narrative"
+            ]
+        }
+        
+        # Call LLM with vision
+        # Using Claude Sonnet 4.5 instead of Gemini because:
+        # 1. Better structured output handling (proven in narrative generation)
+        # 2. More reliable JSON parsing with our robust extraction
+        # 3. Consistency - same model family as narrative generation
+        response = await self.llm.generate(
+            model="claude-sonnet-4.5",
+            messages=[
+                Message(
+                    role=MessageRole.SYSTEM,
+                    content=system_prompt
+                ),
+                Message(
+                    role=MessageRole.USER,
+                    content=[
+                        ImageContent(
+                            data=image_base64,
+                            media_type=f"image/{image_format}"
+                        ),
+                        TextContent(text=user_prompt)
+                    ]
+                )
+            ],
+            structured_output_schema=schema,
+            max_tokens=8192,
+            temperature=0.1
+        )
+        
+        # Use structured output
+        if response.structured_output:
+            return response.structured_output
+        
+        # Fallback: parse JSON from text with robust extraction
+        import json
+        import re
+        try:
+            # Try direct parsing first
+            return json.loads(response.text)
+        except json.JSONDecodeError:
+            # Try extracting JSON from markdown code blocks
+            try:
+                # Look for ```json ... ``` or ``` ... ```
+                match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response.text, re.DOTALL)
+                if match:
+                    return json.loads(match.group(1))
+                
+                # Look for first { to last }
+                match = re.search(r'\{.*\}', response.text, re.DOTALL)
+                if match:
+                    return json.loads(match.group(0))
+                
+                # If all parsing fails, raise original error
+                raise ValueError(f"Could not extract JSON from response")
+            except (json.JSONDecodeError, AttributeError) as inner_e:
+                print(f"Failed to parse typography analysis: {inner_e}")
+                print(f"Response: {response.text[:500]}")
+                raise ValueError(f"Failed to parse typography analysis: {inner_e}")
 
 
 # ============================================================================
@@ -720,3 +964,21 @@ async def analyze_surface_from_image(
     """
     analyzer = VisionAnalyzer()
     return await analyzer.analyze_surface(image_bytes, image_format, kmeans_colors)
+
+
+async def analyze_typography_from_image(
+    image_bytes: bytes,
+    image_format: str = "png"
+) -> Dict[str, Any]:
+    """
+    Analyze typography system from image using vision LLM.
+    
+    Args:
+        image_bytes: Image data as bytes
+        image_format: Image format (png, jpg, webp)
+    
+    Returns:
+        Dict with font families, scale, weight patterns, and rich narratives
+    """
+    analyzer = VisionAnalyzer()
+    return await analyzer.analyze_typography(image_bytes, image_format)

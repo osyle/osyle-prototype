@@ -3,12 +3,18 @@ DTR Extractors
 
 Low-level extraction utilities for parsing Figma JSON and analyzing images.
 """
-from .figma_parser import FigmaParser, parse_figma_structure, parse_figma_surface
+from .figma_parser import (
+    FigmaParser,
+    parse_figma_structure,
+    parse_figma_surface,
+    parse_figma_typography
+)
 from .vision import (
     VisionAnalyzer, 
     analyze_structure_from_image, 
     validate_hierarchy,
-    analyze_surface_from_image
+    analyze_surface_from_image,
+    analyze_typography_from_image
 )
 from .algorithmic import (
     k_means_color_clustering,
@@ -21,11 +27,13 @@ __all__ = [
     'FigmaParser',
     'parse_figma_structure',
     'parse_figma_surface',
+    'parse_figma_typography',
     
     # Vision analysis
     'VisionAnalyzer',
     'analyze_structure_from_image',
     'analyze_surface_from_image',
+    'analyze_typography_from_image',
     'validate_hierarchy',
     
     # Algorithmic CV (optional)
