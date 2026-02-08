@@ -115,15 +115,18 @@ class Pass5Components(BasePass):
             
             total_variants += len(variants)
         
-        # Generate narratives using LLM
-        inventory_with_narratives = await self._generate_narratives_from_properties(
-            inventory,
-            prev_passes
-        )
+        # Generate narratives using LLM for each component
+        for item in inventory:
+            item.narratives = await self._generate_narratives_from_properties(
+                item.type,
+                item.variants,
+                {v: item.properties[v].model_dump() if hasattr(item.properties[v], 'model_dump') else item.properties[v] 
+                 for v in item.variants if v in item.properties}
+            )
         
         # Generate global narratives
         global_narratives = await self._generate_global_narratives(
-            inventory_with_narratives,
+            inventory,
             authority="code"
         )
         
@@ -208,31 +211,54 @@ class Pass5Components(BasePass):
             figma_inventory=figma_data.get('inventory', [])
         )
         
-        # 3. Merge: Use Figma properties + vision narratives
+        # 3. Extract Pass 2 interaction states if available
+        pass_2_states = {}
+        if prev_passes and 'pass_2_surface' in prev_passes:
+            pass_2 = prev_passes['pass_2_surface']
+            if isinstance(pass_2, dict):
+                colors_data = pass_2.get('colors', {})
+                pass_2_states = colors_data.get('interaction_states', {})
+            else:
+                # Pydantic model
+                pass_2_states = getattr(pass_2, 'colors', {}).get('interaction_states', {})
+        
+        print(f"Found {len(pass_2_states)} interaction states from Pass 2")
+        
+        # 4. Merge: Use union of Figma + Vision components
         inventory = []
         total_variants = 0
         
-        # Build a map of Figma components by type
+        # Build maps for both sources
         figma_by_type = {
             comp['type']: comp
             for comp in figma_data.get('inventory', [])
         }
         
-        # Process vision inventory (which includes narratives)
-        for vision_comp in vision_data.get('inventory', []):
-            comp_type = vision_comp['type']
-            
-            # Get Figma data for this type if available
+        vision_by_type = {
+            comp['type']: comp
+            for comp in vision_data.get('inventory', [])
+        }
+        
+        # Get union of all component types
+        all_types = set(figma_by_type.keys()) | set(vision_by_type.keys())
+        
+        # Process each component type
+        for comp_type in all_types:
             figma_comp = figma_by_type.get(comp_type)
+            vision_comp = vision_by_type.get(comp_type)
             
-            if figma_comp:
-                # Use Figma properties (exact) + vision narratives (rich)
+            if figma_comp and vision_comp:
+                # HYBRID: Best - use Figma properties + vision narratives
                 variants = figma_comp.get('variants', ['default'])
                 
                 # Convert Figma properties to ComponentProperties
                 props_objects = {}
                 for variant, props in figma_comp.get('properties', {}).items():
-                    props_objects[variant] = ComponentProperties(**props)
+                    # Apply Pass 2 interaction states if available
+                    enhanced_props = self._enhance_with_pass2_states(
+                        comp_type, variant, props, pass_2_states
+                    )
+                    props_objects[variant] = ComponentProperties(**enhanced_props)
                 
                 # Generate code hints from Figma properties
                 code_hints = {}
@@ -243,14 +269,38 @@ class Pass5Components(BasePass):
                 narratives = vision_comp.get('narratives', {})
                 confidence = 0.95  # Highest confidence (hybrid)
                 source = "hybrid"
+                
+            elif figma_comp:
+                # FIGMA ONLY - exact but no narratives
+                variants = figma_comp.get('variants', ['default'])
+                
+                props_objects = {}
+                for variant, props in figma_comp.get('properties', {}).items():
+                    enhanced_props = self._enhance_with_pass2_states(
+                        comp_type, variant, props, pass_2_states
+                    )
+                    props_objects[variant] = ComponentProperties(**enhanced_props)
+                
+                code_hints = {}
+                for variant, props in figma_comp.get('properties', {}).items():
+                    code_hints[variant] = self._generate_code_hint(props)
+                
+                # Generate narratives from properties if vision missed it
+                narratives = await self._generate_narratives_from_properties(comp_type, variants, props_objects)
+                confidence = 0.90  # Figma exact properties
+                source = "figma"
+                
             else:
-                # Vision only - no Figma data for this component
+                # VISION ONLY - no Figma data for this component
                 variants = vision_comp.get('variants', ['default'])
                 
                 # Convert vision properties
                 props_objects = {}
                 for variant, props in vision_comp.get('properties', {}).items():
-                    props_objects[variant] = ComponentProperties(**props)
+                    enhanced_props = self._enhance_with_pass2_states(
+                        comp_type, variant, props, pass_2_states
+                    )
+                    props_objects[variant] = ComponentProperties(**enhanced_props)
                 
                 code_hints = vision_comp.get('code_hints', {})
                 narratives = vision_comp.get('narratives', {})
@@ -350,105 +400,136 @@ class Pass5Components(BasePass):
         
         return " ".join(classes) if classes else ""
     
+    def _enhance_with_pass2_states(
+        self,
+        comp_type: str,
+        variant: str,
+        properties: Dict[str, Any],
+        pass_2_states: Dict[str, str]
+    ) -> Dict[str, Any]:
+        """
+        Enhance component properties with Pass 2 interaction states.
+        
+        Maps interaction states like "button-primary-hover" to component properties.
+        """
+        enhanced = properties.copy()
+        
+        # Build key patterns to look for in Pass 2 states
+        # Try multiple patterns: button-primary-hover, button-hover, primary-hover
+        patterns = [
+            f"{comp_type}-{variant}-hover",
+            f"{comp_type}-hover",
+            f"{variant}-hover"
+        ]
+        
+        for pattern in patterns:
+            if pattern in pass_2_states:
+                css_string = pass_2_states[pattern]
+                # Parse CSS string to extract properties
+                # Example: "transform: scale(1.05); box-shadow: 0px 6px 16px rgba(0,0,0,0.12); transition: all 200ms ease-out;"
+                
+                if 'box-shadow:' in css_string:
+                    # Extract shadow
+                    shadow_start = css_string.find('box-shadow:') + len('box-shadow:')
+                    shadow_end = css_string.find(';', shadow_start)
+                    if shadow_end > shadow_start:
+                        enhanced['hover_shadow'] = css_string[shadow_start:shadow_end].strip()
+                
+                if 'transition:' in css_string:
+                    # Extract transition
+                    trans_start = css_string.find('transition:') + len('transition:')
+                    trans_end = css_string.find(';', trans_start)
+                    if trans_end > trans_start:
+                        enhanced['transition'] = css_string[trans_start:trans_end].strip()
+                
+                # If we found a match, stop looking
+                break
+        
+        # Also check for active states
+        active_patterns = [
+            f"{comp_type}-{variant}-active",
+            f"{comp_type}-active",
+            f"{variant}-active"
+        ]
+        
+        for pattern in active_patterns:
+            if pattern in pass_2_states:
+                # Could extract active state properties here
+                pass
+        
+        return enhanced
+    
     async def _generate_narratives_from_properties(
         self,
-        inventory: List[ComponentInventoryItem],
-        prev_passes: Optional[Dict[str, Any]]
-    ) -> List[ComponentInventoryItem]:
-        """Generate rich narratives from extracted properties using LLM."""
-        print("Generating rich narratives from component properties...")
-        
-        # Build context from previous passes if available
-        context = ""
-        if prev_passes:
-            pass_2 = prev_passes.get('pass_2_surface')
-            pass_3 = prev_passes.get('pass_3_typography')
-            
-            if pass_2:
-                context += f"\nCOLOR PALETTE: Primary accent: {pass_2.get('colors', {}).get('exact_palette', [{}])[0].get('hex', 'N/A') if pass_2.get('colors', {}).get('exact_palette') else 'N/A'}"
-            
-            if pass_3:
-                context += f"\nTYPOGRAPHY: {', '.join([f.get('name', '') for f in pass_3.get('families', [])[:2]])}"
+        comp_type: str,
+        variants: List[str],
+        properties: Dict[str, Any]
+    ) -> Dict[str, str]:
+        """Generate rich narratives for a component from its properties using LLM."""
+        print(f"Generating narratives for {comp_type}...")
         
         # Build component summary for prompt
-        comp_summary = []
-        for item in inventory:
-            variants_str = ', '.join(item.variants)
-            comp_summary.append(f"- {item.type}: {variants_str}")
+        props_summary = []
+        for variant in variants[:3]:  # Limit to first 3 variants
+            if variant in properties:
+                props = properties[variant]
+                props_summary.append(f"{variant}: {props}")
         
-        components_text = '\n'.join(comp_summary)
-        
-        # Generate narratives via LLM
-        prompt = f"""Based on these extracted component properties, generate rich narratives explaining the designer's thinking.
+        prompt = f"""Generate rich, detailed narratives for this {comp_type} component.
 
-COMPONENTS IDENTIFIED:
-{components_text}
-{context}
+Component: {comp_type}
+Variants: {', '.join(variants)}
+Properties: {chr(10).join(props_summary)}
 
-For EACH component, generate 3-4 rich, multi-sentence narratives (choose the most relevant):
-- design_thinking: Core philosophy and key design decisions
-- variant_system: How variants differ and semantic meaning
-- interaction_philosophy: Hover/focus/active state choreography
-- usage_patterns: Where/when/how components appear
+Generate 3-4 narratives (3-4 sentences each) explaining the designer's thinking:
 
-Return ONLY JSON matching this schema:
+1. design_thinking: WHY the designer made these visual decisions (not just WHAT exists)
+2. variant_system: How variants differ and what they semantically encode
+3. interaction_philosophy: How the component responds to user interaction
+4. usage_patterns: Where, when, and how this component appears in the design
+
+Return ONLY valid JSON:
 {{
-  "components": [
-    {{
-      "type": "button",
-      "narratives": {{
-        "design_thinking": "Multi-sentence rich description...",
-        "variant_system": "Multi-sentence rich description...",
-        "interaction_philosophy": "Multi-sentence rich description...",
-        "usage_patterns": "Multi-sentence rich description..."
-      }}
-    }}
-  ]
-}}
+  "design_thinking": "3-4 sentences...",
+  "variant_system": "3-4 sentences...",
+  "interaction_philosophy": "3-4 sentences...",
+  "usage_patterns": "3-4 sentences..."
+}}"""
 
-CRITICAL: Return ONLY the JSON object, no markdown, no preamble."""
-        
         try:
             response = await self.llm.generate(
-                model="claude-sonnet-4.5",
+                model="claude-sonnet-4-20250514",
                 messages=[
                     Message(role=MessageRole.USER, content=prompt)
                 ],
-                temperature=0.3,
-                max_tokens=3000
+                max_tokens=2000,
+                temperature=0.6
             )
             
-            # Parse response
+            # Parse JSON response
             text = response.text.strip()
+            # Remove markdown code blocks if present
+            if '```json' in text:
+                text = text.split('```json')[1].split('```')[0].strip()
+            elif '```' in text:
+                text = text.split('```')[1].split('```')[0].strip()
             
-            # Remove markdown if present
-            if text.startswith('```'):
-                lines = text.split('\n')
-                text = '\n'.join(lines[1:-1])
-            
-            # Extract JSON
+            # Find JSON object
             start = text.find('{')
             end = text.rfind('}')
-            if start >= 0 and end >= 0:
+            if start != -1 and end != -1:
                 json_str = text[start:end+1]
                 result = json.loads(json_str)
-                
-                # Map narratives to inventory items
-                narratives_by_type = {
-                    comp['type']: comp['narratives']
-                    for comp in result.get('components', [])
-                }
-                
-                # Update inventory with narratives
-                for item in inventory:
-                    if item.type in narratives_by_type:
-                        item.narratives = narratives_by_type[item.type]
-                
+                return result
+            
         except Exception as e:
             print(f"Failed to generate narratives: {e}")
-            # Continue with empty narratives
         
-        return inventory
+        # Fallback
+        return {
+            "design_thinking": f"This {comp_type} follows clean, modern design principles.",
+            "variant_system": f"Variants ({', '.join(variants)}) provide different visual weights and contexts."
+        }
     
     async def _generate_global_narratives(
         self,

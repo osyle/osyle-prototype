@@ -1383,29 +1383,68 @@ class FigmaParser:
                 # Extract variants from children
                 children = node.get('children', [])
                 variants = []
+                variant_map = {}  # Map variant_name -> properties (with interaction states)
                 
                 for child in children:
                     if child.get('type') == 'COMPONENT':
-                        variant_name = self._extract_variant_name(child.get('name', ''))
+                        child_name = child.get('name', '')
+                        variant_name = self._extract_variant_name(child_name)
+                        interaction_state = self._extract_interaction_state(child_name)
                         variant_props = self._extract_component_properties(child)
                         
-                        variants.append({
-                            'name': variant_name,
+                        # Initialize variant if not exists
+                        if variant_name not in variant_map:
+                            variant_map[variant_name] = {
+                                'name': variant_name,
+                                'properties': {},
+                                'node_id': child.get('id')
+                            }
+                        
+                        # If this is an interaction state, add to the base variant
+                        if interaction_state:
+                            # Map properties to interaction state fields
+                            if 'background' in variant_props:
+                                variant_map[variant_name]['properties'][f'{interaction_state}_background'] = variant_props['background']
+                            if 'shadow' in variant_props:
+                                variant_map[variant_name]['properties'][f'{interaction_state}_shadow'] = variant_props['shadow']
+                            if 'border' in variant_props:
+                                variant_map[variant_name]['properties'][f'{interaction_state}_border'] = variant_props['border']
+                            # Add transition if not already present
+                            if 'transition' not in variant_map[variant_name]['properties']:
+                                variant_map[variant_name]['properties']['transition'] = 'all 200ms ease-out'
+                        else:
+                            # Base variant properties
+                            variant_map[variant_name]['properties'].update(variant_props)
+                            variant_map[variant_name]['node_id'] = child.get('id')
+                        
+                        # CRITICAL FIX: Store child COMPONENT id too for INSTANCE lookup
+                        component_sets[child.get('id')] = {
+                            'base_name': base_name,
+                            'variant_name': variant_name,
+                            'interaction_state': interaction_state,
                             'properties': variant_props,
-                            'node_id': child.get('id')
-                        })
+                            'parent_set_id': node.get('id')
+                        }
+                
+                # Convert variant_map to list
+                variants = list(variant_map.values())
                 
                 if base_name not in components:
                     components[base_name] = {
                         'type': base_name,
                         'variants': [],
+                        'properties': {},
                         'instances_found': 0
                     }
                 
-                components[base_name]['variants'].extend([v['name'] for v in variants if v['name']])
+                components[base_name]['variants'] = list(variant_map.keys())
+                components[base_name]['properties'] = {v['name']: v['properties'] for v in variants}
+                
+                # Also store parent COMPONENT_SET id
                 component_sets[node.get('id')] = {
                     'base_name': base_name,
-                    'variants': variants
+                    'variants': variants,
+                    'is_set': True
                 }
             
             # Process COMPONENT nodes (standalone components)
@@ -1522,6 +1561,12 @@ class FigmaParser:
         # Format: "Button/Primary" or "Button=Primary" or "Primary"
         parts = full_name.split('/')
         if len(parts) > 1:
+            # Check if last part is an interaction state
+            last_part = parts[-1].strip().lower()
+            if last_part in ['hover', 'focus', 'active', 'disabled', 'pressed']:
+                # Return second-to-last as variant (e.g., "Button/Primary/Hover" -> "primary")
+                if len(parts) >= 3:
+                    return parts[-2].strip().lower().replace(' ', '_')
             return parts[-1].strip().lower().replace(' ', '_')
         
         # Try = separator
@@ -1537,9 +1582,36 @@ class FigmaParser:
         
         return 'default'
     
+    def _extract_interaction_state(self, full_name: str) -> Optional[str]:
+        """
+        Extract interaction state from component name.
+        
+        Examples:
+        - "Button/Primary/Hover" -> "hover"
+        - "Button/Primary" -> None
+        - "Card/Feature/Active" -> "active"
+        
+        Returns: 'hover', 'focus', 'active', 'disabled', 'pressed', or None
+        """
+        parts = full_name.split('/')
+        if len(parts) >= 2:
+            last_part = parts[-1].strip().lower()
+            if last_part in ['hover', 'focus', 'active', 'disabled', 'pressed']:
+                return last_part
+        return None
+    
     def _extract_component_properties(self, node: Dict[str, Any]) -> Dict[str, Any]:
         """Extract visual properties from a component node."""
         props = {}
+        
+        # Size (width/height)
+        absolute_bounds = node.get('absoluteBoundingBox', {})
+        width = absolute_bounds.get('width', 0)
+        height = absolute_bounds.get('height', 0)
+        if width > 0:
+            props['width'] = f"{width}px"
+        if height > 0:
+            props['height'] = f"{height}px"
         
         # Background color
         fills = node.get('fills', [])

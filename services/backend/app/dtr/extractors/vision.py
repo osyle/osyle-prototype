@@ -1234,7 +1234,7 @@ CRITICAL:
 - All strings must be valid JSON (use double quotes, escape special characters)
 """
         
-        user_prompt = "Identify all UI components in this design. Return ONLY valid JSON, no markdown blocks, no extra text."
+        user_prompt = "Identify all UI components in this design. For EACH component, write 3-4 detailed narratives (minimum 3 sentences each) explaining WHY the designer made these choices. Return ONLY valid JSON, no markdown blocks, no extra text."
         
         # Use Gemini 2.5 Flash for vision analysis (cheaper, excellent vision performance)
         max_attempts = 5
