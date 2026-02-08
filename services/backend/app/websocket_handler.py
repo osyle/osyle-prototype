@@ -17,8 +17,11 @@ from app.db import convert_decimals  # Import for Decimal conversion
 # Generation imports (keep for other handlers)
 from app.generation_orchestrator import GenerationOrchestrator
 from app.parametric import ParametricGenerator
-from app.dtm_builder_v2 import DTMBuilderV2  # Keep for smart_dtm_update (TODO)
-from app.dtm_updater_v3 import DTMUpdaterV3  # Keep for smart_dtm_update (TODO)
+
+# DTM imports (Pass 7)
+from app.dtm import synthesizer as dtm_synthesizer
+from app.dtm import storage as dtm_storage
+from app.dtr import storage as dtr_storage
 
 # Import helper for Figma compression (used by other handlers)
 from app.unified_dtr_builder import prepare_figma_for_llm
@@ -333,6 +336,29 @@ async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: 
             "placements_count": len(pass_4_result.get("placements", []))
         })
         
+        # ====================================================================
+        # TRIGGER DTM BUILD (Pass 7) if taste has 2+ resources
+        # ====================================================================
+        print(f"\n{'='*70}")
+        print(f"Checking if DTM build needed for taste {taste_id}...")
+        print(f"{'='*70}\n")
+        
+        dtm_result = await build_dtm_for_taste(
+            taste_id=taste_id,
+            llm=llm,
+            websocket=websocket
+        )
+        
+        if dtm_result.get("status") == "success":
+            print(f"✅ DTM built successfully!")
+            print(f"   Resource count: {dtm_result.get('total_resources')}")
+            print(f"   Confidence: {dtm_result.get('confidence')}")
+        elif dtm_result.get("status") == "skipped":
+            print(f"ℹ️  DTM build skipped: {dtm_result.get('reason')}")
+        else:
+            print(f"⚠️  DTM build failed: {dtm_result.get('error')}")
+
+        
     except Exception as e:
         import traceback
         error_msg = f"Extraction failed: {str(e)}"
@@ -340,29 +366,26 @@ async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: 
         await send_error(websocket, error_msg)
 
 
-async def smart_dtm_update(
-    user_id: str,
+async def build_dtm_for_taste(
     taste_id: str,
-    new_resource_id: str,
     llm,
     websocket: WebSocket
 ) -> Dict[str, Any]:
     """
-    Smart DTM update logic with progress updates
-    - 1 resource: Skip
-    - 2 resources: Build initial DTM v2
-    - 3+ resources: Incremental update
+    Build DTM from all resources in a taste (Pass 7)
+    - 1 resource: Skip (just use DTR)
+    - 2+ resources: Build/rebuild DTM
     """
     
     # Count resources with DTRs
     resources = db.list_resources_for_taste(taste_id)
-    resources_with_dtr = []
+    resource_ids = [
+        r["resource_id"] 
+        for r in resources 
+        if r.get("metadata", {}).get("has_dtr")
+    ]
     
-    for resource in resources:
-        if storage.resource_dtr_exists(user_id, taste_id, resource["resource_id"]):
-            resources_with_dtr.append(resource)
-    
-    total_dtrs = len(resources_with_dtr)
+    total_dtrs = len(resource_ids)
     
     # CASE 1: Only 1 resource → Skip
     if total_dtrs < 2:
@@ -372,92 +395,41 @@ async def smart_dtm_update(
             "total_resources": total_dtrs
         }
     
-    # Check if DTM exists
-    dtm_exists = storage.taste_dtm_exists(user_id, taste_id)
+    # CASE 2: 2+ resources → Build/rebuild DTM
+    await send_progress(
+        websocket,
+        "building_dtm",
+        f"Building DTM from {total_dtrs} resources..."
+    )
     
-    # CASE 2: 2+ resources, no DTM → Build
-    if not dtm_exists:
-        await send_progress(
-            websocket,
-            "building_dtm",
-            f"Building initial DTM v2 from {total_dtrs} resources..."
+    try:
+        # Synthesize DTM (Pass 7)
+        dtm = await dtm_synthesizer.synthesize_dtm(
+            taste_id=taste_id,
+            resource_ids=resource_ids,
+            llm=llm,
+            priority_mode=False  # Use all resources equally
         )
         
-        try:
-            # Load all DTRs
-            dtrs = []
-            for resource in resources_with_dtr:
-                dtr = storage.get_resource_dtr(user_id, taste_id, resource["resource_id"])
-                if dtr:
-                    dtrs.append(dtr)
-            
-            if not dtrs:
-                raise Exception("No DTRs could be loaded")
-            
-            # Build DTM v2
-            dtm_builder = DTMBuilderV2(llm)
-            dtm_v2 = await dtm_builder.build_dtm(
-                dtrs=dtrs,
-                taste_id=taste_id,
-                owner_id=user_id
-            )
-            
-            # Save DTM v2
-            storage.put_taste_dtm(user_id, taste_id, dtm_v2)
-            
-            return {
-                "status": "built",
-                "message": "DTM v2 built successfully",
-                "total_resources": total_dtrs,
-                "confidence": dtm_v2["meta"]["overall_confidence"]
-            }
-            
-        except Exception as e:
-            return {
-                "status": "error",
-                "error": str(e)
-            }
-    
-    # CASE 3: DTM exists → Incremental update
-    else:
         await send_progress(
             websocket,
-            "updating_dtm",
-            f"Updating DTM v2 with new resource..."
+            "dtm_complete",
+            f"DTM built successfully from {total_dtrs} resources"
         )
         
-        try:
-            # Get existing DTM
-            dtm = storage.get_taste_dtm(user_id, taste_id)
-            
-            # Get new DTR
-            new_dtr = storage.get_resource_dtr(user_id, taste_id, new_resource_id)
-            
-            if not new_dtr:
-                raise Exception("DTR not found for new resource")
-            
-            # Incremental update
-            updater = DTMUpdaterV3()
-            updated_dtm = await updater.update_dtm(
-                existing_dtm=dtm,
-                new_dtr=new_dtr
-            )
-            
-            # Save updated DTM
-            storage.put_taste_dtm(user_id, taste_id, updated_dtm)
-            
-            return {
-                "status": "updated",
-                "message": "DTM v2 updated successfully",
-                "total_resources": updated_dtm["meta"]["total_resources"],
-                "confidence": updated_dtm["meta"]["overall_confidence"]
-            }
-            
-        except Exception as e:
-            return {
-                "status": "error",
-                "error": str(e)
-            }
+        return {
+            "status": "success",
+            "dtm_id": dtm.taste_id,
+            "total_resources": len(resource_ids),
+            "confidence": dtm.generation_guidance.confidence_by_domain.get("overall", 0.75)
+        }
+        
+    except Exception as e:
+        await send_error(websocket, f"DTM build failed: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e)
+        }
 
 
 async def handle_generate_ui(websocket: WebSocket, data: Dict[str, Any], user_id: str):

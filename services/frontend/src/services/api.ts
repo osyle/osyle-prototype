@@ -102,17 +102,6 @@ export interface BuildDTRResponse {
   confidence?: Record<string, unknown>
 }
 
-export interface UpdateDTMResponse {
-  status: 'skipped' | 'built' | 'updated'
-  message?: string
-  taste_id?: string
-  total_resources?: number
-  confidence?: number
-  incremental?: boolean
-  reason?: string
-  total_dtrs?: number
-}
-
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -995,33 +984,46 @@ export const llmAPI = {
 }
 
 // ============================================================================
-// DTM API
+// DTM API (Pass 7)
 // ============================================================================
+
+export interface DTMBuildRequest {
+  taste_id: string
+  resource_ids?: string[] // If not provided, uses all resources
+  priority_mode?: boolean
+}
+
+export interface DTMBuildResponse {
+  status: string
+  dtm_id: string
+  resource_count: number
+  confidence: number
+  duration_seconds: number
+}
+
+export interface DTMStatusResponse {
+  exists: boolean
+  resource_count: number
+  created_at?: string
+  confidence?: number
+}
 
 export const dtmAPI = {
   /**
-   * Auto-update DTM after DTR is created
-   * Decides whether to build new DTM or update existing one
+   * Build DTM for a taste (entire taste or subset of resources)
    */
-  updateDtm: async (
-    tasteId: string,
-    resourceId: string,
-  ): Promise<UpdateDTMResponse> => {
-    return apiRequest<UpdateDTMResponse>('/api/dtm/update', {
+  build: async (payload: DTMBuildRequest): Promise<DTMBuildResponse> => {
+    return apiRequest<DTMBuildResponse>('/api/dtm/build', {
       method: 'POST',
-      body: JSON.stringify({
-        taste_id: tasteId,
-        resource_id: resourceId,
-        resynthesize: false, // Fast incremental update
-      }),
+      body: JSON.stringify(payload),
     })
   },
 
   /**
-   * Get DTM for a taste
+   * Get DTM status for a taste
    */
-  get: async (tasteId: string): Promise<Record<string, unknown>> => {
-    return apiRequest<Record<string, unknown>>(`/api/dtm/${tasteId}`)
+  getStatus: async (tasteId: string): Promise<DTMStatusResponse> => {
+    return apiRequest<DTMStatusResponse>(`/api/dtm/${tasteId}/status`)
   },
 
   /**

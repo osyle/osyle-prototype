@@ -12,7 +12,7 @@ import {
   FileJson,
   Trash2,
 } from 'lucide-react'
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ConfigurationMenu from '../components/ConfigurationMenu'
 
@@ -144,6 +144,9 @@ export default function Home() {
     useState<DtmTrainingState>('training')
   const [dtmResourceCount, setDtmResourceCount] = useState(0)
   const [dtmTrainingError, setDtmTrainingError] = useState<string | null>(null)
+
+  // Ref to track DTR close timeout (for smooth DTR→DTM transition)
+  const dtrCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Project loading state
   const [isLoadingProject, setIsLoadingProject] = useState(false)
@@ -605,95 +608,80 @@ export default function Home() {
 
   const buildDtrForResource = async (tasteId: string, resourceId: string) => {
     try {
-      // Build DTR via WebSocket (always - it will skip if exists)
+      // Build DTR via WebSocket (Passes 1-6)
       console.log('Building DTR for resource:', resourceId)
-      await api.llm.buildDtr(resourceId, tasteId)
 
-      // Success!
-      setDtrLearningState('success')
-      console.log('DTR learning completed successfully')
+      // WebSocket callbacks to handle both DTR and DTM progress
+      await api.llm.buildDtr(resourceId, tasteId, {
+        onProgress: (stage, message, data) => {
+          console.log(`[DTR Progress] ${stage}: ${message}`, data)
 
-      // Wait 2 seconds for user to see success state
-      await new Promise(resolve => setTimeout(resolve, 2000))
+          // Handle DTM build trigger (backend starts this after Pass 6)
+          if (stage === 'building_dtm') {
+            console.log(
+              'DTM build started - will transition from DTR to DTM modal',
+            )
 
-      // Phase 2: DTM training is now deferred to later phases
-      // For Phase 1, we only do Pass 1 extraction
-      console.log('Phase 1 complete - DTM will be built in later phases')
+            // Cancel the DTR auto-close timeout (we'll handle closing manually)
+            if (dtrCloseTimeoutRef.current) {
+              clearTimeout(dtrCloseTimeoutRef.current)
+              dtrCloseTimeoutRef.current = null
+            }
+
+            const resourceCount = (data?.['resource_count'] as number) || 0
+
+            // Wait 2s to show DTR success, then transition to DTM
+            setTimeout(() => {
+              console.log('Closing DTR modal, opening DTM modal')
+              setIsDtrLearningModalOpen(false) // Close DTR modal
+
+              // Open DTM modal immediately
+              setDtmResourceCount(resourceCount)
+              setDtmTrainingState('training')
+              setDtmTrainingError(null)
+              setIsDtmTrainingModalOpen(true)
+            }, 2000)
+          } else if (stage === 'dtm_complete') {
+            console.log('DTM build complete')
+            setDtmTrainingState('success')
+
+            // Close DTM modal after 2 seconds
+            setTimeout(() => {
+              setIsDtmTrainingModalOpen(false)
+            }, 2000)
+          }
+        },
+        onComplete: result => {
+          console.log('DTR build complete:', result)
+          setDtrLearningState('success')
+
+          // Auto-close DTR modal after 2s (if no DTM build triggers)
+          // This timeout will be cancelled if DTM build starts
+          dtrCloseTimeoutRef.current = setTimeout(() => {
+            console.log('Auto-closing DTR modal (no DTM needed)')
+            setIsDtrLearningModalOpen(false)
+            dtrCloseTimeoutRef.current = null
+          }, 2000)
+        },
+        onError: error => {
+          console.error('DTR build error:', error)
+          setDtrLearningState('error')
+          setDtrLearningError(error)
+
+          // Cancel any pending close timeout on error
+          if (dtrCloseTimeoutRef.current) {
+            clearTimeout(dtrCloseTimeoutRef.current)
+            dtrCloseTimeoutRef.current = null
+          }
+        },
+      })
+
+      console.log('Pass 1-6 complete')
     } catch (err) {
       console.error('Failed to build DTR:', err)
       setDtrLearningState('error')
       setDtrLearningError(
         err instanceof Error ? err.message : 'Failed to learn design taste',
-      )
-    }
-  }
-
-  const trainDtmAfterDtr = async (
-    tasteId: string,
-    resourceId: string,
-    resourceCount: number,
-  ) => {
-    try {
-      // Close DTR modal
-      setIsDtrLearningModalOpen(false)
-
-      // Check if DTM training is needed (requires 2+ resources)
-      if (resourceCount < 2) {
-        console.log(`Only ${resourceCount} resource(s), skipping DTM training`)
-        return
-      }
-
-      // Open DTM modal IMMEDIATELY with the correct resource count
-      console.log(`Opening DTM training modal for ${resourceCount} resources`)
-      setDtmResourceCount(resourceCount)
-      setDtmTrainingState('training')
-      setDtmTrainingError(null)
-      setIsDtmTrainingModalOpen(true)
-
-      // Make the API call (while modal is showing "training")
-      console.log('Calling DTM update endpoint...')
-      const response = await api.dtm.updateDtm(tasteId, resourceId)
-
-      console.log('DTM update response:', {
-        status: response.status,
-        total_resources: response.total_resources,
-        message: response.message,
-      })
-
-      // Verify backend agrees with our resource count
-      if (
-        response.total_resources &&
-        response.total_resources !== resourceCount
-      ) {
-        console.warn(
-          `Resource count mismatch: frontend=${resourceCount}, backend=${response.total_resources}`,
-        )
-        setDtmResourceCount(response.total_resources)
-      }
-
-      // Check if DTM training was skipped by backend
-      if (response.status === 'skipped') {
-        console.log('DTM training skipped by backend - closing modal')
-        setIsDtmTrainingModalOpen(false)
-        return
-      }
-
-      // Backend finished successfully!
-      console.log(
-        `DTM ${response.status} completed successfully with ${response.total_resources || resourceCount} resources`,
-      )
-      setDtmTrainingState('success')
-
-      // Wait 2 seconds for user to see success state
-      await new Promise(resolve => setTimeout(resolve, 2000))
-
-      // Close modal
-      setIsDtmTrainingModalOpen(false)
-    } catch (err) {
-      console.error('Failed to train DTM:', err)
-      setDtmTrainingState('error')
-      setDtmTrainingError(
-        err instanceof Error ? err.message : 'Failed to train design model',
       )
     }
   }
@@ -717,16 +705,10 @@ export default function Home() {
   }
 
   const handleDtmRetry = async () => {
-    if (!pendingResourceData) return
-
-    setDtmTrainingState('training')
+    // DTM retry is not supported - DTM builds automatically via WebSocket
+    // Just close the modal
+    setIsDtmTrainingModalOpen(false)
     setDtmTrainingError(null)
-
-    await trainDtmAfterDtr(
-      pendingResourceData.tasteId,
-      pendingResourceData.resourceId,
-      pendingResourceData.resourceCount,
-    )
   }
 
   const handleDtmClose = () => {

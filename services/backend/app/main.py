@@ -14,8 +14,8 @@ load_dotenv()
 
 # Import routers
 from app.routers import tastes, projects
+from app.routers import dtm
 from app.websocket_routes import router as ws_router
-from app.dtm_routes import router as dtm_router
 # from app.routers.mobbin import router as mobbin_router  # DISABLED: Uses Playwright
 
 app = FastAPI(title="Osyle API", version="1.0.0")
@@ -192,7 +192,7 @@ async def user_profile(user: dict = Depends(verify_token)):
 app.include_router(tastes.router)
 app.include_router(projects.router)
 app.include_router(ws_router)
-app.include_router(dtm_router)
+app.include_router(dtm.router)
 # app.include_router(mobbin_router)  # DISABLED: Uses Playwright
 
 
