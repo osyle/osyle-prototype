@@ -932,6 +932,84 @@ export default function Home() {
     setIsCreateProjectModalOpen(true)
   }
 
+  const handleDeleteTaste = async (
+    taste: TasteDisplay,
+    e: React.MouseEvent,
+  ) => {
+    e.stopPropagation()
+
+    if (
+      !confirm(
+        `Are you sure you want to delete "${taste.name}" and all its resources? This action cannot be undone.`,
+      )
+    ) {
+      return
+    }
+
+    try {
+      await api.tastes.delete(taste.taste_id)
+
+      // Remove from local state
+      setTastes(prev => prev.filter(t => t.taste_id !== taste.taste_id))
+
+      // If this taste was selected, clear selection
+      if (selectedTasteId === taste.taste_id) {
+        setSelectedTasteId(null)
+        setSelectedResourceIds([])
+      }
+
+      console.log(`Successfully deleted taste: ${taste.name}`)
+    } catch (err) {
+      console.error('Failed to delete taste:', err)
+      alert(err instanceof Error ? err.message : 'Failed to delete taste')
+    }
+  }
+
+  const handleDeleteResource = async (
+    tasteId: string,
+    resourceId: string,
+    resourceName: string,
+    e: React.MouseEvent,
+  ) => {
+    e.stopPropagation()
+
+    if (
+      !confirm(
+        `Are you sure you want to delete "${resourceName}"? This action cannot be undone.`,
+      )
+    ) {
+      return
+    }
+
+    try {
+      await api.resources.delete(tasteId, resourceId)
+
+      // Remove from local state
+      setTastes(prev =>
+        prev.map(taste => {
+          if (taste.taste_id === tasteId) {
+            return {
+              ...taste,
+              resources: taste.resources.filter(
+                r => r.resource_id !== resourceId,
+              ),
+              resource_count: (taste.resource_count || 0) - 1,
+            }
+          }
+          return taste
+        }),
+      )
+
+      // If this resource was selected, remove it from selection
+      setSelectedResourceIds(prev => prev.filter(id => id !== resourceId))
+
+      console.log(`Successfully deleted resource: ${resourceName}`)
+    } catch (err) {
+      console.error('Failed to delete resource:', err)
+      alert(err instanceof Error ? err.message : 'Failed to delete resource')
+    }
+  }
+
   // ============================================================================
   // ACCORDION CONTENT
   // ============================================================================
@@ -1001,6 +1079,7 @@ export default function Home() {
                     // Always go to Stage 2 after selecting taste
                     setExpandedStage(2)
                   }}
+                  onDelete={e => handleDeleteTaste(taste, e)}
                 />
               </div>
             ))}
@@ -1071,6 +1150,14 @@ export default function Home() {
                       : [...prev, resource.resource_id],
                   )
                 }}
+                onDelete={e =>
+                  handleDeleteResource(
+                    selectedTaste.taste_id,
+                    resource.resource_id,
+                    resource.name,
+                    e,
+                  )
+                }
               />
             ))}
           </div>

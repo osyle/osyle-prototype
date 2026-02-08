@@ -1,3 +1,4 @@
+import { Trash2 } from 'lucide-react'
 import React, { useState } from 'react'
 import { type ResourceDisplay } from '../types/home.types'
 import { getInitials } from '../utils/helpers'
@@ -10,6 +11,8 @@ interface StyleCardProps {
   resource: ResourceDisplay
   isSelected: boolean
   onClick: () => void
+  // eslint-disable-next-line no-unused-vars
+  onDelete: (e: React.MouseEvent) => void
 }
 
 // ============================================================================
@@ -20,6 +23,7 @@ const StyleCard: React.FC<StyleCardProps> = ({
   resource,
   isSelected,
   onClick,
+  onDelete,
 }) => {
   const [isHovered, setIsHovered] = useState(false)
 
@@ -185,6 +189,29 @@ const StyleCard: React.FC<StyleCardProps> = ({
             </p>
           </div>
         </div>
+
+        {/* Delete button - bottom right */}
+        <button
+          onClick={onDelete}
+          className="absolute transition-all hover:scale-110"
+          style={{
+            bottom: '12px',
+            right: '12px',
+            width: '32px',
+            height: '32px',
+            backgroundColor: '#FEE2E2',
+            color: '#DC2626',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10,
+            opacity: isHovered ? 1 : 0,
+            pointerEvents: isHovered ? 'auto' : 'none',
+          }}
+        >
+          <Trash2 size={16} />
+        </button>
       </div>
     </div>
   )

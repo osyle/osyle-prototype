@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 from app.auth import get_current_user
 from app import db, storage
+from app.dtr import storage as dtr_storage
 from app.models import (
     TasteCreate,
     TasteOut,
@@ -150,6 +151,11 @@ async def delete_taste(
             taste_id=taste_id,
             resource_id=resource["resource_id"]
         )
+        # Delete DTR outputs
+        try:
+            dtr_storage.delete_resource_dtr(resource["resource_id"])
+        except Exception as e:
+            print(f"Warning: Failed to delete DTR for resource {resource['resource_id']}: {e}")
         # Delete resource from DB
         db.delete_resource(resource["resource_id"])
     
@@ -332,6 +338,12 @@ async def delete_resource(
         taste_id=taste_id,
         resource_id=resource_id
     )
+    
+    # Delete DTR outputs
+    try:
+        dtr_storage.delete_resource_dtr(resource_id)
+    except Exception as e:
+        print(f"Warning: Failed to delete DTR for resource {resource_id}: {e}")
     
     # Delete resource from DB
     db.delete_resource(resource_id)

@@ -13,6 +13,7 @@ export interface TasteDisplay {
   taste_id: string
   name: string
   resources: ResourceDisplay[]
+  resource_count?: number
 }
 
 export interface ResourceDisplay {
