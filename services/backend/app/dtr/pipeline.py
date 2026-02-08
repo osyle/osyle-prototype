@@ -460,6 +460,83 @@ async def extract_pass_4_only(
         raise
 
 
+async def extract_pass_5_only(
+    resource_id: str,
+    taste_id: str,
+    figma_json: Optional[Dict[str, Any]] = None,
+    image_bytes: Optional[bytes] = None,
+    image_format: str = "png",
+    progress_callback: Optional[ProgressCallback] = None
+) -> Dict[str, Any]:
+    """
+    Extract only Pass 5 (component vocabulary)
+    
+    Convenience function for Pass 5 extraction.
+    
+    Args:
+        resource_id: Resource UUID
+        taste_id: Taste UUID
+        figma_json: Optional Figma JSON document
+        image_bytes: Image data
+        image_format: Image format
+        progress_callback: Optional async callback for progress updates
+    
+    Returns:
+        Pass 5 results
+    """
+    try:
+        # Update status
+        save_extraction_status(
+            resource_id,
+            status="processing",
+            current_pass="pass_5_components"
+        )
+        
+        # Report progress
+        if progress_callback:
+            await progress_callback("pass-5", "Identifying component vocabulary...")
+        
+        # Run Pass 5
+        from .passes import run_pass_5
+        result = await run_pass_5(
+            figma_json=figma_json,
+            image_bytes=image_bytes,
+            image_format=image_format
+        )
+        
+        # Convert to dict
+        result_dict = result.model_dump(by_alias=True)
+        
+        # Save result
+        save_pass_result(
+            resource_id,
+            "pass_5_components",
+            result_dict
+        )
+        
+        # Update status
+        save_extraction_status(
+            resource_id,
+            status="completed",
+            current_pass="pass_5_components"
+        )
+        
+        if progress_callback:
+            await progress_callback("pass-5", "Component vocabulary extraction complete")
+        
+        return result_dict
+    
+    except Exception as e:
+        # Update status to failed
+        save_extraction_status(
+            resource_id,
+            status="failed",
+            current_pass="pass_5_components",
+            error=str(e)
+        )
+        raise
+
+
 async def extract_all_passes_parallel(
     resource_id: str,
     taste_id: str,
@@ -469,9 +546,9 @@ async def extract_all_passes_parallel(
     progress_callback: Optional[ProgressCallback] = None
 ) -> Dict[str, Any]:
     """
-    Run Passes 1-4 in parallel
+    Run Passes 1-5 in parallel
     
-    Passes 1-4 are independent and can run simultaneously for faster extraction.
+    Passes 1-5 are independent and can run simultaneously for faster extraction.
     
     Args:
         resource_id: Resource UUID
@@ -508,6 +585,9 @@ async def extract_all_passes_parallel(
         pass_4_task = extract_pass_4_only(
             resource_id, taste_id, figma_json, image_bytes, image_format, progress_callback
         )
+        pass_5_task = extract_pass_5_only(
+            resource_id, taste_id, figma_json, image_bytes, image_format, progress_callback
+        )
         
         # Wait for all to complete
         results = await asyncio.gather(
@@ -515,10 +595,11 @@ async def extract_all_passes_parallel(
             pass_2_task,
             pass_3_task,
             pass_4_task,
+            pass_5_task,
             return_exceptions=True
         )
         
-        pass_1_result, pass_2_result, pass_3_result, pass_4_result = results
+        pass_1_result, pass_2_result, pass_3_result, pass_4_result, pass_5_result = results
         
         # Check for errors
         errors = []
@@ -530,6 +611,8 @@ async def extract_all_passes_parallel(
             errors.append(f"Pass 3: {str(pass_3_result)}")
         if isinstance(pass_4_result, Exception):
             errors.append(f"Pass 4: {str(pass_4_result)}")
+        if isinstance(pass_5_result, Exception):
+            errors.append(f"Pass 5: {str(pass_5_result)}")
         
         if errors:
             error_msg = "; ".join(errors)
@@ -555,7 +638,8 @@ async def extract_all_passes_parallel(
             "pass_1_structure": pass_1_result,
             "pass_2_surface": pass_2_result,
             "pass_3_typography": pass_3_result,
-            "pass_4_image_usage": pass_4_result
+            "pass_4_image_usage": pass_4_result,
+            "pass_5_components": pass_5_result
         }
     
     except Exception as e:

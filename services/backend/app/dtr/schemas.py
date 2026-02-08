@@ -3,7 +3,7 @@ DTR (Design Taste Representation) Schemas
 
 Pydantic models for all pass outputs and the complete DTR.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any, Literal
 
 
@@ -358,9 +358,124 @@ class Pass4ImageUsageDTR(BaseModel):
 # PASS 5: COMPONENT VOCABULARY (TODO - was Pass 4)
 # ============================================================================
 
+class ComponentProperties(BaseModel):
+    """Exact properties for a component variant"""
+    background: Optional[str] = Field(None, description="Background color or treatment")
+    text_color: Optional[str] = Field(None, description="Text color")
+    border: Optional[str] = Field(None, description="Border specification")
+    border_radius: Optional[str] = Field(None, description="Border radius value")
+    padding: Optional[str] = Field(None, description="Padding value")
+    font_weight: Optional[int] = Field(None, description="Font weight")
+    font_size: Optional[str] = Field(None, description="Font size")
+    text_transform: Optional[str] = Field(None, description="Text transform (uppercase, none)")
+    letter_spacing: Optional[str] = Field(None, description="Letter spacing")
+    shadow: Optional[str] = Field(None, description="Box shadow specification")
+    hover_background: Optional[str] = Field(None, description="Hover state background")
+    hover_shadow: Optional[str] = Field(None, description="Hover state shadow")
+    focus_outline: Optional[str] = Field(None, description="Focus state outline")
+    transition: Optional[str] = Field(None, description="Transition specification")
+    other_properties: Optional[Dict[str, Any]] = Field(None, description="Additional properties")
+    
+    @field_validator('font_weight', mode='before')
+    @classmethod
+    def convert_font_weight(cls, v):
+        """Convert string font weights to integers"""
+        if v is None:
+            return None
+        if isinstance(v, int):
+            return v
+        if isinstance(v, str):
+            # Map common string weights to numeric values
+            weight_map = {
+                'thin': 100,
+                'extralight': 200,
+                'extra-light': 200,
+                'ultralight': 200,
+                'ultra-light': 200,
+                'light': 300,
+                'normal': 400,
+                'regular': 400,
+                'medium': 500,
+                'semibold': 600,
+                'semi-bold': 600,
+                'demibold': 600,
+                'demi-bold': 600,
+                'bold': 700,
+                'extrabold': 800,
+                'extra-bold': 800,
+                'ultrabold': 800,
+                'ultra-bold': 800,
+                'black': 900,
+                'heavy': 900
+            }
+            v_lower = v.lower().strip()
+            if v_lower in weight_map:
+                return weight_map[v_lower]
+            # Try to parse as integer
+            try:
+                return int(v)
+            except ValueError:
+                # If can't convert, return 400 as default
+                return 400
+        return v
+
+
+class ComponentInventoryItem(BaseModel):
+    """Single component in the inventory"""
+    type: str = Field(..., description="Component type: button, card, input, etc.")
+    variants: List[str] = Field(default_factory=list, description="Variant names if any")
+    
+    # Exact properties per variant
+    properties: Dict[str, ComponentProperties] = Field(
+        default_factory=dict,
+        description="Exact properties for each variant"
+    )
+    
+    # Short code hints per variant
+    code_hints: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Tailwind class hints for each variant"
+    )
+    
+    # Rich narratives (3-4 per component, flexible based on component type)
+    narratives: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Rich contextual narratives. Common keys: design_thinking, variant_system, interaction_philosophy, usage_patterns, surface_treatment, content_hierarchy, etc."
+    )
+    
+    # Source tracking
+    source: str = Field(..., description="Extraction source: figma | vision | hybrid")
+    confidence: float = Field(..., description="Confidence in this component extraction")
+
+
 class Pass5ComponentsDTR(BaseModel):
-    """Pass 5: Component Vocabulary - TODO"""
-    pass
+    """Pass 5: Component Vocabulary (simplified - identification and description)"""
+    authority: str = Field(..., description="Source of analysis: code | vision | hybrid")
+    confidence: float = Field(..., description="Overall confidence score 0-1")
+    
+    # Global narratives (2-3 for entire component system)
+    component_system_philosophy: str = Field(
+        ...,
+        description="Multi-paragraph synthesis of how this designer thinks about components as a system"
+    )
+    cross_component_patterns: str = Field(
+        ...,
+        description="How components share visual language, common patterns across component types"
+    )
+    notable_absences: str = Field(
+        ...,
+        description="What's consistently absent across all components (no pill buttons, no gradients, etc.)"
+    )
+    
+    # Component inventory
+    inventory: List[ComponentInventoryItem] = Field(
+        default_factory=list,
+        description="List of identified components with properties and narratives"
+    )
+    
+    # Summary stats
+    total_components: int = Field(0, description="Total number of component types identified")
+    total_variants: int = Field(0, description="Total number of variants across all components")
 
 
 # ============================================================================

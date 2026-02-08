@@ -1351,6 +1351,289 @@ class FigmaParser:
             return 'caption'
     
     # ========================================================================
+    # PASS 5: COMPONENT VOCABULARY
+    # ========================================================================
+    
+    def extract_components(self) -> Dict[str, Any]:
+        """
+        Main Pass 5 extraction method.
+        
+        Identifies component instances and component sets, extracting:
+        - Component types (buttons, cards, inputs, etc.)
+        - Variants and their properties
+        - Visual properties for each variant
+        
+        Returns:
+            Dict with identified components and their properties
+        """
+        components = {}
+        component_instances = []
+        
+        # Track component sets (master components)
+        component_sets = {}
+        
+        for node in self.all_nodes:
+            node_type = node.get('type')
+            node_name = node.get('name', '')
+            
+            # Process COMPONENT_SET nodes (master components with variants)
+            if node_type == 'COMPONENT_SET':
+                base_name = self._infer_component_type(node_name)
+                
+                # Extract variants from children
+                children = node.get('children', [])
+                variants = []
+                
+                for child in children:
+                    if child.get('type') == 'COMPONENT':
+                        variant_name = self._extract_variant_name(child.get('name', ''))
+                        variant_props = self._extract_component_properties(child)
+                        
+                        variants.append({
+                            'name': variant_name,
+                            'properties': variant_props,
+                            'node_id': child.get('id')
+                        })
+                
+                if base_name not in components:
+                    components[base_name] = {
+                        'type': base_name,
+                        'variants': [],
+                        'instances_found': 0
+                    }
+                
+                components[base_name]['variants'].extend([v['name'] for v in variants if v['name']])
+                component_sets[node.get('id')] = {
+                    'base_name': base_name,
+                    'variants': variants
+                }
+            
+            # Process COMPONENT nodes (standalone components)
+            elif node_type == 'COMPONENT':
+                component_type = self._infer_component_type(node_name)
+                
+                if component_type not in components:
+                    components[component_type] = {
+                        'type': component_type,
+                        'variants': [],
+                        'instances_found': 0
+                    }
+                
+                # Extract properties
+                props = self._extract_component_properties(node)
+                
+                # Store component definition
+                if node.get('id') not in component_sets:
+                    component_sets[node.get('id')] = {
+                        'base_name': component_type,
+                        'variants': [{
+                            'name': 'default',
+                            'properties': props,
+                            'node_id': node.get('id')
+                        }]
+                    }
+            
+            # Process INSTANCE nodes (instances of components)
+            elif node_type == 'INSTANCE':
+                component_id = node.get('componentId')
+                if component_id in component_sets:
+                    comp_info = component_sets[component_id]
+                    base_name = comp_info['base_name']
+                    
+                    if base_name in components:
+                        components[base_name]['instances_found'] += 1
+                    
+                    component_instances.append({
+                        'component_type': base_name,
+                        'instance_name': node_name,
+                        'node_id': node.get('id')
+                    })
+        
+        # Build inventory list
+        inventory = []
+        for comp_type, comp_data in components.items():
+            # Get detailed properties from component sets
+            variants_with_props = []
+            properties_dict = {}
+            
+            # Find matching component set
+            for comp_set in component_sets.values():
+                if comp_set['base_name'] == comp_type:
+                    for variant in comp_set['variants']:
+                        variant_name = variant['name']
+                        variants_with_props.append(variant_name)
+                        properties_dict[variant_name] = variant['properties']
+            
+            if variants_with_props:
+                comp_data['variants'] = list(set(variants_with_props))
+            
+            inventory.append({
+                'type': comp_type,
+                'variants': comp_data['variants'] if comp_data['variants'] else ['default'],
+                'properties': properties_dict,
+                'instances_count': comp_data['instances_found']
+            })
+        
+        return {
+            'has_components': len(inventory) > 0,
+            'total_components': len(inventory),
+            'total_instances': len(component_instances),
+            'inventory': inventory,
+            'component_instances': component_instances
+        }
+    
+    def _infer_component_type(self, name: str) -> str:
+        """Infer component type from node name."""
+        name_lower = name.lower()
+        
+        # Common component type keywords
+        if 'button' in name_lower or 'btn' in name_lower:
+            return 'button'
+        elif 'card' in name_lower:
+            return 'card'
+        elif 'input' in name_lower or 'textfield' in name_lower or 'text field' in name_lower:
+            return 'input'
+        elif 'modal' in name_lower or 'dialog' in name_lower:
+            return 'modal'
+        elif 'nav' in name_lower and 'item' in name_lower:
+            return 'nav_item'
+        elif 'tab' in name_lower and ('item' in name_lower or 's' in name_lower):
+            return 'tab'
+        elif 'badge' in name_lower or 'tag' in name_lower:
+            return 'badge'
+        elif 'avatar' in name_lower:
+            return 'avatar'
+        elif 'icon' in name_lower:
+            return 'icon'
+        elif 'checkbox' in name_lower:
+            return 'checkbox'
+        elif 'radio' in name_lower:
+            return 'radio'
+        elif 'toggle' in name_lower or 'switch' in name_lower:
+            return 'toggle'
+        elif 'dropdown' in name_lower or 'select' in name_lower:
+            return 'dropdown'
+        else:
+            # Generic component name
+            return name.split('/')[0].strip().lower().replace(' ', '_')
+    
+    def _extract_variant_name(self, full_name: str) -> str:
+        """Extract variant name from full component name."""
+        # Format: "Button/Primary" or "Button=Primary" or "Primary"
+        parts = full_name.split('/')
+        if len(parts) > 1:
+            return parts[-1].strip().lower().replace(' ', '_')
+        
+        # Try = separator
+        parts = full_name.split('=')
+        if len(parts) > 1:
+            return parts[-1].strip().lower().replace(' ', '_')
+        
+        # Check for state keywords
+        name_lower = full_name.lower()
+        for keyword in ['primary', 'secondary', 'ghost', 'outline', 'tertiary', 'default', 'hover', 'active', 'disabled']:
+            if keyword in name_lower:
+                return keyword
+        
+        return 'default'
+    
+    def _extract_component_properties(self, node: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract visual properties from a component node."""
+        props = {}
+        
+        # Background color
+        fills = node.get('fills', [])
+        if fills:
+            first_fill = fills[0]
+            if first_fill.get('type') == 'SOLID':
+                color = first_fill.get('color', {})
+                props['background'] = self._color_to_hex(color)
+            elif first_fill.get('type') == 'GRADIENT_LINEAR':
+                # Store gradient info
+                props['background'] = 'gradient'
+                props['gradient_stops'] = first_fill.get('gradientStops', [])
+        
+        # Border
+        strokes = node.get('strokes', [])
+        if strokes:
+            stroke = strokes[0]
+            stroke_weight = node.get('strokeWeight', 1)
+            stroke_color = stroke.get('color', {})
+            props['border'] = f"{stroke_weight}px solid {self._color_to_hex(stroke_color)}"
+        
+        # Border radius
+        corner_radius = node.get('cornerRadius')
+        if corner_radius:
+            props['border_radius'] = f"{corner_radius}px"
+        
+        # Padding (from auto-layout)
+        padding_left = node.get('paddingLeft', 0)
+        padding_right = node.get('paddingRight', 0)
+        padding_top = node.get('paddingTop', 0)
+        padding_bottom = node.get('paddingBottom', 0)
+        
+        if padding_top == padding_bottom and padding_left == padding_right:
+            if padding_top > 0 or padding_left > 0:
+                props['padding'] = f"{padding_top}px {padding_left}px"
+        else:
+            if any([padding_top, padding_right, padding_bottom, padding_left]):
+                props['padding'] = f"{padding_top}px {padding_right}px {padding_bottom}px {padding_left}px"
+        
+        # Shadows
+        effects = node.get('effects', [])
+        for effect in effects:
+            if effect.get('type') == 'DROP_SHADOW' and effect.get('visible', True):
+                shadow_css = self._effect_to_css(effect)
+                props['shadow'] = shadow_css.get('css', '')
+        
+        # Text properties (if has text children)
+        text_nodes = self._find_text_nodes(node)
+        if text_nodes:
+            first_text = text_nodes[0]
+            font_name = first_text.get('fontName', {})
+            props['font_family'] = font_name.get('family', '')
+            props['font_weight'] = first_text.get('fontWeight', 400)
+            props['font_size'] = f"{first_text.get('fontSize', 16)}px"
+            props['text_color'] = self._get_text_color(first_text)
+            
+            letter_spacing = first_text.get('letterSpacing')
+            if letter_spacing:
+                unit = letter_spacing.get('unit', 'PIXELS')
+                value = letter_spacing.get('value', 0)
+                if unit == 'PERCENT':
+                    props['letter_spacing'] = f"{value / 100}em"
+                else:
+                    props['letter_spacing'] = f"{value}px"
+            
+            text_case = first_text.get('textCase')
+            if text_case == 'UPPER':
+                props['text_transform'] = 'uppercase'
+            elif text_case == 'LOWER':
+                props['text_transform'] = 'lowercase'
+        
+        return props
+    
+    def _find_text_nodes(self, node: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Find all text nodes within a component."""
+        text_nodes = []
+        
+        if node.get('type') == 'TEXT':
+            text_nodes.append(node)
+        
+        for child in node.get('children', []):
+            text_nodes.extend(self._find_text_nodes(child))
+        
+        return text_nodes
+    
+    def _get_text_color(self, text_node: Dict[str, Any]) -> str:
+        """Extract text color from text node."""
+        fills = text_node.get('fills', [])
+        if fills and fills[0].get('type') == 'SOLID':
+            color = fills[0].get('color', {})
+            return self._color_to_hex(color)
+        return '#000000'
+    
+    # ========================================================================
     # PASS 4: IMAGE USAGE PATTERNS
     # ========================================================================
     
@@ -1484,3 +1767,17 @@ def parse_figma_images(figma_json: Dict[str, Any]) -> Dict[str, Any]:
     """
     parser = FigmaParser(figma_json)
     return parser.extract_images()
+
+
+def parse_figma_components(figma_json: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Parse component vocabulary from Figma JSON (Pass 5).
+    
+    Args:
+        figma_json: Root FRAME node from Figma plugin export
+    
+    Returns:
+        Dict with component inventory containing identified components and their properties
+    """
+    parser = FigmaParser(figma_json)
+    return parser.extract_components()

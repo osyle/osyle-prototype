@@ -4,7 +4,12 @@ Vision Analyzer
 Uses LLM vision (Gemini 2.5 Flash) to extract design properties from images.
 Used by all passes when analyzing screenshots.
 """
-from typing import Dict, Any, Optional
+
+import re
+import json
+import traceback
+ 
+from typing import List, Dict, Any, Optional
 import base64
 from app.llm import LLMService, Message, MessageRole, ImageContent, TextContent
 
@@ -262,7 +267,7 @@ Respond with a JSON object matching this structure:
             return result
         
         # Fallback: try parsing text
-        import json
+    
         try:
             result = json.loads(response.text)
             self._convert_structure_strings_to_lists(result)
@@ -390,7 +395,6 @@ Respond with:
             return response.structured_output
         
         # Fallback: parse text (should not happen with structured output enabled)
-        import json
         try:
             return json.loads(response.text)
         except json.JSONDecodeError as e:
@@ -644,7 +648,6 @@ Respond with a JSON object:{kmeans_reference}
             return result
         
         # Fallback: parse text
-        import json
         try:
             result = json.loads(response.text)
             # Same conversion for fallback
@@ -875,8 +878,7 @@ CRITICAL: All narrative fields must be rich, multi-sentence paragraphs that expl
             return response.structured_output
         
         # Fallback: parse JSON from text with robust extraction
-        import json
-        import re
+    
         try:
             # Try direct parsing first
             return json.loads(response.text)
@@ -1047,8 +1049,6 @@ CRITICAL: Return ONLY the JSON object. No markdown, no backticks, no explanation
                 )
                 
                 # Parse response
-                import json
-                import re
                 
                 # Safety check
                 if not response or not hasattr(response, 'text'):
@@ -1129,7 +1129,6 @@ CRITICAL: Return ONLY the JSON object. No markdown, no backticks, no explanation
             except Exception as e:
                 last_error = f"Exception: {str(e)}"
                 print(f"Attempt {attempt} failed with exception: {e}")
-                import traceback
                 traceback.print_exc()
                 continue
         
@@ -1142,6 +1141,206 @@ CRITICAL: Return ONLY the JSON object. No markdown, no backticks, no explanation
             "content_style": None,
             "rhythm": f"Analysis failed after {max_attempts} attempts: {last_error}",
             "image_to_text_ratio": None
+        }
+    
+    async def analyze_components(
+        self,
+        image_bytes: bytes,
+        image_format: str = "png",
+        figma_inventory: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """
+        Analyze component vocabulary from design.
+        
+        Identifies components and their properties, generating rich narratives
+        about the designer's component thinking.
+        
+        Args:
+            image_bytes: Image data as bytes
+            image_format: Image format (png, jpg, webp)
+            figma_inventory: Optional inventory from Figma JSON parsing
+        
+        Returns:
+            Dict with component inventory, properties, and rich narratives
+        """
+        # Encode image
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+        
+        # Build context from Figma inventory if provided
+        figma_context = ""
+        if figma_inventory:
+            figma_context = "\n\nCOMPONENTS DETECTED FROM FIGMA:\n"
+            for comp in figma_inventory:
+                figma_context += f"- {comp['type']}: {comp.get('instances_count', 0)} instances"
+                if comp.get('variants'):
+                    figma_context += f", variants: {', '.join(comp['variants'])}"
+                figma_context += "\n"
+        
+        # Build system prompt - SIMPLIFIED for better JSON compliance
+        system_prompt = f"""You are a design analyst. Analyze this UI design and identify all components.
+
+IDENTIFY THESE COMPONENT TYPES:
+- Buttons (and their variants like primary/secondary/ghost)
+- Cards (content cards, stat cards, etc.)
+- Inputs (text fields, checkboxes, toggles, etc.)
+- Navigation items (tabs, nav links)
+- Avatars/profile images
+- Badges/tags
+- Any other recurring UI patterns{figma_context}
+
+For each component, note:
+- Type (button, card, etc.)
+- Variants (if any)
+- Visual properties (colors, sizes, spacing, shadows, etc.)
+  - font_weight should be numeric: 100-900 (e.g., 400, 600, 700)
+- Code hints (Tailwind classes)
+- Design thinking (why they look this way)
+
+Also provide:
+- Overall component philosophy
+- Patterns shared across components
+- What's notably absent
+
+Return ONLY a JSON object matching this schema:
+{{
+  "component_system_philosophy": "text describing overall approach",
+  "cross_component_patterns": "text describing shared patterns",
+  "notable_absences": "text describing what's missing",
+  "inventory": [
+    {{
+      "type": "button",
+      "variants": ["primary", "secondary"],
+      "properties": {{
+        "primary": {{"background": "#5856D6", "text_color": "#FFF", "border_radius": "8px", "padding": "12px 24px", "font_weight": 600}}
+      }},
+      "code_hints": {{"primary": "bg-purple-600 text-white px-6 py-3 rounded-lg"}},
+      "narratives": {{
+        "design_thinking": "Why this component looks this way",
+        "variant_system": "How variants differ"
+      }},
+      "source": "vision",
+      "confidence": 0.8
+    }}
+  ],
+  "total_components": 5,
+  "total_variants": 10
+}}
+
+CRITICAL: 
+- Return ONLY the JSON object
+- Start with {{ and end with }}
+- No markdown code blocks
+- No explanatory text before or after
+- All strings must be valid JSON (use double quotes, escape special characters)
+"""
+        
+        user_prompt = "Identify all UI components in this design. Return ONLY valid JSON, no markdown blocks, no extra text."
+        
+        # Use Gemini 2.5 Flash for vision analysis (cheaper, excellent vision performance)
+        max_attempts = 5
+        last_error = None
+        
+        for attempt in range(1, max_attempts + 1):
+            try:
+                print(f"Component analysis attempt {attempt}/{max_attempts}...")
+                
+                response = await self.llm.generate(
+                    model="gemini-2.5-flash",
+                    messages=[
+                        Message(
+                            role=MessageRole.SYSTEM,
+                            content=system_prompt
+                        ),
+                        Message(
+                            role=MessageRole.USER,
+                            content=[
+                                ImageContent(
+                                    data=image_base64,
+                                    media_type=f"image/{image_format}"
+                                ),
+                                TextContent(text=user_prompt)
+                            ]
+                        )
+                    ],
+                    temperature=0.3,
+                    max_tokens=8000  # Increased for comprehensive component analysis
+                )
+                
+                # Extract JSON from response
+                response_text = response.text.strip()
+                
+                # DEBUG: Print response for troubleshooting
+                print(f"\n{'='*80}")
+                print(f"RAW RESPONSE (first 500 chars):")
+                print(response_text[:500])
+                print(f"{'='*80}\n")
+                
+                # Remove markdown code blocks with aggressive extraction
+                if '```json' in response_text:
+                    # Extract content between ```json and ```
+                    parts = response_text.split('```json')
+                    if len(parts) > 1:
+                        response_text = parts[1].split('```')[0].strip()
+                elif '```' in response_text:
+                    # Generic code block
+                    parts = response_text.split('```')
+                    if len(parts) >= 3:
+                        response_text = parts[1].strip()
+                
+                # Find JSON object - first { to last }
+                start_idx = response_text.find('{')
+                end_idx = response_text.rfind('}')
+                
+                if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
+                    last_error = "No JSON object found in response"
+                    print(f"Attempt {attempt} failed: {last_error}")
+                    print(f"Response preview: {response_text[:300]}")
+                    continue
+                
+                json_str = response_text[start_idx:end_idx+1]
+                
+                try:
+                    result = json.loads(json_str)
+                except json.JSONDecodeError as e:
+                    last_error = f"JSON parse error: {e}"
+                    print(f"Attempt {attempt} failed: {last_error}")
+                    print(f"JSON string preview: {json_str[:300]}")
+                    continue
+                
+                # Validate required fields
+                required_fields = ['inventory', 'component_system_philosophy']
+                missing_fields = [f for f in required_fields if f not in result]
+                
+                if missing_fields:
+                    last_error = f"Missing required fields: {missing_fields}"
+                    print(f"Attempt {attempt} failed: {last_error}")
+                    continue
+                
+                # Calculate totals if not provided
+                if 'total_components' not in result:
+                    result['total_components'] = len(result['inventory'])
+                if 'total_variants' not in result:
+                    result['total_variants'] = sum(len(comp.get('variants', [])) for comp in result['inventory'])
+                
+                # Success!
+                print(f"✓ Component analysis succeeded on attempt {attempt}")
+                return result
+                
+            except Exception as e:
+                last_error = f"Exception: {str(e)}"
+                print(f"Attempt {attempt} failed with exception: {e}")
+                traceback.print_exc()
+                continue
+        
+        # All attempts failed - return safe fallback
+        print(f"❌ All {max_attempts} component analysis attempts failed. Last error: {last_error}")
+        return {
+            "component_system_philosophy": f"Analysis failed: {last_error}",
+            "cross_component_patterns": "Unable to analyze",
+            "notable_absences": "Unable to analyze",
+            "inventory": [],
+            "total_components": 0,
+            "total_variants": 0
         }
 
 
@@ -1241,3 +1440,23 @@ async def analyze_image_usage_from_image(
     """
     analyzer = VisionAnalyzer()
     return await analyzer.analyze_image_usage(image_bytes, image_format)
+
+
+async def analyze_components_from_image(
+    image_bytes: bytes,
+    image_format: str = "png",
+    figma_inventory: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """
+    Analyze component vocabulary from image using vision LLM.
+    
+    Args:
+        image_bytes: Image data as bytes
+        image_format: Image format (png, jpg, webp)
+        figma_inventory: Optional component inventory from Figma parsing
+    
+    Returns:
+        Dict with component inventory, properties, and rich narratives
+    """
+    analyzer = VisionAnalyzer()
+    return await analyzer.analyze_components(image_bytes, image_format, figma_inventory)

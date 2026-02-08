@@ -9,9 +9,9 @@ from .pass_1_structure import Pass1Structure, run_pass_1
 from .pass_2_surface import Pass2Surface, run_pass_2
 from .pass_3_typography import Pass3Typography, run_pass_3
 from .pass_4_image_usage import Pass4ImageUsage, run_pass_4
+from .pass_5_components import Pass5Components, run_pass_5
 
 # TODO: Add other passes as they're implemented
-# from .pass_5_components import Pass5Components, run_pass_5
 # from .pass_6_personality import Pass6Personality, run_pass_6
 
 __all__ = [
@@ -34,6 +34,10 @@ __all__ = [
     # Pass 4
     'Pass4ImageUsage',
     'run_pass_4',
+    
+    # Pass 5
+    'Pass5Components',
+    'run_pass_5',
     
     # TODO: Add other passes
 ]
