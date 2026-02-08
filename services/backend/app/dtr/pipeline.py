@@ -537,6 +537,100 @@ async def extract_pass_5_only(
         raise
 
 
+async def extract_pass_6_only(
+    resource_id: str,
+    taste_id: str,
+    image_bytes: Optional[bytes] = None,
+    image_format: str = "png",
+    progress_callback: Optional[ProgressCallback] = None
+) -> Dict[str, Any]:
+    """
+    Extract Pass 6 (personality synthesis) - MUST run after Pass 1-5
+    
+    Pass 6 synthesizes all previous passes into a complete, self-contained DTR.
+    
+    Args:
+        resource_id: Resource UUID
+        taste_id: Taste UUID
+        image_bytes: Original design image (highly recommended)
+        image_format: Image format
+        progress_callback: Optional async callback for progress updates
+    
+    Returns:
+        Complete DTR from Pass 6
+    """
+    try:
+        # Update status
+        save_extraction_status(
+            resource_id,
+            status="processing",
+            current_pass="pass_6_personality"
+        )
+        
+        # Report progress
+        if progress_callback:
+            await progress_callback("pass-6", "Synthesizing personality and taste...")
+        
+        # Load Pass 1-5 results (Pass 6 depends on them)
+        print(f"📂 Loading Pass 1-5 results for synthesis...")
+        
+        pass_1_result = load_pass_result(resource_id, "pass_1_structure")
+        pass_2_result = load_pass_result(resource_id, "pass_2_surface")
+        pass_3_result = load_pass_result(resource_id, "pass_3_typography")
+        pass_4_result = load_pass_result(resource_id, "pass_4_image_usage")
+        pass_5_result = load_pass_result(resource_id, "pass_5_components")
+        
+        # Verify we have at least some results
+        if not any([pass_1_result, pass_2_result, pass_3_result, pass_4_result, pass_5_result]):
+            raise ValueError("Pass 6 requires at least one previous pass to be completed")
+        
+        print(f"✅ Loaded {sum([1 for r in [pass_1_result, pass_2_result, pass_3_result, pass_4_result, pass_5_result] if r])} pass results")
+        
+        # Run Pass 6
+        from .passes import run_pass_6
+        result = await run_pass_6(
+            resource_id=resource_id,
+            taste_id=taste_id,
+            image_bytes=image_bytes,
+            image_format=image_format,
+            pass_1_result=pass_1_result,
+            pass_2_result=pass_2_result,
+            pass_3_result=pass_3_result,
+            pass_4_result=pass_4_result,
+            pass_5_result=pass_5_result
+        )
+        
+        # Save result
+        save_pass_result(
+            resource_id,
+            "pass_6_complete_dtr",
+            result
+        )
+        
+        # Update status to completed with base quality tier
+        save_extraction_status(
+            resource_id,
+            status="completed",
+            current_pass="pass_6_personality",
+            quality_tier="base"
+        )
+        
+        if progress_callback:
+            await progress_callback("pass-6", "Complete DTR synthesis finished - Base tier achieved!")
+        
+        return result
+    
+    except Exception as e:
+        # Update status to failed
+        save_extraction_status(
+            resource_id,
+            status="failed",
+            current_pass="pass_6_personality",
+            error=str(e)
+        )
+        raise
+
+
 async def extract_all_passes_parallel(
     resource_id: str,
     taste_id: str,

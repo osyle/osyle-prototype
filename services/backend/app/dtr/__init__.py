@@ -10,6 +10,7 @@ Public API:
 - extract_pass_3_only(): Run only Pass 3
 - extract_pass_4_only(): Run only Pass 4
 - extract_pass_5_only(): Run only Pass 5
+- extract_pass_6_only(): Run only Pass 6 (personality synthesis)
 - extract_all_passes_parallel(): Run Passes 1-5 in parallel
 - load_pass_result(): Load saved pass results
 - load_complete_dtr(): Load complete DTR
@@ -21,6 +22,7 @@ from .pipeline import (
     extract_pass_3_only,
     extract_pass_4_only,
     extract_pass_5_only,
+    extract_pass_6_only,
     extract_all_passes_parallel,
     ExtractionPipeline
 )
@@ -38,9 +40,10 @@ from .schemas import (
     Pass3TypographyDTR,
     Pass4ImageUsageDTR,
     Pass5ComponentsDTR,
+    Pass6CompleteDTR,
     CompleteDTR
 )
-from .passes import run_pass_1, run_pass_2, run_pass_3, run_pass_4, run_pass_5
+from .passes import run_pass_1, run_pass_2, run_pass_3, run_pass_4, run_pass_5, run_pass_6
 
 __version__ = "0.1.0"
 
@@ -52,6 +55,7 @@ __all__ = [
     'extract_pass_3_only',
     'extract_pass_4_only',
     'extract_pass_5_only',
+    'extract_pass_6_only',
     'extract_all_passes_parallel',
     
     # Pipeline
@@ -71,6 +75,7 @@ __all__ = [
     'Pass3TypographyDTR',
     'Pass4ImageUsageDTR',
     'Pass5ComponentsDTR',
+    'Pass6CompleteDTR',
     'CompleteDTR',
     
     # Direct pass execution
@@ -78,5 +83,6 @@ __all__ = [
     'run_pass_2',
     'run_pass_3',
     'run_pass_4',
-    'run_pass_5'
+    'run_pass_5',
+    'run_pass_6'
 ]

@@ -214,7 +214,8 @@ def save_extraction_status(
     resource_id: str,
     status: str,
     current_pass: Optional[str] = None,
-    error: Optional[str] = None
+    error: Optional[str] = None,
+    quality_tier: Optional[str] = None
 ):
     """
     Save extraction status
@@ -224,6 +225,7 @@ def save_extraction_status(
         status: Status string (pending, processing, completed, failed)
         current_pass: Current pass being processed
         error: Error message if failed
+        quality_tier: Quality tier (base, corrected, approved) - set when Pass 6 completes
     """
     resource_dir = get_resource_dir(resource_id)
     
@@ -232,6 +234,7 @@ def save_extraction_status(
         "status": status,
         "current_pass": current_pass,
         "error": error,
+        "quality_tier": quality_tier,
         "updated_at": datetime.utcnow().isoformat()
     }
     

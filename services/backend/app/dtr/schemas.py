@@ -479,43 +479,163 @@ class Pass5ComponentsDTR(BaseModel):
 
 
 # ============================================================================
-# PASS 6: PERSONALITY (TODO - was Pass 5)
+# PASS 6: COMPLETE DTR (Personality Synthesis + Consolidated Tokens)
 # ============================================================================
 
-class Pass6PersonalityDTR(BaseModel):
-    """Pass 6: Personality and Philosophy - TODO"""
-    pass
+class DecisionHeuristics(BaseModel):
+    """Designer's decision-making heuristics"""
+    complexity_approach: str = Field(..., description="How designer handles complex information: simplify vs organize")
+    drama_vs_usability: str = Field(..., description="Balance between visual drama and usability")
+    density_preference: str = Field(..., description="Spacing density preferences")
+    color_philosophy: str = Field(..., description="Approach to color usage")
+    spacing_philosophy: str = Field(..., description="Spatial reasoning patterns")
+    typography_approach: str = Field(..., description="Typographic decision patterns")
+
+
+class SignatureObsession(BaseModel):
+    """A pattern that appears with unusual consistency"""
+    pattern: str = Field(..., description="The obsessive pattern (e.g., 'blur(96px) on every card')")
+    frequency: str = Field(..., description="How often it appears")
+    functional_or_aesthetic: str = Field(..., description="Is this functional or purely aesthetic?")
+    application_rule: str = Field(..., description="When and how to apply this pattern")
+
+
+class RuleBreaking(BaseModel):
+    """Deliberate violation of design conventions"""
+    convention_violated: str = Field(..., description="What design convention is being broken")
+    what_designer_does: str = Field(..., description="What the designer does instead")
+    inferred_intent: str = Field(..., description="Why they might be breaking this rule")
+    application_contexts: str = Field(..., description="Where to apply this rule-breaking")
+
+
+class PersonalitySynthesis(BaseModel):
+    """Pass 6's unique contribution: personality analysis"""
+    design_lineage: str = Field(..., description="Multi-paragraph analysis of design traditions and influences")
+    emotional_register: str = Field(..., description="Multi-paragraph description of intended emotional response")
+    decision_heuristics: DecisionHeuristics
+    signature_obsessions: List[SignatureObsession] = Field(default_factory=list)
+    deliberate_rule_breaking: List[RuleBreaking] = Field(default_factory=list)
+    notable_absences: List[str] = Field(default_factory=list, description="What the designer never does")
+
+
+class CrossCuttingPatterns(BaseModel):
+    """Synthesized narratives from Pass 1-5"""
+    spatial_philosophy: str = Field(..., description="From Pass 1: How designer thinks about space")
+    color_relationships: str = Field(..., description="From Pass 2: How colors interact")
+    typography_philosophy: str = Field(..., description="From Pass 3: How designer approaches typography")
+    component_system_philosophy: str = Field(..., description="From Pass 5: How designer thinks about components")
+    image_integration_approach: str = Field(..., description="From Pass 4: How imagery is integrated")
+
+
+class WhenToPrioritize(BaseModel):
+    """Guidance on priority trade-offs"""
+    structure_over_style: str = Field(..., description="When to prioritize structural clarity")
+    consistency_over_novelty: str = Field(..., description="When to maintain consistency vs innovate")
+    usability_over_aesthetics: str = Field(..., description="When to prioritize function vs form")
+
+
+class AmbiguityResolution(BaseModel):
+    """How to handle ambiguous situations"""
+    missing_element_approach: str = Field(..., description="How to handle elements not in reference designs")
+    conflicting_patterns: str = Field(..., description="How to resolve pattern conflicts")
+    edge_cases: str = Field(..., description="Guidance for unusual situations")
+
+
+class ConfidenceByDomain(BaseModel):
+    """Confidence scores per design domain"""
+    colors: float = Field(..., ge=0.0, le=1.0)
+    typography: float = Field(..., ge=0.0, le=1.0)
+    spacing: float = Field(..., ge=0.0, le=1.0)
+    components: float = Field(..., ge=0.0, le=1.0)
+    overall: float = Field(..., ge=0.0, le=1.0)
+
+
+class GenerationGuidance(BaseModel):
+    """Guidance for applying this taste in generation"""
+    when_to_prioritize: WhenToPrioritize
+    ambiguity_resolution: AmbiguityResolution
+    confidence_by_domain: ConfidenceByDomain
+
+
+class ExactTokens(BaseModel):
+    """Consolidated exact tokens from Pass 1-5 for easy access"""
+    # From Pass 2
+    colors: Optional[ColorSystem] = None
+    materials: Optional[MaterialSystem] = None
+    
+    # From Pass 3
+    typography: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Typography tokens: families, sizes, weights, line_heights, letter_spacing"
+    )
+    
+    # From Pass 1
+    spacing: Optional[SpacingSchema] = None
+    
+    # From Pass 5
+    components: Optional[List[ComponentInventoryItem]] = Field(default_factory=list)
+    
+    # From Pass 4
+    image_usage: Optional[Dict[str, Any]] = None
+
+
+class Pass6CompleteDTR(BaseModel):
+    """
+    Pass 6: Complete DTR Synthesis
+    
+    Self-contained representation that includes:
+    1. Exact tokens (consolidated from Pass 1-5)
+    2. Cross-cutting patterns (narratives from Pass 1-5)
+    3. Personality synthesis (Pass 6's unique contribution)
+    4. Generation guidance
+    
+    This single output can be used alone for UI generation.
+    """
+    # Metadata
+    resource_id: str
+    taste_id: str
+    authority: Literal["synthesis"] = "synthesis"
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Overall synthesis confidence")
+    created_at: str
+    
+    # Part 1: Consolidated exact tokens (from Pass 1-5)
+    exact_tokens: ExactTokens
+    
+    # Part 2: Cross-cutting patterns (from Pass 1-5 narratives)
+    cross_cutting_patterns: CrossCuttingPatterns
+    
+    # Part 3: Personality synthesis (Pass 6 unique contribution)
+    personality: PersonalitySynthesis
+    
+    # Part 4: Generation guidance
+    generation_guidance: GenerationGuidance
+
 
 
 # ============================================================================
-# PASS 5: PERSONALITY (TODO)
-# ============================================================================
-
-class Pass5PersonalityDTR(BaseModel):
-    """Pass 5: Personality and Philosophy - TODO"""
-    pass
-
-
-# ============================================================================
-# COMPLETE DTR (TODO)
+# COMPLETE DTR (Wrapper for Pass 6 Complete DTR)
 # ============================================================================
 
 class CompleteDTR(BaseModel):
     """
     Complete DTR from all passes
     
-    This will be populated after all passes are implemented.
+    Note: Pass6CompleteDTR is now the self-contained complete DTR.
+    This wrapper maintains backward compatibility while individual
+    pass outputs are still saved separately for debugging/reproduction.
     """
     resource_id: str
     taste_id: str
     
-    # Pass outputs
+    # Pass outputs (individual passes, saved separately)
     pass_1_structure: Optional[Pass1StructureDTR] = None
     pass_2_surface: Optional[Pass2SurfaceDTR] = None
     pass_3_typography: Optional[Pass3TypographyDTR] = None
     pass_4_image_usage: Optional[Pass4ImageUsageDTR] = None
     pass_5_components: Optional[Pass5ComponentsDTR] = None
-    pass_6_personality: Optional[Pass6PersonalityDTR] = None
+    
+    # Pass 6: Complete DTR (self-contained, used for generation)
+    pass_6_complete: Optional[Pass6CompleteDTR] = None
     
     # Metadata
     extraction_tier: Literal["base", "corrected", "approved"] = "base"

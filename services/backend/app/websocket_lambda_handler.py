@@ -488,6 +488,30 @@ def handle_build_dtr(data: Dict[str, Any], apigw_management: Any, connection_id:
             print(f"   Components found: {pass_5_result.get('total_components')}")
             print(f"   Variants found: {pass_5_result.get('total_variants')}")
             
+            # NOW run Pass 6 (personality synthesis) - depends on Pass 1-5
+            print(f"🎨 Starting Pass 6: Personality synthesis...")
+            send_message(apigw_management, connection_id, {
+                "type": "progress",
+                "stage": "pass-6",
+                "message": "Synthesizing complete DTR..."
+            })
+            
+            from app.dtr import extract_pass_6_only
+            
+            pass_6_result = await extract_pass_6_only(
+                resource_id=resource_id,
+                taste_id=taste_id,
+                image_bytes=image_bytes,
+                image_format=image_format
+            )
+            
+            print(f"✅ Pass 6 extraction completed!")
+            print(f"   Authority: {pass_6_result.get('authority')}")
+            print(f"   Confidence: {pass_6_result.get('confidence')}")
+            print(f"   Obsessions detected: {len(pass_6_result.get('personality', {}).get('signature_obsessions', []))}")
+            print(f"   Rule-breaking patterns: {len(pass_6_result.get('personality', {}).get('deliberate_rule_breaking', []))}")
+            print(f"   Quality tier: base")
+            
             # Send completion
             send_message(apigw_management, connection_id, {
                 "type": "complete",
@@ -500,6 +524,7 @@ def handle_build_dtr(data: Dict[str, Any], apigw_management: Any, connection_id:
                     "pass_3_completed": True,
                     "pass_4_completed": True,
                     "pass_5_completed": True,
+                    "pass_6_completed": True,
                     "pass_1_authority": pass_1_result.get("authority"),
                     "pass_1_confidence": pass_1_result.get("confidence"),
                     "pass_2_authority": pass_2_result.get("authority"),
@@ -510,6 +535,9 @@ def handle_build_dtr(data: Dict[str, Any], apigw_management: Any, connection_id:
                     "pass_4_confidence": pass_4_result.get("confidence"),
                     "pass_5_authority": pass_5_result.get("authority"),
                     "pass_5_confidence": pass_5_result.get("confidence"),
+                    "pass_6_authority": pass_6_result.get("authority"),
+                    "pass_6_confidence": pass_6_result.get("confidence"),
+                    "quality_tier": "base",  # Pass 6 completion achieves base tier
                     "extraction_time_ms": (
                         pass_1_result.get("extraction_time_ms", 0) + 
                         pass_2_result.get("extraction_time_ms", 0) +
