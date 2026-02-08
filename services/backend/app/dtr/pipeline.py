@@ -6,7 +6,7 @@ Handles progress tracking, error handling, and result storage.
 """
 from typing import Dict, Any, Optional, Callable, Awaitable
 import asyncio
-from .passes import run_pass_1, run_pass_2, run_pass_3, run_pass_4
+from .passes import run_pass_1, run_pass_2, run_pass_3, run_pass_4, Pass4ImageUsage
 from .storage import (
     save_pass_result,
     save_complete_dtr,
@@ -418,12 +418,13 @@ async def extract_pass_4_only(
         if progress_callback:
             await progress_callback("pass-4", "Analyzing image usage patterns...")
         
-        # Run Pass 4
-        result = await run_pass_4(
+        # Run Pass 4 (pass resource_id for asset extraction)
+        pass_4 = Pass4ImageUsage()
+        pass_4.resource_id = resource_id  # Set resource_id for asset extraction
+        result = await pass_4.execute(
             figma_json=figma_json,
             image_bytes=image_bytes,
-            image_format=image_format,
-            resource_id=resource_id
+            image_format=image_format
         )
         
         # Convert to dict

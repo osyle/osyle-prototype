@@ -37,6 +37,7 @@ class FigmaParser:
         self.all_nodes = []
         self.frames = []
         self.text_nodes = []
+        self.image_nodes = []
         self.spacing_values = []
         
         # Collect all nodes with depth tracking
@@ -57,6 +58,14 @@ class FigmaParser:
             self.frames.append(node)
         elif node_type == 'TEXT':
             self.text_nodes.append(node)
+        
+        # Check for image fills (RECTANGLE or ELLIPSE with IMAGE fill)
+        if node_type in ['RECTANGLE', 'ELLIPSE', 'VECTOR']:
+            fills = node.get('fills', [])
+            for fill in fills:
+                if fill.get('type') == 'IMAGE':
+                    self.image_nodes.append(node)
+                    break
         
         # Collect spacing values from this node
         self._collect_spacing_from_node(node)
@@ -1340,6 +1349,81 @@ class FigmaParser:
             return 'body'
         else:
             return 'caption'
+    
+    # ========================================================================
+    # PASS 4: IMAGE USAGE PATTERNS
+    # ========================================================================
+    
+    def extract_images(self) -> Dict[str, Any]:
+        """
+        Main Pass 4 extraction method.
+        
+        Extracts all nodes with IMAGE fills (avatars, photos, illustrations).
+        Returns structured metadata about each image node.
+        
+        Returns:
+            Dict with image_nodes list containing position, size, treatment data
+        """
+        if not self.image_nodes:
+            return {
+                "has_images": False,
+                "image_nodes": []
+            }
+        
+        # Extract metadata for each image node
+        nodes_data = []
+        for node in self.image_nodes:
+            # Get image fill
+            image_fill = None
+            for fill in node.get('fills', []):
+                if fill.get('type') == 'IMAGE':
+                    image_fill = fill
+                    break
+            
+            if not image_fill:
+                continue
+            
+            # Extract positioning and sizing
+            node_data = {
+                "id": node.get('id', ''),  # Node ID for matching with exported images
+                "name": node.get('name', 'Unnamed'),
+                "type": node.get('type'),
+                "x": node.get('x', 0),
+                "y": node.get('y', 0),
+                "width": node.get('width', 0),
+                "height": node.get('height', 0),
+                "corner_radius": node.get('cornerRadius', 0),
+                "top_left_radius": node.get('topLeftRadius'),
+                "top_right_radius": node.get('topRightRadius'),
+                "bottom_left_radius": node.get('bottomLeftRadius'),
+                "bottom_right_radius": node.get('bottomRightRadius'),
+                "opacity": image_fill.get('opacity', 1.0),
+                "blend_mode": image_fill.get('blendMode', 'NORMAL'),
+                "image_ref": image_fill.get('imageRef', ''),
+                "scale_mode": image_fill.get('scaleMode', 'FILL'),
+                "visible": node.get('visible', True)
+            }
+            
+            # Extract effects (shadows, blurs, etc.)
+            effects = node.get('effects', [])
+            if effects:
+                node_data["effects"] = [
+                    {
+                        "type": effect.get('type'),
+                        "visible": effect.get('visible', True),
+                        "radius": effect.get('radius'),
+                        "color": effect.get('color')
+                    }
+                    for effect in effects
+                ]
+            
+            nodes_data.append(node_data)
+        
+        return {
+            "has_images": len(nodes_data) > 0,
+            "image_count": len(nodes_data),
+            "image_nodes": nodes_data
+        }
 
 
 # ============================================================================
@@ -1386,3 +1470,17 @@ def parse_figma_typography(figma_json: Dict[str, Any]) -> Dict[str, Any]:
     """
     parser = FigmaParser(figma_json)
     return parser.extract_typography()
+
+
+def parse_figma_images(figma_json: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Parse image usage from Figma JSON (Pass 4).
+    
+    Args:
+        figma_json: Root FRAME node from Figma plugin export
+    
+    Returns:
+        Dict with image_nodes list containing metadata for all IMAGE fills
+    """
+    parser = FigmaParser(figma_json)
+    return parser.extract_images()

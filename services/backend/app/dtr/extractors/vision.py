@@ -846,12 +846,9 @@ CRITICAL: All narrative fields must be rich, multi-sentence paragraphs that expl
         }
         
         # Call LLM with vision
-        # Using Claude Sonnet 4.5 instead of Gemini because:
-        # 1. Better structured output handling (proven in narrative generation)
-        # 2. More reliable JSON parsing with our robust extraction
-        # 3. Consistency - same model family as narrative generation
+        # Using Gemini 2.5 Flash - handles structured typography analysis well
         response = await self.llm.generate(
-            model="claude-sonnet-4.5",
+            model="gemini-2.5-flash",
             messages=[
                 Message(
                     role=MessageRole.SYSTEM,
@@ -902,6 +899,250 @@ CRITICAL: All narrative fields must be rich, multi-sentence paragraphs that expl
                 print(f"Failed to parse typography analysis: {inner_e}")
                 print(f"Response: {response.text[:500]}")
                 raise ValueError(f"Failed to parse typography analysis: {inner_e}")
+    
+    async def analyze_image_usage(
+        self,
+        image_bytes: bytes,
+        image_format: str = "png"
+    ) -> Dict[str, Any]:
+        """
+        Analyze image usage patterns from design.
+        
+        Uses Gemini 2.5 Flash to detect all imagery including:
+        - Avatar photos (profile pictures, user avatars)
+        - Product photos/illustrations (cars, items, etc.)
+        - Hero images and backgrounds
+        - Card thumbnails
+        - Decorative graphics and abstract shapes
+        
+        Args:
+            image_bytes: Image data as bytes
+            image_format: Image format (png, jpg, webp)
+        
+        Returns:
+            Dict with has_images, placements, content_style, rhythm data
+        """
+        # Encode image
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+        
+        # Build system prompt - EXPLICIT about what counts as imagery
+        system_prompt = """You are a design analyst specializing in understanding how designers use imagery.
+
+Analyze this design to identify ALL imagery including:
+
+**WHAT COUNTS AS IMAGERY (include ALL of these):**
+1. Profile photos and avatar images (circular user photos, profile pictures)
+2. Product photos and illustrations (cars, items, objects, devices)
+3. Hero images and background imagery
+4. Card thumbnails and content images
+5. Decorative graphics (gradient orbs, abstract shapes, patterns, blurred backgrounds)
+6. Icons that are photographic or illustrative (not simple line icons)
+7. Photographs of any kind (people, places, things)
+8. 3D renders and illustrations
+9. Complex graphics and visual elements
+
+**WHAT TO EXCLUDE (skip these):**
+- Simple line icons (hamburger menu, chevron, etc.)
+- Text and typography
+- Solid color fills (unless they're decorative graphic elements like gradient orbs)
+- Buttons and form controls without images
+
+For each image you identify, analyze:
+1. Its role/placement (avatar, product_photo, hero_image, decorative_graphic, etc.)
+2. Position and frequency
+3. Visual treatment (sizing, border_radius, shadows, overlays, etc.)
+4. Content style (photography type, illustration style, etc.)
+
+Return ONLY valid JSON matching this exact schema:
+{
+  "has_images": boolean,
+  "image_density": "minimal" | "sparse" | "moderate" | "heavy" | "dominant",
+  "placements": [
+    {
+      "role": "avatar | product_photo | hero_background | card_thumbnail | decorative_graphic | section_divider | inline_content",
+      "position": "description of position (e.g., 'top left corner', 'within user card row', 'bottom navigation')",
+      "frequency": "single instance | repeating (N instances)",
+      "context": "usage context description",
+      "coordinates": {"x": 0, "y": 0, "width": 100, "height": 100},
+      "treatment": {
+        "sizing": "full-bleed | contained | cover | contain | fixed",
+        "border_radius": "0 | 8px | 12px | 50% | etc.",
+        "overlay": "none | linear-gradient(...) | rgba(...)",
+        "border": "none | description",
+        "shadow": "none | description",
+        "mask": "rectangle | circle | custom",
+        "effects": ["blur", "desaturate", etc.]
+      }
+    }
+  ],
+  "content_style": {
+    "primary_type": "photography | 3d_renders | flat_illustrations | abstract_graphics | mixed",
+    "photography_details": {
+      "tone": "warm | cool | neutral",
+      "contrast": "high | low | medium",
+      "saturation": "vibrant | desaturated | muted",
+      "lighting": "bright | moody | natural | dramatic",
+      "subject_matter": "people | architecture | nature | abstract | products | mixed",
+      "processing": "natural | stylized | heavily edited"
+    },
+    "generation_prompt_hint": "Ready-to-use prompt for image generation APIs to match this style"
+  },
+  "rhythm": "Description of overall image usage pattern",
+  "image_to_text_ratio": "~X% visual, Y% text"
+}
+
+CRITICAL OUTPUT FORMAT: 
+- Your response must START with { and END with }
+- Do NOT include any text before or after the JSON
+- Do NOT wrap in markdown code blocks (no ```json or ```)
+- Do NOT include any preamble or explanation
+- Return ONLY the raw JSON object
+- Ensure all strings are properly escaped for JSON
+
+VALIDATION RULES:
+- If you find ANY images, set has_images: true
+- If placements array has items, has_images MUST be true
+- rhythm field MUST be a descriptive string about visual flow, NEVER an error message
+- All string values must be valid JSON strings with proper escaping
+- Avatar photos ARE imagery (count them!)
+- Product photos ARE imagery (count them!)
+- Decorative graphics ARE imagery (count them!)
+"""
+        
+        user_prompt = """Analyze all imagery in this design. Be thorough and generous - include:
+- ALL profile photos and avatars
+- ALL product images or illustrations  
+- ALL decorative graphics (even subtle ones like gradient orbs)
+- Hero images and backgrounds
+- Any other visual content that isn't plain text or simple icons
+
+CRITICAL: Return ONLY the JSON object. No markdown, no backticks, no explanation. Just pure JSON starting with { and ending with }."""
+        
+        # Retry logic for intermittent failures
+        max_attempts = 5
+        last_error = None
+        
+        for attempt in range(1, max_attempts + 1):
+            try:
+                print(f"Vision analysis attempt {attempt}/{max_attempts}...")
+                
+                # Use Gemini 2.5 Flash (cheaper, faster) with retries instead of Claude
+                response = await self.llm.generate(
+                    model="gemini-2.5-flash",
+                    messages=[
+                        Message(role=MessageRole.SYSTEM, content=system_prompt),
+                        Message(
+                            role=MessageRole.USER,
+                            content=[
+                                ImageContent(
+                                    data=image_base64,
+                                    media_type=f"image/{image_format}"
+                                ),
+                                TextContent(text=user_prompt)
+                            ]
+                        )
+                    ],
+                    max_tokens=4096,
+                    temperature=0.2
+                )
+                
+                # Parse response
+                import json
+                import re
+                
+                # Safety check
+                if not response or not hasattr(response, 'text'):
+                    last_error = "Invalid response from LLM"
+                    print(f"Attempt {attempt} failed: {last_error}")
+                    continue
+                
+                # Try structured output first
+                if hasattr(response, 'structured_output') and response.structured_output:
+                    result = response.structured_output
+                else:
+                    # Fallback: parse from text with aggressive extraction
+                    text = response.text.strip()
+                    
+                    # Remove markdown code blocks
+                    if '```json' in text:
+                        # Extract content between ```json and ```
+                        parts = text.split('```json')
+                        if len(parts) > 1:
+                            text = parts[1].split('```')[0].strip()
+                    elif '```' in text:
+                        # Generic code block
+                        parts = text.split('```')
+                        if len(parts) >= 3:
+                            text = parts[1].strip()
+                    
+                    # Remove any leading/trailing text before/after JSON
+                    # Find first { and last }
+                    start = text.find('{')
+                    end = text.rfind('}')
+                    
+                    if start != -1 and end != -1 and end > start:
+                        text = text[start:end+1]
+                    
+                    try:
+                        result = json.loads(text)
+                    except json.JSONDecodeError as e:
+                        last_error = f"JSON parse error: {e}"
+                        print(f"Attempt {attempt} failed: {last_error}")
+                        print(f"Response preview: {response.text[:300]}")
+                        continue
+                
+                # Validate result quality
+                if not isinstance(result, dict):
+                    last_error = "Result is not a dict"
+                    print(f"Attempt {attempt} failed: {last_error}")
+                    continue
+                
+                # Critical validation: if placements exist, has_images must be true
+                placements = result.get('placements', [])
+                has_images = result.get('has_images', False)
+                
+                if len(placements) > 0 and not has_images:
+                    # Auto-fix: model found images but said has_images: false
+                    print(f"Auto-fixing: Found {len(placements)} placements but has_images was false")
+                    result['has_images'] = True
+                
+                # Check for minimal required fields
+                required_fields = ['has_images', 'placements']
+                missing_fields = [f for f in required_fields if f not in result]
+                
+                if missing_fields:
+                    last_error = f"Missing required fields: {missing_fields}"
+                    print(f"Attempt {attempt} failed: {last_error}")
+                    continue
+                
+                # Check if rhythm field has error message (common failure pattern)
+                rhythm = result.get('rhythm', '')
+                if 'unable to analyze' in rhythm.lower() or 'parsing error' in rhythm.lower() or 'analysis failed' in rhythm.lower():
+                    last_error = f"Rhythm field contains error message: {rhythm[:100]}"
+                    print(f"Attempt {attempt} failed: {last_error}")
+                    continue
+                
+                # Success! Return the result
+                print(f"✓ Vision analysis succeeded on attempt {attempt}")
+                return result
+                
+            except Exception as e:
+                last_error = f"Exception: {str(e)}"
+                print(f"Attempt {attempt} failed with exception: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        # All attempts failed - return safe fallback
+        print(f"❌ All {max_attempts} vision analysis attempts failed. Last error: {last_error}")
+        return {
+            "has_images": False,
+            "image_density": "unknown",
+            "placements": [],
+            "content_style": None,
+            "rhythm": f"Analysis failed after {max_attempts} attempts: {last_error}",
+            "image_to_text_ratio": None
+        }
 
 
 # ============================================================================
@@ -982,3 +1223,21 @@ async def analyze_typography_from_image(
     """
     analyzer = VisionAnalyzer()
     return await analyzer.analyze_typography(image_bytes, image_format)
+
+
+async def analyze_image_usage_from_image(
+    image_bytes: bytes,
+    image_format: str = "png"
+) -> Dict[str, Any]:
+    """
+    Analyze image usage patterns from image using vision LLM.
+    
+    Args:
+        image_bytes: Image data as bytes
+        image_format: Image format (png, jpg, webp)
+    
+    Returns:
+        Dict with has_images, placements, content_style, rhythm data
+    """
+    analyzer = VisionAnalyzer()
+    return await analyzer.analyze_image_usage(image_bytes, image_format)

@@ -116,16 +116,24 @@ async function handleExport(exportJson, exportPng) {
 
     figma.ui.postMessage({
       type: "progress",
-      message: `Exporting ${imageNodes.length} images...`,
+      message: `Found ${imageNodes.length} images, exporting at reduced scale...`,
     });
 
     for (let i = 0; i < imageNodes.length; i++) {
       const imgNode = imageNodes[i];
       try {
+        // CRITICAL: Export at 0.25x scale to avoid memory crashes
+        // Full resolution images (via getBytesAsync) are 4MB+ each and crash Figma
+        // 0.25x scale reduces file size by ~16x while preserving usability
         const imgData = await imgNode.exportAsync({
           format: "PNG",
-          constraint: { type: "SCALE", value: 2 },
+          constraint: { type: "SCALE", value: 0.25 },
         });
+
+        if (!imgData || imgData.length === 0) {
+          console.error(`Empty image data for node ${imgNode.id}`);
+          continue;
+        }
 
         // Convert to base64
         const base64 = arrayBufferToBase64(imgData);
@@ -238,7 +246,7 @@ function findImageNodes(node) {
   const imageNodes = [];
 
   function traverse(n) {
-    // Check if this node has an IMAGE fill
+    // Find nodes with IMAGE fills (backgrounds, masked images, etc.)
     if ("fills" in n && n.fills !== figma.mixed && Array.isArray(n.fills)) {
       for (const fill of n.fills) {
         if (fill.type === "IMAGE" && fill.visible !== false) {

@@ -1,304 +1,127 @@
 """
 Pass 4: Image Usage Patterns
 
-Analyzes how and where the designer uses imagery - photographs, illustrations,
-3D renders, abstract graphics. Captures placement patterns, visual treatments,
-content style, and overall image density.
-
-This is a single-step vision analysis pass (no agentic loop required).
+Analyzes how the designer uses imagery - photographs, illustrations,
+graphics, avatars - in their designs.
 """
 from typing import Dict, Any, Optional, List
 import json
 import os
 import base64
-from io import BytesIO
-from PIL import Image as PILImage
+from datetime import datetime
 from .base import BasePass, PassRegistry
-from ..schemas import (
-    Pass4ImageUsageDTR,
-    ImagePlacement,
-    ImageTreatment,
-    ContentStyle,
-    PhotographyDetails
-)
-from app.llm import LLMService, Message, MessageRole, ImageContent, TextContent
+from app.llm import LLMService, Message, MessageRole
+from app.dtr.schemas import Pass4ImageUsageDTR
+from app.dtr.extractors.figma_parser import parse_figma_images
+from app.dtr.extractors import analyze_image_usage_from_image
 
 
 class Pass4ImageUsage(BasePass):
     """
     Pass 4: Image Usage Patterns
     
-    Analyzes imagery usage in the design to understand the designer's
-    image philosophy - where images appear, how they're treated,
-    what style of imagery is used, and overall image density.
+    Uses centralized vision analysis + Figma metadata extraction + asset extraction.
     """
     
     def __init__(self):
         super().__init__()
         self.llm = LLMService()
+        self.resource_id: Optional[str] = None  # Set by pipeline for asset extraction
     
     async def execute(
         self,
         figma_json: Optional[Dict[str, Any]] = None,
         image_bytes: Optional[bytes] = None,
         image_format: str = "png",
-        prev_passes: Optional[Dict[str, Any]] = None,
-        resource_id: Optional[str] = None
+        prev_passes: Optional[Dict[str, Any]] = None
     ) -> Pass4ImageUsageDTR:
         """
-        Execute Pass 4: Image Usage Patterns
+        Execute Pass 4 image usage extraction.
+        
+        Strategy:
+        1. Use centralized vision analysis (analyze_image_usage_from_image)
+        2. Extract Figma image metadata from JSON
+        3. Merge vision + Figma data
+        4. Extract embedded image assets from Figma JSON
+        5. Generate narrative synthesis
         
         Args:
-            figma_json: Optional Figma JSON document
-            image_bytes: Image data (required for content analysis)
+            figma_json: Optional Figma JSON data
+            image_bytes: Optional image data (REQUIRED for vision analysis)
             image_format: Image format (png, jpg, webp)
-            prev_passes: Not used (Pass 4 is independent)
-            resource_id: Resource ID for asset storage path
+            prev_passes: Results from previous passes (unused in Pass 4)
         
         Returns:
             Pass4ImageUsageDTR with image usage analysis
         """
-        # Image is required for content analysis
-        if not image_bytes:
-            # Return minimal DTR if no image available
-            return self._create_no_images_dtr()
-        
-        # Start timing
         self._start_timing()
         
-        # Check if design has images (quick detection)
-        has_figma = figma_json is not None
+        # Image is required for this pass (vision-based)
+        if image_bytes is None:
+            return self._create_no_images_dtr()
         
-        # Extract Figma image metadata if available (parallel with vision)
-        figma_image_nodes = None
-        if has_figma:
-            figma_image_nodes = self._extract_figma_image_nodes(figma_json)
+        # Extract embedded images from Figma JSON (for asset extraction later)
+        figma_image_exports = {}
+        figma_image_data = None
         
-        # Run vision analysis (primary source)
-        vision_analysis = await self._analyze_with_vision(image_bytes, image_format)
+        if figma_json:
+            # Get embedded images
+            figma_image_exports = figma_json.get("_imageExports", {})
+            if figma_image_exports:
+                print(f"Found {len(figma_image_exports)} embedded images in Figma JSON")
+            
+            # Parse image metadata
+            figma_image_data = parse_figma_images(figma_json)
+            image_count = figma_image_data.get("image_count", 0)
+            print(f"Found {image_count} image nodes in Figma JSON metadata")
         
-        # If no images detected, return early
-        if not vision_analysis.get("has_images", False):
-            elapsed = self._stop_timing()
-            return Pass4ImageUsageDTR(
-                authority="vision",
-                confidence=0.85,
-                has_images=False,
-                image_density="none",
-                placements=[],
-                content_style=None,
-                rhythm="No imagery present - text and UI components only",
-                narrative="This design does not use photographic images, illustrations, or decorative graphics beyond standard UI icons. The visual emphasis is entirely on typography, color, and layout structure.",
-                extracted_at=self._get_timestamp(),
-                extraction_time_ms=elapsed
+        # Run centralized vision analysis
+        print("Running centralized vision analysis...")
+        vision_analysis = await analyze_image_usage_from_image(image_bytes, image_format)
+        
+        # Safety check - ensure we have valid data
+        if not vision_analysis or not isinstance(vision_analysis, dict):
+            print("ERROR: Vision analysis returned None or invalid data")
+            return self._create_no_images_dtr()
+        
+        print(f"Vision analysis complete: has_images={vision_analysis.get('has_images')}, placements={len(vision_analysis.get('placements', []))}")
+        
+        # Determine authority and confidence
+        has_figma_images = figma_image_data and figma_image_data.get("has_images", False)
+        authority = "hybrid" if figma_json and has_figma_images else "vision"
+        confidence = 0.85 if authority == "hybrid" else 0.75
+        
+        # Merge Figma metadata if available
+        if has_figma_images:
+            vision_analysis = self._merge_figma_metadata(
+                vision_analysis,
+                figma_image_data.get("image_nodes", [])
             )
         
-        # Merge Figma metadata with vision analysis (if available)
-        if figma_image_nodes:
-            vision_analysis = self._merge_figma_metadata(vision_analysis, figma_image_nodes)
-            authority = "hybrid"
-            confidence = 0.85
-        else:
-            authority = "vision"
-            confidence = 0.75
-        
-        # Extract and save image assets (if resource_id provided)
-        if resource_id and vision_analysis.get("placements"):
-            await self._extract_image_assets(
-                image_bytes,
-                vision_analysis["placements"],
-                resource_id
+        # Extract image assets from embedded Figma data
+        if figma_image_exports and self.resource_id:
+            print(f"Extracting {len(figma_image_exports)} image assets...")
+            vision_analysis["placements"] = await self._extract_image_assets(
+                vision_analysis.get("placements", []),
+                figma_image_exports,
+                self.resource_id
             )
         
         # Generate narrative synthesis
         narrative = await self._generate_narrative(vision_analysis)
+        if not narrative or not isinstance(narrative, str):
+            narrative = "Image usage narrative could not be generated."
         vision_analysis["narrative"] = narrative
         
         # Add metadata
-        elapsed = self._stop_timing()
+        elapsed = self._end_timing()
         vision_analysis["authority"] = authority
         vision_analysis["confidence"] = confidence
-        vision_analysis["extracted_at"] = self._get_timestamp()
+        vision_analysis["extracted_at"] = datetime.utcnow().isoformat()
         vision_analysis["extraction_time_ms"] = elapsed
         
         # Validate and return
         return Pass4ImageUsageDTR(**vision_analysis)
-    
-    def _extract_figma_image_nodes(
-        self,
-        figma_json: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
-        """
-        Extract image nodes from Figma JSON
-        
-        Returns list of image node metadata with positions and properties.
-        """
-        image_nodes = []
-        
-        def walk_nodes(node: Dict[str, Any]):
-            """Recursively walk node tree"""
-            # Check if this node has image fills
-            if node.get("fills"):
-                for fill in node["fills"]:
-                    if fill.get("type") == "IMAGE":
-                        # Extract image metadata
-                        bounds = node.get("absoluteBoundingBox", {})
-                        image_nodes.append({
-                            "node_id": node.get("id"),
-                            "name": node.get("name", ""),
-                            "coordinates": {
-                                "x": bounds.get("x", 0),
-                                "y": bounds.get("y", 0),
-                                "width": bounds.get("width", 0),
-                                "height": bounds.get("height", 0)
-                            },
-                            "scale_mode": fill.get("scaleMode", "FILL"),
-                            "corner_radius": node.get("cornerRadius", 0),
-                            "effects": node.get("effects", [])
-                        })
-            
-            # Recurse to children
-            if "children" in node:
-                for child in node["children"]:
-                    walk_nodes(child)
-        
-        # Walk tree starting from document
-        if "document" in figma_json:
-            walk_nodes(figma_json["document"])
-        
-        return image_nodes
-    
-    async def _analyze_with_vision(
-        self,
-        image_bytes: bytes,
-        image_format: str
-    ) -> Dict[str, Any]:
-        """
-        Analyze image usage with vision model (primary analysis)
-        
-        Uses Gemini 2.5 Flash (best vision model) to detect:
-        - Image placements and roles
-        - Visual treatments
-        - Content style
-        - Overall density and rhythm
-        """
-        # Prepare system prompt
-        system_prompt = """You are a design analyst specializing in understanding how designers use imagery.
-
-Analyze this design to understand the designer's image usage philosophy.
-
-Identify:
-1. Every instance where images appear (not icons/logos, but actual imagery - photographs, illustrations, graphics)
-2. The placement pattern for each (hero background, card thumbnail, avatar, decorative graphic, etc.)
-3. How each image is visually treated (sizing, borders, overlays, aspect ratios, etc.)
-4. The style/content of the imagery (photography style, illustration style, etc.)
-5. Overall image density and rhythm
-
-Return ONLY valid JSON matching this exact schema:
-{
-  "has_images": boolean,
-  "image_density": "minimal" | "sparse" | "moderate" | "heavy" | "dominant",
-  "placements": [
-    {
-      "role": "hero_background | card_thumbnail | avatar | decorative_graphic | section_divider | inline_content | product_showcase",
-      "position": "description of position (e.g., 'top, full-width', 'within card grid')",
-      "frequency": "single instance | repeating (N instances)",
-      "context": "usage context description",
-      "treatment": {
-        "sizing": "full-bleed | contained | cover | contain | fixed aspect ratio",
-        "border_radius": "0 | 8px | 12px | 50% | etc.",
-        "overlay": "none | linear-gradient(...) | rgba(...)",
-        "border": "none | description",
-        "shadow": "none | description",
-        "mask": "rectangle | circle | custom",
-        "effects": ["blur", "desaturate", etc.]
-      }
-    }
-  ],
-  "content_style": {
-    "primary_type": "photography | 3d_renders | flat_illustrations | abstract_graphics | mixed",
-    "secondary_type": "optional secondary type if mixed",
-    "photography_details": {
-      "tone": "warm | cool | neutral",
-      "contrast": "high | low | medium",
-      "saturation": "vibrant | desaturated | muted",
-      "lighting": "bright | moody | natural | dramatic",
-      "subject_matter": "people | architecture | nature | abstract | products | mixed",
-      "processing": "natural | stylized | heavily edited"
-    },
-    "illustration_notes": "optional notes on illustration style",
-    "generation_prompt_hint": "Ready-to-use prompt for image generation APIs to match this style"
-  },
-  "rhythm": "Description of overall image usage pattern",
-  "image_to_text_ratio": "Approximate percentage split"
-}
-
-CRITICAL: 
-- Respond with ONLY JSON, no preamble, no markdown backticks
-- Distinguish between functional UI icons and actual imagery/graphics
-- If no imagery present, return has_images: false with empty placements
-- For photography_details, only include if primary_type is "photography"
-"""
-        
-        # Encode image as base64
-        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-        
-        # Call vision model (Gemini 2.5 Flash - same as other vision extractors)
-        response = await self.llm.generate(
-            model="gemini-2.5-flash",
-            messages=[
-                Message(role=MessageRole.SYSTEM, content=system_prompt),
-                Message(
-                    role=MessageRole.USER,
-                    content=[
-                        ImageContent(
-                            data=image_base64,
-                            media_type=f"image/{image_format}"
-                        ),
-                        TextContent(text="Analyze the image usage patterns in this design.")
-                    ]
-                )
-            ],
-            max_tokens=2000,
-            temperature=0.1
-        )
-        
-        # Extract and parse JSON
-        content = response.content[0].text if response.content else ""
-        
-        # Try to extract JSON from response
-        try:
-            # Clean response - remove markdown backticks if present
-            cleaned = content.strip()
-            if cleaned.startswith("```json"):
-                cleaned = cleaned[7:]
-            if cleaned.startswith("```"):
-                cleaned = cleaned[3:]
-            if cleaned.endswith("```"):
-                cleaned = cleaned[:-3]
-            cleaned = cleaned.strip()
-            
-            # Find JSON object
-            start = cleaned.find("{")
-            end = cleaned.rfind("}") + 1
-            if start != -1 and end > start:
-                cleaned = cleaned[start:end]
-            
-            data = json.loads(cleaned)
-            return data
-        
-        except json.JSONDecodeError as e:
-            # Fallback if JSON parsing fails
-            print(f"Failed to parse JSON from vision model: {e}")
-            print(f"Response was: {content}")
-            return {
-                "has_images": False,
-                "image_density": "unknown",
-                "placements": [],
-                "content_style": None,
-                "rhythm": "Unable to analyze - parsing error",
-                "image_to_text_ratio": None
-            }
     
     def _merge_figma_metadata(
         self,
@@ -306,127 +129,126 @@ CRITICAL:
         figma_nodes: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        Merge Figma metadata into vision analysis
+        Merge Figma metadata into vision analysis.
         
-        Enhances vision analysis with precise coordinates and properties from Figma.
+        Enhances vision-detected placements with exact coordinates from Figma.
         """
-        # If vision found no placements, try to add Figma nodes
-        if not vision_analysis.get("placements") and figma_nodes:
-            vision_analysis["placements"] = []
-            for node in figma_nodes:
-                vision_analysis["placements"].append({
-                    "role": "detected_in_figma",
-                    "position": f"x:{node['coordinates']['x']}, y:{node['coordinates']['y']}",
-                    "frequency": "single instance",
-                    "context": f"Figma node: {node['name']}",
-                    "coordinates": node["coordinates"],
-                    "treatment": {
-                        "sizing": node["scale_mode"].lower(),
-                        "border_radius": f"{node['corner_radius']}px",
-                        "overlay": "none",
-                        "border": "none",
-                        "shadow": "none",
-                        "mask": "rectangle",
-                        "effects": []
-                    }
-                })
+        placements = vision_analysis.get("placements", [])
         
-        # Otherwise, enhance vision placements with Figma coordinates
-        elif vision_analysis.get("placements") and figma_nodes:
-            # Try to match vision placements with Figma nodes
-            # Simple heuristic: match by approximate position/size
-            for placement in vision_analysis["placements"]:
-                # For now, just add coordinates to first few placements
-                # In production, would do smarter matching based on position
-                if len(figma_nodes) > 0 and not placement.get("coordinates"):
-                    node = figma_nodes.pop(0)
-                    placement["coordinates"] = node["coordinates"]
+        # For each vision-detected placement, try to match with Figma node
+        for placement in placements:
+            vision_coords = placement.get("coordinates", {})
+            
+            # Try to match by position/size similarity
+            best_match = None
+            best_distance = float('inf')
+            
+            for figma_node in figma_nodes:
+                # Calculate distance between vision coords and Figma coords
+                dx = abs(vision_coords.get("x", 0) - figma_node["x"])
+                dy = abs(vision_coords.get("y", 0) - figma_node["y"])
+                distance = dx + dy
+                
+                if distance < best_distance:
+                    best_distance = distance
+                    best_match = figma_node
+            
+            # If we found a good match (within 100px), enhance with Figma data
+            if best_match and best_distance < 100:
+                placement["coordinates"] = {
+                    "x": best_match["x"],
+                    "y": best_match["y"],
+                    "width": best_match["width"],
+                    "height": best_match["height"]
+                }
+                placement["treatment"]["border_radius"] = f"{best_match['corner_radius']}px"
+                placement["figma_name"] = best_match["name"]
+                placement["figma_node_id"] = best_match.get("id", "")  # For asset matching
         
         return vision_analysis
     
     async def _extract_image_assets(
         self,
-        source_image_bytes: bytes,
         placements: List[Dict[str, Any]],
+        figma_image_exports: Dict[str, str],
         resource_id: str
-    ):
+    ) -> List[Dict[str, Any]]:
         """
-        Extract and save individual image assets from detected placements
+        Extract and save image assets from Figma JSON.
         
-        Crops images from source and saves to /dtr_outputs/{resource_id}/assets/
+        The Figma plugin embeds exported images as base64 in figma.json
+        under the _imageExports key: { "node-id": "base64data", ... }
+        
+        This method extracts those images and saves them to the assets directory.
+        
+        Args:
+            placements: List of placement dicts from vision analysis
+            figma_image_exports: Dict mapping node IDs to base64 image data
+            resource_id: Resource ID for output directory
+        
+        Returns:
+            Updated placements list with asset_path filled in
         """
         try:
-            # Open source image
-            img = PILImage.open(BytesIO(source_image_bytes))
-            
-            # Create assets directory
-            # Using /home/claude/dtr_outputs for now (as per instruction)
-            base_dir = "/home/claude/dtr_outputs"
-            assets_dir = os.path.join(base_dir, resource_id, "assets")
+            assets_dir = f"/app/dtr_outputs/{resource_id}/assets"
             os.makedirs(assets_dir, exist_ok=True)
+            print(f"Created assets directory: {assets_dir}")
             
-            # Extract each placement that has coordinates
-            for idx, placement in enumerate(placements):
-                coords = placement.get("coordinates")
-                if not coords:
-                    continue
-                
+            # Save each embedded image
+            saved_images = {}
+            for node_id, base64_data in figma_image_exports.items():
                 try:
-                    # Crop region
-                    x = int(coords.get("x", 0))
-                    y = int(coords.get("y", 0))
-                    width = int(coords.get("width", 0))
-                    height = int(coords.get("height", 0))
+                    # Decode base64 to bytes
+                    img_bytes = base64.b64decode(base64_data)
                     
-                    # Skip if invalid dimensions
-                    if width <= 0 or height <= 0:
-                        continue
-                    
-                    # Ensure coordinates are within image bounds
-                    img_width, img_height = img.size
-                    x = max(0, min(x, img_width))
-                    y = max(0, min(y, img_height))
-                    width = min(width, img_width - x)
-                    height = min(height, img_height - y)
-                    
-                    if width <= 0 or height <= 0:
-                        continue
-                    
-                    cropped = img.crop((x, y, x + width, y + height))
-                    
-                    # Generate filename
-                    role = placement.get("role", "image").replace("_", "-")
-                    filename = f"{role}-{idx + 1}.png"
+                    # Save to assets directory
+                    filename = f"image-{node_id}.png"
                     filepath = os.path.join(assets_dir, filename)
                     
-                    # Save
-                    cropped.save(filepath)
+                    with open(filepath, 'wb') as f:
+                        f.write(img_bytes)
                     
-                    # Update placement with asset path (relative)
-                    placement["asset_path"] = f"assets/{filename}"
-                
+                    saved_images[node_id] = f"assets/{filename}"
+                    print(f"✓ Saved embedded image: {filepath}")
                 except Exception as e:
-                    print(f"Failed to extract image asset {idx}: {e}")
-                    continue
+                    print(f"✗ Failed to extract image {node_id}: {e}")
+            
+            print(f"Successfully extracted {len(saved_images)}/{len(figma_image_exports)} images")
+            
+            # Match placements to extracted images
+            matched_count = 0
+            for placement in placements:
+                figma_node_id = placement.get("figma_node_id")
+                if figma_node_id and figma_node_id in saved_images:
+                    placement["asset_path"] = saved_images[figma_node_id]
+                    matched_count += 1
+                    print(f"✓ Matched placement '{placement.get('role')}' to {saved_images[figma_node_id]}")
+            
+            print(f"Matched {matched_count}/{len(placements)} placements to assets")
+            return placements
         
         except Exception as e:
-            print(f"Failed to extract image assets: {e}")
+            print(f"ERROR in _extract_image_assets: {e}")
+            import traceback
+            traceback.print_exc()
+            return placements
     
     async def _generate_narrative(
         self,
         analysis_data: Dict[str, Any]
     ) -> str:
         """
-        Generate rich narrative synthesis from structured analysis
+        Generate rich narrative synthesis from structured analysis.
         
-        Uses Gemini for cost-efficiency (simpler task than typography analysis).
+        Uses Claude for high-quality synthesis.
         """
-        # Prepare analysis summary
-        summary = f"""Image Usage Analysis:
+        try:
+            # Prepare analysis summary
+            summary = f"""Image Usage Analysis:
 - Has images: {analysis_data.get('has_images')}
 - Density: {analysis_data.get('image_density')}
 - Number of placements: {len(analysis_data.get('placements', []))}
-- Content style: {analysis_data.get('content_style', {}).get('primary_type')}
+- Content style: {analysis_data.get('content_style', {}).get('primary_type') if analysis_data.get('content_style') else 'None'}
 - Rhythm: {analysis_data.get('rhythm')}
 
 Placements:
@@ -435,8 +257,8 @@ Placements:
 Content Style:
 {json.dumps(analysis_data.get('content_style', {}), indent=2)}
 """
-        
-        system_prompt = """You are a design critic analyzing a designer's image usage philosophy.
+            
+            system_prompt = """You are a design critic analyzing a designer's image usage philosophy.
 
 Given the structured analysis of image usage in a design, synthesize a rich narrative that explains:
 1. The designer's overall approach to imagery (sparingly vs heavily, decorative vs functional)
@@ -449,19 +271,31 @@ Write 2-3 paragraphs that capture the essence of this designer's image philosoph
 Be specific and insightful, not generic.
 
 Return ONLY the narrative text, no preamble."""
+            
+            response = await self.llm.generate(
+                model="claude-sonnet-4.5",  # Changed from gemini for consistency
+                messages=[
+                    Message(role=MessageRole.SYSTEM, content=system_prompt),
+                    Message(role=MessageRole.USER, content=summary)
+                ],
+                max_tokens=1000,  # Increased from 500 to prevent truncation
+                temperature=0.3
+            )
+            
+            # Claude responses use .text attribute
+            narrative = response.text if hasattr(response, 'text') else "No narrative generated."
+            
+            # Warn if narrative seems truncated
+            if len(narrative.strip()) < 100:
+                print(f"Warning: Narrative seems truncated (length: {len(narrative)})")
+            
+            return narrative.strip()
         
-        response = await self.llm.generate(
-            model="gemini-2.5-flash",
-            messages=[
-                Message(role=MessageRole.SYSTEM, content=system_prompt),
-                Message(role=MessageRole.USER, content=summary)
-            ],
-            max_tokens=500,
-            temperature=0.3
-        )
-        
-        narrative = response.content[0].text if response.content else "No narrative generated."
-        return narrative.strip()
+        except Exception as e:
+            print(f"ERROR in _generate_narrative: {e}")
+            import traceback
+            traceback.print_exc()
+            return "Image usage narrative could not be generated due to an error."
     
     def _create_no_images_dtr(self) -> Pass4ImageUsageDTR:
         """Create minimal DTR when no image is available"""
@@ -474,36 +308,26 @@ Return ONLY the narrative text, no preamble."""
             content_style=None,
             rhythm="No image available for analysis",
             narrative="Image analysis could not be performed - no image data provided.",
-            extracted_at=self._get_timestamp(),
+            extracted_at=datetime.utcnow().isoformat(),
             extraction_time_ms=0
         )
 
 
-
-# Register the pass
-PassRegistry.register("pass_4_image_usage", Pass4ImageUsage)
-
-
-# ============================================================================
-# CONVENIENCE FUNCTION
-# ============================================================================
-
+# Helper function for pipeline
 async def run_pass_4(
     figma_json: Optional[Dict[str, Any]] = None,
     image_bytes: Optional[bytes] = None,
-    image_format: str = "png",
-    resource_id: Optional[str] = None
+    image_format: str = "png"
 ) -> Pass4ImageUsageDTR:
     """
-    Run Pass 4: Image Usage Patterns
+    Run Pass 4 image usage extraction.
     
     Convenience function for running Pass 4 directly.
     
     Args:
         figma_json: Optional Figma JSON document
-        image_bytes: Image data (required for content analysis)
+        image_bytes: Optional image data
         image_format: Image format (png, jpg, webp)
-        resource_id: Resource ID for asset storage path
     
     Returns:
         Pass4ImageUsageDTR with image usage analysis
@@ -512,6 +336,5 @@ async def run_pass_4(
     return await pass_instance.execute(
         figma_json=figma_json,
         image_bytes=image_bytes,
-        image_format=image_format,
-        resource_id=resource_id
+        image_format=image_format
     )

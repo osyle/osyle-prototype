@@ -7,14 +7,16 @@ from .figma_parser import (
     FigmaParser,
     parse_figma_structure,
     parse_figma_surface,
-    parse_figma_typography
-)
+    parse_figma_typography,
+    parse_figma_images
+)   
 from .vision import (
     VisionAnalyzer, 
     analyze_structure_from_image, 
     validate_hierarchy,
     analyze_surface_from_image,
-    analyze_typography_from_image
+    analyze_typography_from_image,
+    analyze_image_usage_from_image
 )
 from .algorithmic import (
     k_means_color_clustering,
@@ -28,12 +30,14 @@ __all__ = [
     'parse_figma_structure',
     'parse_figma_surface',
     'parse_figma_typography',
-    
+    'parse_figma_images',
+
     # Vision analysis
     'VisionAnalyzer',
     'analyze_structure_from_image',
     'analyze_surface_from_image',
     'analyze_typography_from_image',
+    'analyze_image_usage_from_image',
     'validate_hierarchy',
     
     # Algorithmic CV (optional)
