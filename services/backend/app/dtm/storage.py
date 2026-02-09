@@ -6,6 +6,7 @@ import os
 import json
 import hashlib
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 from .schemas import (
     Pass7CompleteDTM,
@@ -15,18 +16,19 @@ from .schemas import (
 )
 
 
-# Base directory for DTM outputs
-DTM_OUTPUTS_DIR = os.path.join(os.getcwd(), "dtm_outputs")
+# Base directory for DTM outputs (mounted via Docker volume)
+# This maps to project/dtm_outputs in the host filesystem
+DTM_OUTPUTS_DIR = Path("/app/dtm_outputs")
 
 
-def ensure_dtm_directory(taste_id: str) -> str:
+def ensure_dtm_directory(taste_id: str) -> Path:
     """Ensure DTM output directory exists for a taste"""
-    taste_dir = os.path.join(DTM_OUTPUTS_DIR, taste_id)
-    os.makedirs(taste_dir, exist_ok=True)
+    taste_dir = DTM_OUTPUTS_DIR / taste_id
+    taste_dir.mkdir(parents=True, exist_ok=True)
     
     # Create subdirectories
-    os.makedirs(os.path.join(taste_dir, "fingerprints"), exist_ok=True)
-    os.makedirs(os.path.join(taste_dir, "subsets"), exist_ok=True)
+    (taste_dir / "fingerprints").mkdir(exist_ok=True)
+    (taste_dir / "subsets").mkdir(exist_ok=True)
     
     return taste_dir
 
@@ -46,26 +48,26 @@ def save_dtm(taste_id: str, dtm: Pass7CompleteDTM, resource_ids: List[str]) -> s
     dtm_dict = dtm.model_dump() if hasattr(dtm, 'model_dump') else dtm.dict()
     
     # Save latest version
-    latest_path = os.path.join(taste_dir, "complete_dtm_latest.json")
+    latest_path = taste_dir / "complete_dtm_latest.json"
     with open(latest_path, 'w') as f:
         json.dump(dtm_dict, f, indent=2)
     
     # Save timestamped version
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    versioned_path = os.path.join(taste_dir, f"complete_dtm_{timestamp}.json")
+    versioned_path = taste_dir / f"complete_dtm_{timestamp}.json"
     with open(versioned_path, 'w') as f:
         json.dump(dtm_dict, f, indent=2)
     
     print(f"✅ Saved DTM to {latest_path}")
-    return latest_path
+    return str(latest_path)
 
 
 def load_dtm(taste_id: str) -> Optional[Pass7CompleteDTM]:
     """Load complete DTM from filesystem"""
-    taste_dir = os.path.join(DTM_OUTPUTS_DIR, taste_id)
-    dtm_path = os.path.join(taste_dir, "complete_dtm_latest.json")
+    taste_dir = DTM_OUTPUTS_DIR / taste_id
+    dtm_path = taste_dir / "complete_dtm_latest.json"
     
-    if not os.path.exists(dtm_path):
+    if not dtm_path.exists():
         return None
     
     with open(dtm_path, 'r') as f:
@@ -76,16 +78,16 @@ def load_dtm(taste_id: str) -> Optional[Pass7CompleteDTM]:
 
 def dtm_exists(taste_id: str) -> bool:
     """Check if DTM exists for a taste"""
-    taste_dir = os.path.join(DTM_OUTPUTS_DIR, taste_id)
-    dtm_path = os.path.join(taste_dir, "complete_dtm_latest.json")
-    return os.path.exists(dtm_path)
+    taste_dir = DTM_OUTPUTS_DIR / taste_id
+    dtm_path = taste_dir / "complete_dtm_latest.json"
+    return dtm_path.exists()
 
 
 def delete_dtm(taste_id: str):
     """Delete all DTM outputs for a taste"""
-    taste_dir = os.path.join(DTM_OUTPUTS_DIR, taste_id)
+    taste_dir = DTM_OUTPUTS_DIR / taste_id
     
-    if os.path.exists(taste_dir):
+    if taste_dir.exists():
         import shutil
         shutil.rmtree(taste_dir)
         print(f"✅ Deleted DTM directory: {taste_dir}")
@@ -98,25 +100,25 @@ def delete_dtm(taste_id: str):
 def save_fingerprint(taste_id: str, fingerprint: StyleFingerprint) -> str:
     """Save style fingerprint for a resource"""
     taste_dir = ensure_dtm_directory(taste_id)
-    fingerprints_dir = os.path.join(taste_dir, "fingerprints")
+    fingerprints_dir = taste_dir / "fingerprints"
     
     # Convert to dict
     fp_dict = fingerprint.model_dump() if hasattr(fingerprint, 'model_dump') else fingerprint.dict()
     
     # Save
-    fp_path = os.path.join(fingerprints_dir, f"{fingerprint.resource_id}_fingerprint.json")
+    fp_path = fingerprints_dir / f"{fingerprint.resource_id}_fingerprint.json"
     with open(fp_path, 'w') as f:
         json.dump(fp_dict, f, indent=2)
     
-    return fp_path
+    return str(fp_path)
 
 
 def load_fingerprint(taste_id: str, resource_id: str) -> Optional[StyleFingerprint]:
     """Load style fingerprint for a resource"""
-    taste_dir = os.path.join(DTM_OUTPUTS_DIR, taste_id)
-    fp_path = os.path.join(taste_dir, "fingerprints", f"{resource_id}_fingerprint.json")
+    taste_dir = DTM_OUTPUTS_DIR / taste_id
+    fp_path = taste_dir / "fingerprints" / f"{resource_id}_fingerprint.json"
     
-    if not os.path.exists(fp_path):
+    if not fp_path.exists():
         return None
     
     with open(fp_path, 'r') as f:
@@ -127,10 +129,10 @@ def load_fingerprint(taste_id: str, resource_id: str) -> Optional[StyleFingerpri
 
 def load_all_fingerprints(taste_id: str) -> List[StyleFingerprint]:
     """Load all fingerprints for a taste"""
-    taste_dir = os.path.join(DTM_OUTPUTS_DIR, taste_id)
-    fingerprints_dir = os.path.join(taste_dir, "fingerprints")
+    taste_dir = DTM_OUTPUTS_DIR / taste_id
+    fingerprints_dir = taste_dir / "fingerprints"
     
-    if not os.path.exists(fingerprints_dir):
+    if not fingerprints_dir.exists():
         return []
     
     fingerprints = []
@@ -159,7 +161,7 @@ def compute_subset_hash(resource_ids: List[str]) -> str:
 def save_subset_dtm(taste_id: str, resource_ids: List[str], dtm: Pass7CompleteDTM) -> str:
     """Save subset DTM to cache"""
     taste_dir = ensure_dtm_directory(taste_id)
-    subsets_dir = os.path.join(taste_dir, "subsets")
+    subsets_dir = taste_dir / "subsets"
     
     # Compute hash
     subset_hash = compute_subset_hash(resource_ids)
@@ -168,7 +170,7 @@ def save_subset_dtm(taste_id: str, resource_ids: List[str], dtm: Pass7CompleteDT
     dtm_dict = dtm.model_dump() if hasattr(dtm, 'model_dump') else dtm.dict()
     
     # Save
-    subset_path = os.path.join(subsets_dir, f"{subset_hash}.json")
+    subset_path = subsets_dir / f"{subset_hash}.json"
     with open(subset_path, 'w') as f:
         json.dump(dtm_dict, f, indent=2)
     
@@ -176,16 +178,16 @@ def save_subset_dtm(taste_id: str, resource_ids: List[str], dtm: Pass7CompleteDT
     update_subset_cache_metadata(taste_id, resource_ids, subset_hash)
     
     print(f"✅ Cached subset DTM: {subset_hash}")
-    return subset_path
+    return str(subset_path)
 
 
 def load_subset_dtm(taste_id: str, resource_ids: List[str]) -> Optional[Pass7CompleteDTM]:
     """Load subset DTM from cache"""
     subset_hash = compute_subset_hash(resource_ids)
-    taste_dir = os.path.join(DTM_OUTPUTS_DIR, taste_id)
-    subset_path = os.path.join(taste_dir, "subsets", f"{subset_hash}.json")
+    taste_dir = DTM_OUTPUTS_DIR / taste_id
+    subset_path = taste_dir / "subsets" / f"{subset_hash}.json"
     
-    if not os.path.exists(subset_path):
+    if not subset_path.exists():
         return None
     
     with open(subset_path, 'r') as f:
@@ -201,7 +203,7 @@ def load_subset_dtm(taste_id: str, resource_ids: List[str]) -> Optional[Pass7Com
 def save_dtm_metadata(metadata: DTMMetadata):
     """Save DTM metadata"""
     taste_dir = ensure_dtm_directory(metadata.taste_id)
-    metadata_path = os.path.join(taste_dir, "dtm_metadata.json")
+    metadata_path = taste_dir / "dtm_metadata.json"
     
     # Convert to dict
     metadata_dict = metadata.model_dump() if hasattr(metadata, 'model_dump') else metadata.dict()
@@ -212,10 +214,10 @@ def save_dtm_metadata(metadata: DTMMetadata):
 
 def load_dtm_metadata(taste_id: str) -> Optional[DTMMetadata]:
     """Load DTM metadata"""
-    taste_dir = os.path.join(DTM_OUTPUTS_DIR, taste_id)
-    metadata_path = os.path.join(taste_dir, "dtm_metadata.json")
+    taste_dir = DTM_OUTPUTS_DIR / taste_id
+    metadata_path = taste_dir / "dtm_metadata.json"
     
-    if not os.path.exists(metadata_path):
+    if not metadata_path.exists():
         return None
     
     with open(metadata_path, 'r') as f:
