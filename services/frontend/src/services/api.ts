@@ -1006,6 +1006,7 @@ export interface DTMStatusResponse {
   resource_count: number
   created_at?: string
   confidence?: number
+  needs_rebuild?: boolean // True if resources were deleted since last build
 }
 
 export const dtmAPI = {
@@ -1024,6 +1025,15 @@ export const dtmAPI = {
    */
   getStatus: async (tasteId: string): Promise<DTMStatusResponse> => {
     return apiRequest<DTMStatusResponse>(`/api/dtm/${tasteId}/status`)
+  },
+
+  /**
+   * Rebuild DTM for entire taste (after resource deletions)
+   */
+  rebuild: async (tasteId: string): Promise<DTMBuildResponse> => {
+    return apiRequest<DTMBuildResponse>(`/api/dtm/${tasteId}/rebuild`, {
+      method: 'POST',
+    })
   },
 
   /**

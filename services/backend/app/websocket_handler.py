@@ -457,8 +457,9 @@ async def build_dtm_for_taste(
                 metadata["has_dtm"] = True
                 metadata["dtm_resource_count"] = len(resource_ids)
                 metadata["dtm_last_updated"] = dtm.created_at
-                db.update_taste(taste_id, {"metadata": metadata})
-                print(f"✅ Database updated: has_dtm = True")
+                metadata["needs_dtm_rebuild"] = False  # Clear rebuild flag
+                db.update_taste(taste_id, metadata=metadata)
+                print(f"✅ Database updated: has_dtm = True, needs_dtm_rebuild = False")
             else:
                 print(f"⚠️  Warning: Taste {taste_id} not found in database")
         except Exception as e:

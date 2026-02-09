@@ -145,6 +145,10 @@ export default function Home() {
   const [dtmResourceCount, setDtmResourceCount] = useState(0)
   const [dtmTrainingError, setDtmTrainingError] = useState<string | null>(null)
 
+  // DTM Rebuild state
+  const [dtmNeedsRebuild, setDtmNeedsRebuild] = useState(false)
+  const [isRebuildingDtm, setIsRebuildingDtm] = useState(false)
+
   // Ref to track DTR close timeout (for smooth DTR→DTM transition)
   const dtrCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -164,6 +168,26 @@ export default function Home() {
   // ============================================================================
   // EFFECTS
   // ============================================================================
+
+  // Fetch DTM status when taste is selected
+  useEffect(() => {
+    async function fetchDTMStatus() {
+      if (!selectedTasteId) {
+        setDtmNeedsRebuild(false)
+        return
+      }
+
+      try {
+        const status = await api.dtm.getStatus(selectedTasteId)
+        setDtmNeedsRebuild(status.needs_rebuild || false)
+      } catch (error) {
+        console.error('Failed to fetch DTM status:', error)
+        setDtmNeedsRebuild(false)
+      }
+    }
+
+    fetchDTMStatus()
+  }, [selectedTasteId])
 
   // Load user info
   useEffect(() => {
@@ -400,6 +424,27 @@ export default function Home() {
     // Clear the came_from_editor flag after checking
     sessionStorage.removeItem('came_from_editor')
   }, [setDeviceInfo, setRenderingMode])
+
+  // Fetch DTM status when taste is selected (check if rebuild needed)
+  useEffect(() => {
+    async function fetchDtmStatus() {
+      if (!selectedTasteId) {
+        setDtmNeedsRebuild(false)
+        return
+      }
+
+      try {
+        const status = await api.dtm.getStatus(selectedTasteId)
+        setDtmNeedsRebuild(status.needs_rebuild || false)
+      } catch (err) {
+        console.error('Failed to fetch DTM status:', err)
+        // Don't show error to user - this is just for the rebuild button
+        setDtmNeedsRebuild(false)
+      }
+    }
+
+    fetchDtmStatus()
+  }, [selectedTasteId])
 
   // ============================================================================
   // EVENT HANDLERS
@@ -746,6 +791,49 @@ export default function Home() {
     setPendingResourceData(null)
   }
 
+  const handleRebuildDtm = async () => {
+    if (!selectedTasteId) return
+
+    try {
+      setIsRebuildingDtm(true)
+      setDtmTrainingError(null)
+
+      // Open DTM training modal
+      setDtmTrainingState('training')
+      setIsDtmTrainingModalOpen(true)
+
+      // Call rebuild API
+      const response = await api.dtm.rebuild(selectedTasteId)
+
+      console.log('DTM rebuilt successfully:', response)
+
+      // Update state
+      setDtmTrainingState('success')
+      setDtmNeedsRebuild(false)
+
+      // Refresh DTM status to ensure UI is in sync
+      try {
+        const status = await api.dtm.getStatus(selectedTasteId)
+        setDtmNeedsRebuild(status.needs_rebuild || false)
+      } catch (err) {
+        console.error('Failed to refresh DTM status:', err)
+      }
+
+      // Close modal after 2 seconds
+      setTimeout(() => {
+        setIsDtmTrainingModalOpen(false)
+      }, 2000)
+    } catch (err) {
+      console.error('Failed to rebuild DTM:', err)
+      setDtmTrainingState('error')
+      setDtmTrainingError(
+        err instanceof Error ? err.message : 'Failed to rebuild taste model',
+      )
+    } finally {
+      setIsRebuildingDtm(false)
+    }
+  }
+
   const handleCreateProject = async (projectName: string) => {
     if (!selectedTasteId) return
 
@@ -1014,6 +1102,16 @@ export default function Home() {
       // If this resource was selected, remove it from selection
       setSelectedResourceIds(prev => prev.filter(id => id !== resourceId))
 
+      // Fetch DTM status to check if rebuild is needed
+      if (tasteId === selectedTasteId) {
+        try {
+          const status = await api.dtm.getStatus(tasteId)
+          setDtmNeedsRebuild(status.needs_rebuild || false)
+        } catch (err) {
+          console.error('Failed to fetch DTM status after deletion:', err)
+        }
+      }
+
       console.log(`Successfully deleted resource: ${resourceName}`)
     } catch (err) {
       console.error('Failed to delete resource:', err)
@@ -1176,6 +1274,62 @@ export default function Home() {
 
         {/* Action buttons */}
         <div className="mt-6 flex justify-end gap-3">
+          {/* Rebuild DTM button - appears when resources were deleted */}
+          {dtmNeedsRebuild && (
+            <button
+              onClick={handleRebuildDtm}
+              disabled={isRebuildingDtm}
+              className="px-6 py-2.5 rounded-lg font-medium text-sm transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              style={{
+                backgroundColor: '#F59E0B',
+                color: '#FFFFFF',
+                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
+              }}
+            >
+              {isRebuildingDtm ? (
+                <>
+                  <svg
+                    className="animate-spin h-4 w-4"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Rebuilding...
+                </>
+              ) : (
+                <>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Rebuild DTM
+                </>
+              )}
+            </button>
+          )}
+
           {/* Use Entire Taste button - always visible when taste is selected */}
           <button
             onClick={() => {
