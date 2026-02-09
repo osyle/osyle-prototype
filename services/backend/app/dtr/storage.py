@@ -151,7 +151,7 @@ def load_complete_dtr(
     version: str = "latest"
 ) -> Optional[Dict[str, Any]]:
     """
-    Load complete DTR
+    Load complete DTR (Pass 6 output)
     
     Args:
         resource_id: Resource UUID
@@ -163,11 +163,13 @@ def load_complete_dtr(
     resource_dir = get_resource_dir(resource_id)
     
     if version == "latest":
-        filepath = resource_dir / "complete_dtr_latest.json"
+        # Pass 6 saves as "pass_6_complete_dtr_latest.json"
+        filepath = resource_dir / "pass_6_complete_dtr_latest.json"
     else:
-        filepath = resource_dir / f"complete_dtr_{version}.json"
+        filepath = resource_dir / f"pass_6_complete_dtr_{version}.json"
     
     if not filepath.exists():
+        print(f"⚠️  DTR file not found: {filepath}")
         return None
     
     with open(filepath, 'r') as f:

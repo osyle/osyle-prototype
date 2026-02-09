@@ -171,10 +171,13 @@ def update_taste(taste_id: str, name: str = None, metadata: dict = None) -> Dict
     now = get_timestamp()
     update_expr_parts = ["updated_at = :updated"]
     expr_attr_values = {":updated": now}
+    expr_attr_names = {}  # For reserved keywords
     
     if name is not None:
-        update_expr_parts.append("name = :name")
+        # 'name' is a reserved keyword in DynamoDB
+        update_expr_parts.append("#n = :name")
         expr_attr_values[":name"] = name
+        expr_attr_names["#n"] = "name"
     
     if metadata is not None:
         update_expr_parts.append("metadata = :metadata")
@@ -182,12 +185,18 @@ def update_taste(taste_id: str, name: str = None, metadata: dict = None) -> Dict
     
     update_expr = "SET " + ", ".join(update_expr_parts)
     
-    response = tastes_table.update_item(
-        Key={"taste_id": taste_id},
-        UpdateExpression=update_expr,
-        ExpressionAttributeValues=expr_attr_values,
-        ReturnValues="ALL_NEW"
-    )
+    # Only include ExpressionAttributeNames if we have any
+    update_params = {
+        "Key": {"taste_id": taste_id},
+        "UpdateExpression": update_expr,
+        "ExpressionAttributeValues": expr_attr_values,
+        "ReturnValues": "ALL_NEW"
+    }
+    
+    if expr_attr_names:
+        update_params["ExpressionAttributeNames"] = expr_attr_names
+    
+    response = tastes_table.update_item(**update_params)
     
     return response.get("Attributes", {})
 
@@ -255,7 +264,21 @@ def list_resources_for_taste(taste_id: str) -> List[Dict[str, Any]]:
             IndexName="taste_id-index",
             KeyConditionExpression=Key('taste_id').eq(taste_id)
         )
-        return response.get("Items", [])
+        items = response.get("Items", [])
+        
+        # Filter out corrupt/incomplete records (missing required fields)
+        valid_items = []
+        for item in items:
+            # Check if item has required fields
+            if "resource_id" in item and "name" in item:
+                valid_items.append(item)
+            else:
+                # Log corrupt record for cleanup
+                print(f"⚠️  Warning: Found corrupt resource record: {item.get('resource_id', 'unknown')}")
+                # Could optionally delete it here
+                # resources_table.delete_item(Key={"resource_id": item.get("resource_id")})
+        
+        return valid_items
     except ClientError as e:
         print(f"Error querying resources: {e}")
         return []
@@ -272,10 +295,13 @@ def update_resource(
     now = get_timestamp()
     update_expr_parts = ["updated_at = :updated"]
     expr_attr_values = {":updated": now}
+    expr_attr_names = {}  # For reserved keywords
     
     if name is not None:
-        update_expr_parts.append("name = :name")
+        # 'name' is a reserved keyword in DynamoDB
+        update_expr_parts.append("#n = :name")
         expr_attr_values[":name"] = name
+        expr_attr_names["#n"] = "name"
     
     if has_figma is not None:
         update_expr_parts.append("has_figma = :has_figma")
@@ -291,12 +317,18 @@ def update_resource(
     
     update_expr = "SET " + ", ".join(update_expr_parts)
     
-    response = resources_table.update_item(
-        Key={"resource_id": resource_id},
-        UpdateExpression=update_expr,
-        ExpressionAttributeValues=expr_attr_values,
-        ReturnValues="ALL_NEW"
-    )
+    # Only include ExpressionAttributeNames if we have any
+    update_params = {
+        "Key": {"resource_id": resource_id},
+        "UpdateExpression": update_expr,
+        "ExpressionAttributeValues": expr_attr_values,
+        "ReturnValues": "ALL_NEW"
+    }
+    
+    if expr_attr_names:
+        update_params["ExpressionAttributeNames"] = expr_attr_names
+    
+    response = resources_table.update_item(**update_params)
     
     return response.get("Attributes", {})
 

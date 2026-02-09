@@ -296,7 +296,52 @@ async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: 
         print(f"   Rule-breaking patterns: {len(pass_6_result.get('personality', {}).get('deliberate_rule_breaking', []))}")
         print(f"   Quality tier: base")
         
-        # Send completion
+        # ====================================================================
+        # UPDATE DATABASE: Mark resource as having DTR
+        # ====================================================================
+        print(f"📝 Updating database: Setting has_dtr = True for resource {resource_id}")
+        try:
+            resource = db.get_resource(resource_id)
+            if resource:
+                metadata = resource.get("metadata", {})
+                metadata["has_dtr"] = True
+                # Update only the metadata field (don't use return value)
+                db.update_resource(resource_id=resource_id, metadata=metadata)
+                print(f"✅ Database updated: has_dtr = True")
+            else:
+                print(f"⚠️  Warning: Resource {resource_id} not found in database")
+        except Exception as e:
+            print(f"⚠️  Warning: Failed to update database: {e}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
+            # Don't fail the whole process if DB update fails
+        
+        # ====================================================================
+        # TRIGGER DTM BUILD (Pass 7) if taste has 2+ resources
+        # ====================================================================
+        print(f"\n{'='*70}")
+        print(f"Checking if DTM build needed for taste {taste_id}...")
+        print(f"{'='*70}\n")
+        
+        # Create LLM service for DTM synthesis
+        llm = get_llm_service()
+        
+        dtm_result = await build_dtm_for_taste(
+            taste_id=taste_id,
+            llm=llm,
+            websocket=websocket
+        )
+        
+        if dtm_result.get("status") == "success":
+            print(f"✅ DTM built successfully!")
+            print(f"   Resource count: {dtm_result.get('total_resources')}")
+            print(f"   Confidence: {dtm_result.get('confidence')}")
+        elif dtm_result.get("status") == "skipped":
+            print(f"ℹ️  DTM build skipped: {dtm_result.get('reason')}")
+        else:
+            print(f"⚠️  DTM build failed: {dtm_result.get('error')}")
+        
+        # Send completion AFTER DTM (or skip it - DTM sends its own messages)
         await send_complete(websocket, {
             "status": "success",
             "resource_id": resource_id,
@@ -335,28 +380,6 @@ async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: 
             "image_density": pass_4_result.get("image_density"),
             "placements_count": len(pass_4_result.get("placements", []))
         })
-        
-        # ====================================================================
-        # TRIGGER DTM BUILD (Pass 7) if taste has 2+ resources
-        # ====================================================================
-        print(f"\n{'='*70}")
-        print(f"Checking if DTM build needed for taste {taste_id}...")
-        print(f"{'='*70}\n")
-        
-        dtm_result = await build_dtm_for_taste(
-            taste_id=taste_id,
-            llm=llm,
-            websocket=websocket
-        )
-        
-        if dtm_result.get("status") == "success":
-            print(f"✅ DTM built successfully!")
-            print(f"   Resource count: {dtm_result.get('total_resources')}")
-            print(f"   Confidence: {dtm_result.get('confidence')}")
-        elif dtm_result.get("status") == "skipped":
-            print(f"ℹ️  DTM build skipped: {dtm_result.get('reason')}")
-        else:
-            print(f"⚠️  DTM build failed: {dtm_result.get('error')}")
 
         
     except Exception as e:
@@ -377,7 +400,7 @@ async def build_dtm_for_taste(
     - 2+ resources: Build/rebuild DTM
     """
     
-    # Count resources with DTRs
+    # Count resources with DTRs (DB is now source of truth)
     resources = db.list_resources_for_taste(taste_id)
     resource_ids = [
         r["resource_id"] 
@@ -387,8 +410,12 @@ async def build_dtm_for_taste(
     
     total_dtrs = len(resource_ids)
     
+    print(f"📊 DTM Check: Found {total_dtrs} resources with DTRs (from database)")
+    print(f"   Resource IDs: {resource_ids}")
+    
     # CASE 1: Only 1 resource → Skip
     if total_dtrs < 2:
+        print(f"ℹ️  Skipping DTM build - need at least 2 resources, have {total_dtrs}")
         return {
             "status": "skipped",
             "reason": "Need at least 2 resources to build DTM",
@@ -396,10 +423,12 @@ async def build_dtm_for_taste(
         }
     
     # CASE 2: 2+ resources → Build/rebuild DTM
+    print(f"✅ Building DTM for {total_dtrs} resources")
     await send_progress(
         websocket,
         "building_dtm",
-        f"Building DTM from {total_dtrs} resources..."
+        f"Building DTM from {total_dtrs} resources...",
+        {"resource_count": total_dtrs}
     )
     
     try:
@@ -417,6 +446,25 @@ async def build_dtm_for_taste(
             f"DTM built successfully from {total_dtrs} resources"
         )
         
+        # ====================================================================
+        # UPDATE DATABASE: Mark taste as having DTM
+        # ====================================================================
+        print(f"📝 Updating database: Setting has_dtm = True for taste {taste_id}")
+        try:
+            taste = db.get_taste(taste_id)
+            if taste:
+                metadata = taste.get("metadata", {})
+                metadata["has_dtm"] = True
+                metadata["dtm_resource_count"] = len(resource_ids)
+                metadata["dtm_last_updated"] = dtm.created_at
+                db.update_taste(taste_id, {"metadata": metadata})
+                print(f"✅ Database updated: has_dtm = True")
+            else:
+                print(f"⚠️  Warning: Taste {taste_id} not found in database")
+        except Exception as e:
+            print(f"⚠️  Warning: Failed to update database: {e}")
+            # Don't fail the whole process if DB update fails
+        
         return {
             "status": "success",
             "dtm_id": dtm.taste_id,
@@ -425,7 +473,20 @@ async def build_dtm_for_taste(
         }
         
     except Exception as e:
-        await send_error(websocket, f"DTM build failed: {str(e)}")
+        import traceback
+        error_msg = f"DTM build failed: {str(e)}"
+        print(f"❌ DTM ERROR: {traceback.format_exc()}")
+        
+        # Send dtm_error progress stage for better frontend handling
+        await send_progress(
+            websocket,
+            "dtm_error",
+            error_msg
+        )
+        
+        # Also send error message for WebSocket error handling
+        await send_error(websocket, error_msg)
+        
         return {
             "status": "error",
             "error": str(e)

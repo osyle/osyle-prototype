@@ -263,12 +263,32 @@ class GoogleProvider(BaseLLMProvider):
                 try:
                     structured_output = json.loads(text_content)
                 except json.JSONDecodeError as e:
-                    # Don't silently fail - raise error with context
-                    raise ValueError(
-                        f"Gemini returned invalid JSON for structured output: {e}\n"
-                        f"Response text (first 500 chars): {text_content[:500]}\n"
-                        f"Response may have been truncated. Try increasing max_tokens."
-                    )
+                    # Try to repair truncated JSON by closing open structures
+                    try:
+                        # Count open brackets/braces
+                        open_braces = text_content.count('{') - text_content.count('}')
+                        open_brackets = text_content.count('[') - text_content.count(']')
+                        open_quotes = text_content.count('"') % 2
+                        
+                        # Attempt repair
+                        repaired = text_content
+                        if open_quotes:
+                            repaired += '"'
+                        repaired += ']' * open_brackets
+                        repaired += '}' * open_braces
+                        
+                        structured_output = json.loads(repaired)
+                        print(f"⚠️  Warning: Repaired truncated JSON response (added {open_quotes} quotes, {open_brackets} brackets, {open_braces} braces)")
+                    except:
+                        # Repair failed - raise original error with context
+                        raise ValueError(
+                            f"Gemini returned invalid JSON for structured output: {e}\n"
+                            f"Response text (first 500 chars): {text_content[:500]}\n"
+                            f"Response text (last 200 chars): {text_content[-200:]}\n"
+                            f"Total response length: {len(text_content)} chars\n"
+                            f"Try: 1) Increase max_tokens (current: {config.max_tokens}), "
+                            f"2) Simplify schema, 3) Use gemini-2.5-pro for longer outputs"
+                        )
             
             # Extract tool calls if applicable
             tool_calls = None

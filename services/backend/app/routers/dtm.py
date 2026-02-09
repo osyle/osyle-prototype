@@ -107,6 +107,17 @@ async def build_dtm(
     
     duration = time.time() - start_time
     
+    # Update database: Mark taste as having DTM (if this is full taste build)
+    if not payload.resource_ids:  # Full taste build (all resources)
+        try:
+            metadata = taste.get("metadata", {})
+            metadata["has_dtm"] = True
+            metadata["dtm_resource_count"] = len(resource_ids)
+            metadata["dtm_last_updated"] = dtm.created_at
+            db.update_taste(payload.taste_id, {"metadata": metadata})
+        except Exception as e:
+            print(f"Warning: Failed to update database: {e}")
+    
     return DTMBuildResponse(
         status="success",
         dtm_id=dtm.taste_id,
@@ -132,19 +143,25 @@ async def get_dtm_status(
     if taste.get("owner_id") != user["user_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # Check if DTM exists
-    exists = dtm_storage.dtm_exists(taste_id)
+    # Check database metadata first (faster)
+    metadata = taste.get("metadata", {})
+    has_dtm = metadata.get("has_dtm", False)
     
-    if not exists:
+    if not has_dtm:
         return DTMStatusResponse(
             exists=False,
             resource_count=0
         )
     
-    # Load DTM
+    # Load DTM to get details
     dtm = dtm_storage.load_dtm(taste_id)
     
     if not dtm:
+        # Database says yes but file doesn't exist - inconsistency
+        # Update database to match reality
+        metadata["has_dtm"] = False
+        db.update_taste(taste_id, {"metadata": metadata})
+        
         return DTMStatusResponse(
             exists=False,
             resource_count=0
@@ -174,7 +191,17 @@ async def delete_dtm(
     if taste.get("owner_id") != user["user_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # Delete DTM
+    # Delete DTM files
     dtm_storage.delete_dtm(taste_id)
+    
+    # Update database: Mark taste as NOT having DTM
+    try:
+        metadata = taste.get("metadata", {})
+        metadata["has_dtm"] = False
+        metadata.pop("dtm_resource_count", None)
+        metadata.pop("dtm_last_updated", None)
+        db.update_taste(taste_id, {"metadata": metadata})
+    except Exception as e:
+        print(f"Warning: Failed to update database: {e}")
     
     return {"message": "DTM deleted successfully"}

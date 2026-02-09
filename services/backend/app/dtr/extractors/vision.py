@@ -255,7 +255,7 @@ Respond with a JSON object matching this structure:
                 )
             ],
             structured_output_schema=schema,
-            max_tokens=8192,  # Ensure enough space for complete response
+            max_tokens=16384,  # Increased to prevent truncation in complex schemas
             temperature=0.0  # Deterministic for analysis
         )
         
@@ -386,7 +386,7 @@ Respond with:
                 )
             ],
             structured_output_schema=schema,
-            max_tokens=8192,  # Increase for longer responses
+            max_tokens=16384,  # Increased to prevent truncation
             temperature=0.0
         )
         
@@ -632,7 +632,7 @@ Respond with a JSON object:{kmeans_reference}
                 )
             ],
             structured_output_schema=schema,
-            max_tokens=8192,
+            max_tokens=16384,  # Increased from 8192 to prevent truncation
             temperature=0.1
         )
         
@@ -869,7 +869,7 @@ CRITICAL: All narrative fields must be rich, multi-sentence paragraphs that expl
                 )
             ],
             structured_output_schema=schema,
-            max_tokens=8192,
+            max_tokens=16384,  # Increased to prevent truncation
             temperature=0.1
         )
         
@@ -1263,7 +1263,7 @@ CRITICAL:
                         )
                     ],
                     temperature=0.3,
-                    max_tokens=8000  # Increased for comprehensive component analysis
+                    max_tokens=16384  # Increased to prevent truncation in component analysis
                 )
                 
                 # Extract JSON from response

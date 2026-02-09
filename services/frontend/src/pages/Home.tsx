@@ -628,6 +628,9 @@ export default function Home() {
               dtrCloseTimeoutRef.current = null
             }
 
+            // Set DTR to success state immediately
+            setDtrLearningState('success')
+
             const resourceCount = (data?.['resource_count'] as number) || 0
 
             // Wait 2s to show DTR success, then transition to DTM
@@ -635,11 +638,13 @@ export default function Home() {
               console.log('Closing DTR modal, opening DTM modal')
               setIsDtrLearningModalOpen(false) // Close DTR modal
 
-              // Open DTM modal immediately
-              setDtmResourceCount(resourceCount)
-              setDtmTrainingState('training')
-              setDtmTrainingError(null)
-              setIsDtmTrainingModalOpen(true)
+              // Open DTM modal after short delay for smooth transition
+              setTimeout(() => {
+                setDtmResourceCount(resourceCount)
+                setDtmTrainingState('training')
+                setDtmTrainingError(null)
+                setIsDtmTrainingModalOpen(true)
+              }, 300) // Small delay for visual smoothness
             }, 2000)
           } else if (stage === 'dtm_complete') {
             console.log('DTM build complete')
@@ -649,6 +654,15 @@ export default function Home() {
             setTimeout(() => {
               setIsDtmTrainingModalOpen(false)
             }, 2000)
+          } else if (stage === 'dtm_error') {
+            console.error('DTM build error detected via progress stage')
+            setDtmTrainingState('error')
+            setDtmTrainingError(message)
+
+            // Close DTR modal if still open
+            setIsDtrLearningModalOpen(false)
+
+            // DTM modal stays open to show error
           }
         },
         onComplete: result => {
@@ -665,8 +679,23 @@ export default function Home() {
         },
         onError: error => {
           console.error('DTR build error:', error)
-          setDtrLearningState('error')
-          setDtrLearningError(error)
+
+          // Check if this is a DTM error (happens after DTM build started)
+          if (error.includes('DTM build failed') || error.includes('dtm')) {
+            console.error('DTM-specific error detected')
+            setDtmTrainingState('error')
+            setDtmTrainingError(error)
+
+            // Close DTR modal if still open
+            setIsDtrLearningModalOpen(false)
+
+            // DTM modal will stay open to show error
+            // (DtmTrainingModal handles error display)
+          } else {
+            // Regular DTR error
+            setDtrLearningState('error')
+            setDtrLearningError(error)
+          }
 
           // Cancel any pending close timeout on error
           if (dtrCloseTimeoutRef.current) {

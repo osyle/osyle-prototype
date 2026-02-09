@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from app.dtr import storage as dtr_storage
-from app.llm.service import LLMService
+from app.llm import LLMService, Message, MessageRole
 from . import storage
 from . import fingerprinting
 from . import consensus as consensus_module
@@ -117,18 +117,61 @@ async def synthesize_dtm(
     # Build synthesis prompt
     synthesis_prompt = _build_synthesis_prompt(dtrs, consensus, resolved_conflicts)
     
-    # Call Claude Opus
+    # Call Claude Opus with correct API
     response = await llm.generate(
         model="claude-opus-4.5",
-        system_prompt="You are a design analyst synthesizing multiple design resources into a unified taste model.",
-        user_prompt=synthesis_prompt,
+        messages=[
+            Message(
+                role=MessageRole.SYSTEM,
+                content="You are a design analyst synthesizing multiple design resources into a unified taste model."
+            ),
+            Message(
+                role=MessageRole.USER,
+                content=synthesis_prompt
+            )
+        ],
         temperature=0.3,
         max_tokens=8000
     )
     
     # Parse response (expecting JSON)
     import json
-    synthesis_result = json.loads(response.strip())
+    import re
+    
+    print(f"\n{'='*80}")
+    print(f"LLM Response (first 500 chars):")
+    print(response.text[:500])
+    print(f"{'='*80}\n")
+    
+    # Try to parse JSON
+    try:
+        # First try direct parse
+        synthesis_result = json.loads(response.text.strip())
+    except json.JSONDecodeError as e:
+        # Try to extract JSON from markdown code blocks
+        print(f"⚠️  Direct JSON parse failed: {e}")
+        print(f"Attempting to extract JSON from response...")
+        
+        # Look for JSON in code blocks
+        json_match = re.search(r'```json\s*(\{.*?\})\s*```', response.text, re.DOTALL)
+        if not json_match:
+            json_match = re.search(r'```\s*(\{.*?\})\s*```', response.text, re.DOTALL)
+        if not json_match:
+            # Try to find just the JSON object
+            json_match = re.search(r'(\{.*\})', response.text, re.DOTALL)
+        
+        if json_match:
+            try:
+                synthesis_result = json.loads(json_match.group(1))
+                print(f"✅ Successfully extracted JSON from response")
+            except json.JSONDecodeError as e2:
+                print(f"❌ Failed to parse extracted JSON: {e2}")
+                print(f"Response text (full): {response.text}")
+                raise ValueError(f"LLM did not return valid JSON. Response: {response.text[:1000]}")
+        else:
+            print(f"❌ No JSON found in response")
+            print(f"Response text (full): {response.text}")
+            raise ValueError(f"LLM did not return JSON. Response: {response.text[:1000]}")
     
     print("✅ LLM synthesis complete\n")
     
