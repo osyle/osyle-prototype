@@ -146,7 +146,6 @@ export default function Home() {
   const [dtmTrainingError, setDtmTrainingError] = useState<string | null>(null)
 
   // DTM Rebuild state
-  const [dtmNeedsRebuild, setDtmNeedsRebuild] = useState(false)
   const [isRebuildingDtm, setIsRebuildingDtm] = useState(false)
 
   // Ref to track DTR close timeout (for smooth DTR→DTM transition)
@@ -168,26 +167,6 @@ export default function Home() {
   // ============================================================================
   // EFFECTS
   // ============================================================================
-
-  // Fetch DTM status when taste is selected
-  useEffect(() => {
-    async function fetchDTMStatus() {
-      if (!selectedTasteId) {
-        setDtmNeedsRebuild(false)
-        return
-      }
-
-      try {
-        const status = await api.dtm.getStatus(selectedTasteId)
-        setDtmNeedsRebuild(status.needs_rebuild || false)
-      } catch (error) {
-        console.error('Failed to fetch DTM status:', error)
-        setDtmNeedsRebuild(false)
-      }
-    }
-
-    fetchDTMStatus()
-  }, [selectedTasteId])
 
   // Load user info
   useEffect(() => {
@@ -280,6 +259,8 @@ export default function Home() {
                 taste_id: taste.taste_id,
                 name: taste.name,
                 resources: displayResources,
+                resource_count: taste.resource_count,
+                metadata: taste.metadata,
               }
             } catch (err) {
               console.error(
@@ -290,6 +271,8 @@ export default function Home() {
                 taste_id: taste.taste_id,
                 name: taste.name,
                 resources: [],
+                resource_count: taste.resource_count,
+                metadata: taste.metadata,
               }
             }
           }),
@@ -424,27 +407,6 @@ export default function Home() {
     // Clear the came_from_editor flag after checking
     sessionStorage.removeItem('came_from_editor')
   }, [setDeviceInfo, setRenderingMode])
-
-  // Fetch DTM status when taste is selected (check if rebuild needed)
-  useEffect(() => {
-    async function fetchDtmStatus() {
-      if (!selectedTasteId) {
-        setDtmNeedsRebuild(false)
-        return
-      }
-
-      try {
-        const status = await api.dtm.getStatus(selectedTasteId)
-        setDtmNeedsRebuild(status.needs_rebuild || false)
-      } catch (err) {
-        console.error('Failed to fetch DTM status:', err)
-        // Don't show error to user - this is just for the rebuild button
-        setDtmNeedsRebuild(false)
-      }
-    }
-
-    fetchDtmStatus()
-  }, [selectedTasteId])
 
   // ============================================================================
   // EVENT HANDLERS
@@ -809,15 +771,6 @@ export default function Home() {
 
       // Update state
       setDtmTrainingState('success')
-      setDtmNeedsRebuild(false)
-
-      // Refresh DTM status to ensure UI is in sync
-      try {
-        const status = await api.dtm.getStatus(selectedTasteId)
-        setDtmNeedsRebuild(status.needs_rebuild || false)
-      } catch (err) {
-        console.error('Failed to refresh DTM status:', err)
-      }
 
       // Close modal after 2 seconds
       setTimeout(() => {
@@ -1083,34 +1036,76 @@ export default function Home() {
     try {
       await api.resources.delete(tasteId, resourceId)
 
-      // Remove from local state
-      setTastes(prev =>
-        prev.map(taste => {
-          if (taste.taste_id === tasteId) {
+      // Refresh tastes to get updated metadata from server
+      const apiTastes = await api.tastes.list()
+
+      // Transform to TasteDisplay format (same as loadTastes)
+      const displayTastes: TasteDisplay[] = await Promise.all(
+        apiTastes.map(async taste => {
+          try {
+            // Fetch resources for this taste
+            const resources = await api.resources.list(taste.taste_id)
+
+            // Transform resources to display format with download URLs
+            const displayResources: ResourceDisplay[] = await Promise.all(
+              resources.map(async resource => {
+                let imageUrl: string | null = null
+
+                // If resource has an image, get the download URL
+                if (resource.has_image) {
+                  try {
+                    const resourceWithUrls = await api.resources.get(
+                      taste.taste_id,
+                      resource.resource_id,
+                      true, // include download URLs
+                    )
+                    imageUrl =
+                      resourceWithUrls.download_urls?.image_get_url || null
+                  } catch (err) {
+                    console.error(
+                      `Failed to get image URL for resource ${resource.resource_id}:`,
+                      err,
+                    )
+                  }
+                }
+
+                return {
+                  resource_id: resource.resource_id,
+                  name: resource.name,
+                  imageUrl,
+                  has_image: resource.has_image,
+                  has_figma: resource.has_figma,
+                }
+              }),
+            )
+
             return {
-              ...taste,
-              resources: taste.resources.filter(
-                r => r.resource_id !== resourceId,
-              ),
-              resource_count: (taste.resource_count || 0) - 1,
+              taste_id: taste.taste_id,
+              name: taste.name,
+              resources: displayResources,
+              resource_count: taste.resource_count,
+              metadata: taste.metadata,
+            }
+          } catch (err) {
+            console.error(
+              `Failed to load resources for taste ${taste.taste_id}:`,
+              err,
+            )
+            return {
+              taste_id: taste.taste_id,
+              name: taste.name,
+              resources: [],
+              resource_count: taste.resource_count,
+              metadata: taste.metadata,
             }
           }
-          return taste
         }),
       )
 
+      setTastes(displayTastes)
+
       // If this resource was selected, remove it from selection
       setSelectedResourceIds(prev => prev.filter(id => id !== resourceId))
-
-      // Fetch DTM status to check if rebuild is needed
-      if (tasteId === selectedTasteId) {
-        try {
-          const status = await api.dtm.getStatus(tasteId)
-          setDtmNeedsRebuild(status.needs_rebuild || false)
-        } catch (err) {
-          console.error('Failed to fetch DTM status after deletion:', err)
-        }
-      }
 
       console.log(`Successfully deleted resource: ${resourceName}`)
     } catch (err) {
@@ -1274,8 +1269,8 @@ export default function Home() {
 
         {/* Action buttons */}
         <div className="mt-6 flex justify-end gap-3">
-          {/* Rebuild DTM button - appears when resources were deleted */}
-          {dtmNeedsRebuild && (
+          {/* Rebuild DTM button - shown whenever taste has 2+ resources */}
+          {selectedTaste && selectedTaste.resources.length >= 2 && (
             <button
               onClick={handleRebuildDtm}
               disabled={isRebuildingDtm}

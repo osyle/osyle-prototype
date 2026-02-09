@@ -14,6 +14,7 @@ export interface TasteDisplay {
   name: string
   resources: ResourceDisplay[]
   resource_count?: number
+  metadata?: Record<string, unknown>
 }
 
 export interface ResourceDisplay {

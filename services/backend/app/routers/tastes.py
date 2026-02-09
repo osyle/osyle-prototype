@@ -3,6 +3,7 @@ Tastes and Resources API endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
+from datetime import datetime
 from app.auth import get_current_user
 from app import db, storage
 from app.dtr import storage as dtr_storage
@@ -320,6 +321,7 @@ async def delete_resource(
 ):
     """
     Delete a resource and its files from S3
+    Sets needs_dtm_rebuild flag instead of triggering immediate rebuild
     """
     # Check ownership
     resource = db.get_resource(resource_id)
@@ -347,5 +349,31 @@ async def delete_resource(
     
     # Delete resource from DB
     db.delete_resource(resource_id)
+    print(f"✓ Deleted resource {resource_id} from database")
+    
+    # Set needs_dtm_rebuild flag on taste (if it has or had DTM)
+    taste = db.get_taste(taste_id)
+    if taste:
+        metadata = taste.get("metadata", {})
+        has_dtm = metadata.get("has_dtm")
+        
+        print(f"📊 Taste {taste_id} metadata: has_dtm={has_dtm}, current needs_rebuild={metadata.get('needs_dtm_rebuild')}")
+        
+        # Only set rebuild flag if taste has/had DTM
+        # (no point rebuilding if there was never a DTM)
+        if has_dtm:
+            metadata["needs_dtm_rebuild"] = True
+            metadata["last_deleted_at"] = datetime.utcnow().isoformat()
+            db.update_taste(taste_id, metadata=metadata)
+            print(f"✓ Marked taste {taste_id} as needing DTM rebuild (needs_dtm_rebuild=True)")
+            
+            # Verify the update
+            updated_taste = db.get_taste(taste_id)
+            updated_metadata = updated_taste.get("metadata", {})
+            print(f"✓ Verification: needs_dtm_rebuild={updated_metadata.get('needs_dtm_rebuild')}")
+        else:
+            print(f"⊘ Taste {taste_id} has no DTM, skipping rebuild flag")
+    else:
+        print(f"⚠️  Warning: Could not find taste {taste_id} after resource deletion")
     
     return {"message": "Resource deleted successfully"}

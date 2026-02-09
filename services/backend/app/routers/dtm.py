@@ -229,6 +229,8 @@ async def get_dtm_status(
     has_dtm = metadata.get("has_dtm", False)
     needs_rebuild = metadata.get("needs_dtm_rebuild", False)
     
+    print(f"📊 DTM Status Check for {taste_id}: has_dtm={has_dtm}, needs_rebuild={needs_rebuild}")
+    
     if not has_dtm:
         return DTMStatusResponse(
             exists=False,
