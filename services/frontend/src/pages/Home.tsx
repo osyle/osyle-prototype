@@ -787,6 +787,8 @@ export default function Home() {
     }
   }
 
+  // COMMENTED OUT: handleCreateProject - not needed since we skip project modal
+  /*
   const handleCreateProject = async (projectName: string) => {
     if (!selectedTasteId) return
 
@@ -886,6 +888,7 @@ export default function Home() {
       setIsCreatingProject(false)
     }
   }
+  */
 
   const handleContinueProject = () => {
     // User wants to continue working on existing project
@@ -980,8 +983,47 @@ export default function Home() {
     if (!ideaText.trim()) return
     if (!selectedTasteId) return
 
-    // Resources are selected in Stage 2, go straight to project
-    setIsCreateProjectModalOpen(true)
+    // ========================================================================
+    // BUILD SUBSET DTM DIRECTLY (skip project modal)
+    // ========================================================================
+    try {
+      // Show DTM training modal
+      setDtmResourceCount(selectedResourceIds.length)
+      setDtmTrainingState('training')
+      setDtmTrainingError(null)
+      setIsDtmTrainingModalOpen(true)
+
+      console.log('🎨 Building subset DTM for selected resources...')
+      console.log('Taste ID:', selectedTasteId)
+      console.log('Selected Resource IDs:', selectedResourceIds)
+
+      const dtmResult = await api.dtm.getOrBuild(selectedTasteId, {
+        resource_ids: selectedResourceIds,
+        mode: 'auto',
+      })
+
+      console.log('✅ Subset DTM Result:', dtmResult)
+      console.log('Mode:', dtmResult.mode)
+      console.log('Cached:', dtmResult.was_cached)
+      console.log('Build Time:', dtmResult.build_time_ms, 'ms')
+      if (dtmResult.hash) {
+        console.log('Hash:', dtmResult.hash)
+      }
+
+      // Show success state
+      setDtmTrainingState('success')
+
+      // Auto-close modal after 2 seconds
+      setTimeout(() => {
+        setIsDtmTrainingModalOpen(false)
+      }, 2000)
+    } catch (err) {
+      console.error('Failed to build subset DTM:', err)
+      setDtmTrainingState('error')
+      setDtmTrainingError(
+        err instanceof Error ? err.message : 'Failed to build subset DTM',
+      )
+    }
   }
 
   const handleDeleteTaste = async (
@@ -2561,12 +2603,15 @@ export default function Home() {
       />
 
       {/* Create Project Modal */}
+      {/* COMMENTED OUT: CreateProjectModal - not needed since we skip project creation */}
+      {/*
       <CreateProjectModal
         isOpen={isCreateProjectModalOpen}
         onClose={() => setIsCreateProjectModalOpen(false)}
         onConfirm={handleCreateProject}
         isLoading={isCreatingProject}
       />
+      */}
 
       {/* Project Loading Modal */}
       {isLoadingProject && (

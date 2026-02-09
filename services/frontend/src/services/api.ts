@@ -1009,6 +1009,21 @@ export interface DTMStatusResponse {
   needs_rebuild?: boolean // True if resources were deleted since last build
 }
 
+export interface GetOrBuildDTMRequest {
+  resource_ids: string[]
+  mode?: 'auto' | 'single' | 'subset' | 'full'
+}
+
+export interface GetOrBuildDTMResponse {
+  status: string
+  mode: string
+  hash?: string
+  was_cached: boolean
+  build_time_ms: number
+  resource_ids: string[]
+  dtm?: Record<string, unknown>
+}
+
 export const dtmAPI = {
   /**
    * Build DTM for a taste (entire taste or subset of resources)
@@ -1025,6 +1040,22 @@ export const dtmAPI = {
    */
   getStatus: async (tasteId: string): Promise<DTMStatusResponse> => {
     return apiRequest<DTMStatusResponse>(`/api/dtm/${tasteId}/status`)
+  },
+
+  /**
+   * Get or build DTM for specific resources (smart caching)
+   */
+  getOrBuild: async (
+    tasteId: string,
+    payload: GetOrBuildDTMRequest,
+  ): Promise<GetOrBuildDTMResponse> => {
+    return apiRequest<GetOrBuildDTMResponse>(
+      `/api/dtm/${tasteId}/get-or-build`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+    )
   },
 
   /**

@@ -169,16 +169,54 @@ def save_subset_dtm(taste_id: str, resource_ids: List[str], dtm: Pass7CompleteDT
     # Convert to dict
     dtm_dict = dtm.model_dump() if hasattr(dtm, 'model_dump') else dtm.dict()
     
-    # Save
+    # Save subset DTM file
     subset_path = subsets_dir / f"{subset_hash}.json"
     with open(subset_path, 'w') as f:
         json.dump(dtm_dict, f, indent=2)
     
-    # Update metadata
-    update_subset_cache_metadata(taste_id, resource_ids, subset_hash)
+    # Update subset index
+    _update_subset_index(taste_id, subset_hash, resource_ids)
     
     print(f"✅ Cached subset DTM: {subset_hash}")
     return str(subset_path)
+
+
+def _update_subset_index(taste_id: str, subset_hash: str, resource_ids: List[str]):
+    """Update subset_index.json with new subset entry"""
+    taste_dir = ensure_dtm_directory(taste_id)
+    index_path = taste_dir / "subsets" / "subset_index.json"
+    
+    # Load existing index or create new
+    if index_path.exists():
+        with open(index_path, 'r') as f:
+            index = json.load(f)
+    else:
+        index = {}
+    
+    # Add/update entry
+    index[subset_hash] = {
+        "resource_ids": sorted(resource_ids),
+        "created_at": datetime.now().isoformat(),
+        "dtm_file": f"{subset_hash}.json"
+    }
+    
+    # Save index
+    with open(index_path, 'w') as f:
+        json.dump(index, f, indent=2)
+    
+    print(f"✅ Updated subset index: {subset_hash}")
+
+
+def load_subset_index(taste_id: str) -> Dict[str, Any]:
+    """Load subset_index.json"""
+    taste_dir = DTM_OUTPUTS_DIR / taste_id
+    index_path = taste_dir / "subsets" / "subset_index.json"
+    
+    if not index_path.exists():
+        return {}
+    
+    with open(index_path, 'r') as f:
+        return json.load(f)
 
 
 def load_subset_dtm(taste_id: str, resource_ids: List[str]) -> Optional[Pass7CompleteDTM]:

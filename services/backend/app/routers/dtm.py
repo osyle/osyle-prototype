@@ -2,12 +2,12 @@
 DTM API Routes
 REST endpoints for Design Taste Model operations
 """
-from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Body
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from app.auth import get_current_user
 from app import db
-from app.dtm import synthesizer, storage as dtm_storage
+from app.dtm import synthesizer, storage as dtm_storage, builder
 from app.dtr import storage as dtr_storage
 from app.llm.service import LLMService
 
@@ -42,6 +42,23 @@ class DTMStatusResponse(BaseModel):
     created_at: Optional[str] = None
     confidence: Optional[float] = None
     needs_rebuild: bool = False  # True if resources were deleted since last build
+
+
+class GetOrBuildDTMRequest(BaseModel):
+    """Request to get or build DTM for specific resources"""
+    resource_ids: List[str]
+    mode: str = "auto"  # auto, single, subset, full
+
+
+class GetOrBuildDTMResponse(BaseModel):
+    """Response from get_or_build_dtm"""
+    status: str
+    mode: str
+    hash: Optional[str] = None
+    was_cached: bool
+    build_time_ms: int
+    resource_ids: List[str]
+    dtm: Optional[Dict[str, Any]] = None  # Full DTM object
 
 
 # ============================================================================
@@ -260,6 +277,89 @@ async def get_dtm_status(
         confidence=dtm.generation_guidance.confidence_by_domain.get("overall", 0.75),
         needs_rebuild=needs_rebuild
     )
+
+
+@router.post("/{taste_id}/get-or-build", response_model=GetOrBuildDTMResponse)
+async def get_or_build_dtm_endpoint(
+    taste_id: str,
+    payload: GetOrBuildDTMRequest,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Get cached or build new DTM for specific resources.
+    
+    This is the smart DTM retrieval endpoint that:
+    1. Determines mode (single/subset/full) based on resource count
+    2. Checks cache for existing DTMs
+    3. Builds new DTM if not cached
+    4. Caches newly built DTMs
+    
+    Use cases:
+    - UI generation with selected resources
+    - Testing different resource combinations
+    - Previewing taste before full build
+    """
+    # Validate taste ownership
+    taste = db.get_taste(taste_id)
+    if not taste:
+        raise HTTPException(status_code=404, detail="Taste not found")
+    
+    if taste.get("owner_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Validate resource_ids are not empty
+    if not payload.resource_ids:
+        raise HTTPException(status_code=400, detail="resource_ids cannot be empty")
+    
+    # Validate all resources belong to this taste
+    resources = db.list_resources_for_taste(taste_id)
+    taste_resource_ids = {r["resource_id"] for r in resources}
+    
+    for resource_id in payload.resource_ids:
+        if resource_id not in taste_resource_ids:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Resource {resource_id} does not belong to taste {taste_id}"
+            )
+    
+    # Validate all resources have DTRs
+    for resource_id in payload.resource_ids:
+        resource = db.get_resource(resource_id)
+        if not resource:
+            raise HTTPException(status_code=404, detail=f"Resource {resource_id} not found")
+        
+        if not resource.get("metadata", {}).get("has_dtr"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Resource {resource_id} does not have DTR yet"
+            )
+    
+    # Call builder
+    try:
+        result = await builder.get_or_build_dtm(
+            taste_id=taste_id,
+            resource_ids=payload.resource_ids,
+            mode=payload.mode
+        )
+        
+        # Convert DTM to dict for response
+        dtm_dict = result["dtm"].model_dump() if hasattr(result["dtm"], 'model_dump') else result["dtm"].dict()
+        
+        return GetOrBuildDTMResponse(
+            status="success",
+            mode=result["mode"],
+            hash=result.get("hash"),
+            was_cached=result["was_cached"],
+            build_time_ms=result["build_time_ms"],
+            resource_ids=result["resource_ids"],
+            dtm=dtm_dict
+        )
+    
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ Error in get_or_build_dtm: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to build DTM: {str(e)}")
 
 
 @router.post("/{taste_id}/rebuild", response_model=DTMBuildResponse)
