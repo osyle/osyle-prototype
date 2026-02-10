@@ -15,7 +15,7 @@ load_dotenv()
 # Import routers
 from app.routers import tastes, projects
 from app.routers import dtm
-from app.websocket_routes import router as ws_router
+from app.websockets.routes import router as ws_router
 # from app.routers.mobbin import router as mobbin_router  # DISABLED: Uses Playwright
 
 app = FastAPI(title="Osyle API", version="1.0.0")
@@ -30,7 +30,7 @@ async def startup_event():
     # Disable mobbin temporarily
     """
     try:
-        from app.mobbin_scraper_service import mobbin_scraper_service
+        from app.integrations.mobbin.service import mobbin_scraper_service
         if mobbin_scraper_service.is_configured():
             await mobbin_scraper_service.get_scraper()
             print("✓ Mobbin scraper initialized successfully")
@@ -49,7 +49,7 @@ async def shutdown_event():
     # Disable mobbin temporarily
     """
     try:
-        from app.mobbin_scraper_service import mobbin_scraper_service
+        from app.integrations.mobbin.service import mobbin_scraper_service
         await mobbin_scraper_service.close()
     except Exception as e:
         print(f"Error closing scraper: {e}")
@@ -226,7 +226,7 @@ def handler(event, context):
     
     if is_websocket and not is_http:
         print(f"Detected WebSocket event: {route_key}")
-        from app.websocket_lambda_handler import handle_websocket_event
+        from app.websockets.lambda_handler import handle_websocket_event
         return handle_websocket_event(event, context)
     else:
         print(f"Detected HTTP event: {route_key}")

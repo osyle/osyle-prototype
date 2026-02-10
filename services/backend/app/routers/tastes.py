@@ -4,10 +4,10 @@ Tastes and Resources API endpoints
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 from datetime import datetime
-from app.auth import get_current_user
-from app import db, storage
+from app.core.auth import get_current_user
+from app.core import db, storage
 from app.dtr import storage as dtr_storage
-from app.models import (
+from app.core.models import (
     TasteCreate,
     TasteOut,
     TasteUpdate,

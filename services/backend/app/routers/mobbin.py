@@ -6,7 +6,7 @@ Uses Playwright to scrape Mobbin.com with comprehensive search and content extra
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
-from app.mobbin_scraper_service import mobbin_scraper_service
+from app.integrations.mobbin.service import mobbin_scraper_service
 
 
 router = APIRouter(prefix="/api/mobbin", tags=["mobbin"])

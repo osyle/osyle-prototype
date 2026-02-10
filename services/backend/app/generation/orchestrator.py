@@ -12,8 +12,8 @@ Generation Strategy:
 from typing import Dict, Any, List, Optional
 import base64
 
-from app.parametric import ParametricGenerator
-from app.prompt_selector import get_prompt_name
+from app.generation.parametric import ParametricGenerator
+from app.generation.prompt_selector_old import get_prompt_name
 
 
 class GenerationOrchestrator:

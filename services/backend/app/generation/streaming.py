@@ -9,7 +9,7 @@ from fastapi import WebSocket
 
 
 # Import checkpoint extractor (use the fixed version)
-from app.checkpoint_extractor import (
+from app.generation.checkpoints import (
     extract_at_checkpoint, 
     count_checkpoints,
     _aggressive_clean_checkpoints  # Import the aggressive cleaner

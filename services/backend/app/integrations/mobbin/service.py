@@ -4,7 +4,7 @@ Mobbin Scraper Service - Manages browser instance and scraping
 
 import os
 from typing import Optional
-from app.mobbin_scraper import MobbinScraper
+from app.integrations.mobbin.scraper import MobbinScraper
 import asyncio
 
 

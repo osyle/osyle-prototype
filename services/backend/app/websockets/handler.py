@@ -11,12 +11,12 @@ from fastapi import WebSocket, WebSocketDisconnect
 from typing import Dict, Any, List
 
 from app.llm import get_llm_service
-from app import db, storage
-from app.db import convert_decimals  # Import for Decimal conversion
+from app.core import db, storage
+from app.core.db import convert_decimals  # Import for Decimal conversion
 
 # Generation imports (keep for other handlers)
-from app.generation_orchestrator import GenerationOrchestrator
-from app.parametric import ParametricGenerator
+from app.generation.orchestrator import GenerationOrchestrator
+from app.generation.parametric import ParametricGenerator
 
 # DTM imports (Pass 7)
 from app.dtm import synthesizer as dtm_synthesizer
@@ -27,19 +27,19 @@ from app.dtr import storage as dtr_storage
 from app.unified_dtr_builder import prepare_figma_for_llm
 
 # Import wireframe processor for redesign mode
-from app.wireframe_processor import process_redesign_references, prepare_wireframe_for_llm
+from app.generation.reference_modes.redesign.wireframe_processor import process_redesign_references, prepare_wireframe_for_llm
 
 # Import rethink processor for rethink mode
-from app.rethink_processor import RethinkProcessor
+from app.generation.reference_modes.rethink.processor import RethinkProcessor
 
 # Import progressive streaming
-from app.progressive_streaming import generate_screen_ui_progressive
+from app.generation.streaming import generate_screen_ui_progressive
 
 # Import prompt selector for granular checkpoint mode
-from app.prompt_selector import get_prompt_name
+from app.generation.prompt_selector_old import get_prompt_name
 
-from app.feedback_router import FeedbackRouter
-from app.feedback_applier import FeedbackApplier
+from app.feedback.router import FeedbackRouter
+from app.feedback.applier import FeedbackApplier
 
 async def send_progress(websocket: WebSocket, stage: str, message: str, data: Dict[str, Any] = None):
     """Send progress update to client"""

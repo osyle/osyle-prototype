@@ -3,9 +3,9 @@ Projects API endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form, Request
 from typing import List, Optional
-from app.auth import get_current_user
-from app import db, storage
-from app.models import (
+from app.core.auth import get_current_user
+from app.core import db, storage
+from app.core.models import (
     ProjectCreate,
     ProjectOut,
     ProjectUpdate,

@@ -5,8 +5,8 @@ Migrated from local filesystem to S3 for production use
 import json
 from typing import Dict, Any, Optional
 from datetime import datetime
-from app import storage as s3_storage
-from app import db
+from app.core import storage as s3_storage
+from app.core import db
 
 
 def save_pass_result(

@@ -198,6 +198,7 @@ aws-delete-tables: ## Delete all DynamoDB tables (DESTRUCTIVE)
 	aws dynamodb delete-table --table-name OsyleTastes --region us-east-1
 	aws dynamodb delete-table --table-name OsyleResources --region us-east-1
 	aws dynamodb delete-table --table-name OsyleProjects --region us-east-1
+	aws dynamodb delete-table --table-name OsyleDesignMutations --region us-east-1
 	@echo "✅ All tables deleted"
 
 aws-empty-bucket: ## Empty S3 bucket (DESTRUCTIVE)
@@ -262,6 +263,7 @@ aws-delete-tables-prod: ## Delete PRODUCTION DynamoDB tables (DESTRUCTIVE)
 	aws dynamodb delete-table --table-name OsyleTastes-Prod --region us-east-1
 	aws dynamodb delete-table --table-name OsyleResources-Prod --region us-east-1
 	aws dynamodb delete-table --table-name OsyleProjects-Prod --region us-east-1
+	aws dynamodb delete-table --table-name OsyleDesignMutations-Prod --region us-east-1
 	@echo "✅ All production tables deleted"
 
 aws-empty-bucket-prod: ## Empty PRODUCTION S3 bucket (DESTRUCTIVE)

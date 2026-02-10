@@ -5,7 +5,7 @@ from fastapi import APIRouter, WebSocket, Query, WebSocketException, status
 import jwt
 import os
 
-from app.websocket_handler import handle_websocket
+from app.websockets.handler import handle_websocket
 
 router = APIRouter()
 

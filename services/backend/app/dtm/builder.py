@@ -6,7 +6,7 @@ import time
 from typing import List, Optional, Dict, Any
 from app.dtr import storage as dtr_storage
 from app.dtr.schemas import Pass6CompleteDTR
-from app.db import list_resources_for_taste
+from app.core.db import list_resources_for_taste
 from . import storage
 from . import synthesizer
 from .schemas import Pass7CompleteDTM

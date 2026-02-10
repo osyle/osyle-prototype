@@ -5,8 +5,8 @@ REST endpoints for Design Taste Model operations
 from fastapi import APIRouter, Depends, HTTPException, Body
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
-from app.auth import get_current_user
-from app import db
+from app.core.auth import get_current_user
+from app.core import db
 from app.dtm import synthesizer, storage as dtm_storage, builder
 from app.dtr import storage as dtr_storage
 from app.llm.service import LLMService

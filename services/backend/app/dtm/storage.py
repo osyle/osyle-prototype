@@ -6,8 +6,8 @@ import json
 import hashlib
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from app import storage as s3_storage
-from app import db
+from app.core import storage as s3_storage
+from app.core import db
 from .schemas import (
     Pass7CompleteDTM,
     StyleFingerprint,
