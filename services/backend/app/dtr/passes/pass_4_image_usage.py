@@ -174,46 +174,59 @@ class Pass4ImageUsage(BasePass):
         resource_id: str
     ) -> List[Dict[str, Any]]:
         """
-        Extract and save image assets from Figma JSON.
+        Extract and save image assets from Figma JSON to S3.
         
         The Figma plugin embeds exported images as base64 in figma.json
         under the _imageExports key: { "node-id": "base64data", ... }
         
-        This method extracts those images and saves them to the assets directory.
+        This method extracts those images and saves them to S3.
         
         Args:
             placements: List of placement dicts from vision analysis
             figma_image_exports: Dict mapping node IDs to base64 image data
-            resource_id: Resource ID for output directory
+            resource_id: Resource ID
         
         Returns:
-            Updated placements list with asset_path filled in
+            Updated placements list with asset_path (S3 key) filled in
         """
         try:
-            assets_dir = f"/app/dtr_outputs/{resource_id}/assets"
-            os.makedirs(assets_dir, exist_ok=True)
-            print(f"Created assets directory: {assets_dir}")
+            from app import db
+            from app import storage as s3_storage
             
-            # Save each embedded image
+            # Get resource to find owner_id and taste_id
+            resource = db.get_resource(resource_id)
+            if not resource:
+                print(f"⚠️  Resource {resource_id} not found, skipping image extraction")
+                return placements
+            
+            owner_id = resource["owner_id"]
+            taste_id = resource["taste_id"]
+            
+            # Save each embedded image to S3
             saved_images = {}
             for node_id, base64_data in figma_image_exports.items():
                 try:
                     # Decode base64 to bytes
                     img_bytes = base64.b64decode(base64_data)
                     
-                    # Save to assets directory
-                    filename = f"image-{node_id}.png"
-                    filepath = os.path.join(assets_dir, filename)
+                    # Generate S3 key for this image asset
+                    # Format: resources/{owner_id}/{taste_id}/{resource_id}/dtr/assets/image-{node_id}.png
+                    s3_key = f"resources/{owner_id}/{taste_id}/{resource_id}/dtr/assets/image-{node_id}.png"
                     
-                    with open(filepath, 'wb') as f:
-                        f.write(img_bytes)
+                    # Upload to S3
+                    s3_storage.s3_client.put_object(
+                        Bucket=s3_storage.S3_BUCKET,
+                        Key=s3_key,
+                        Body=img_bytes,
+                        ContentType='image/png'
+                    )
                     
-                    saved_images[node_id] = f"assets/{filename}"
-                    print(f"✓ Saved embedded image: {filepath}")
+                    saved_images[node_id] = s3_key
+                    print(f"✓ Saved embedded image to S3: {s3_key}")
                 except Exception as e:
                     print(f"✗ Failed to extract image {node_id}: {e}")
             
-            print(f"Successfully extracted {len(saved_images)}/{len(figma_image_exports)} images")
+            print(f"Successfully extracted {len(saved_images)}/{len(figma_image_exports)} images to S3")
             
             # Match placements to extracted images
             matched_count = 0

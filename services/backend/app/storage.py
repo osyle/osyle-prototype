@@ -729,3 +729,105 @@ def taste_dtm_exists(user_id: str, taste_id: str) -> bool:
     """Check if DTM exists for a taste"""
     key = get_dtm_key(user_id, taste_id)
     return check_object_exists(key)
+
+
+# ============================================================================
+# DTR/DTM JSON STORAGE HELPERS
+# ============================================================================
+
+def save_json_to_s3(key: str, data: dict) -> bool:
+    """
+    Save JSON data to S3
+    
+    Args:
+        key: S3 object key
+        data: Dictionary to save as JSON
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=key,
+            Body=json.dumps(data, indent=2, default=str),
+            ContentType='application/json'
+        )
+        return True
+    except Exception as e:
+        print(f"Error saving JSON to S3 ({key}): {e}")
+        return False
+
+
+def load_json_from_s3(key: str) -> Optional[dict]:
+    """
+    Load JSON data from S3
+    
+    Args:
+        key: S3 object key
+    
+    Returns:
+        Dictionary if successful, None if not found
+    """
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        content = response['Body'].read().decode('utf-8')
+        return json.loads(content)
+    except s3_client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"Error loading JSON from S3 ({key}): {e}")
+        return None
+
+
+# ============================================================================
+# DTR S3 KEY GENERATION
+# ============================================================================
+
+def get_dtr_pass_key(owner_id: str, taste_id: str, resource_id: str, pass_name: str) -> str:
+    """Generate S3 key for DTR pass output (latest version)"""
+    return f"resources/{owner_id}/{taste_id}/{resource_id}/dtr/{pass_name}_latest.json"
+
+
+def get_dtr_pass_versioned_key(owner_id: str, taste_id: str, resource_id: str, pass_name: str, timestamp: str) -> str:
+    """Generate S3 key for timestamped DTR pass output"""
+    return f"resources/{owner_id}/{taste_id}/{resource_id}/dtr/versions/{pass_name}_{timestamp}.json"
+
+
+def get_dtr_extraction_status_key(owner_id: str, taste_id: str, resource_id: str) -> str:
+    """Generate S3 key for extraction status"""
+    return f"resources/{owner_id}/{taste_id}/{resource_id}/dtr/extraction_status.json"
+
+
+# ============================================================================
+# DTM S3 KEY GENERATION (Pass 7)
+# ============================================================================
+
+def get_dtm_complete_key(owner_id: str, taste_id: str) -> str:
+    """Generate S3 key for complete DTM (latest version)"""
+    return f"tastes/{owner_id}/{taste_id}/dtm/complete_dtm_latest.json"
+
+
+def get_dtm_versioned_key(owner_id: str, taste_id: str, timestamp: str) -> str:
+    """Generate S3 key for timestamped DTM"""
+    return f"tastes/{owner_id}/{taste_id}/dtm/versions/complete_dtm_{timestamp}.json"
+
+
+def get_dtm_metadata_key(owner_id: str, taste_id: str) -> str:
+    """Generate S3 key for DTM metadata"""
+    return f"tastes/{owner_id}/{taste_id}/dtm/dtm_metadata.json"
+
+
+def get_dtm_fingerprint_key(owner_id: str, taste_id: str, resource_id: str) -> str:
+    """Generate S3 key for resource fingerprint"""
+    return f"tastes/{owner_id}/{taste_id}/dtm_fingerprints/{resource_id}_fingerprint.json"
+
+
+def get_dtm_subset_key(owner_id: str, taste_id: str, subset_hash: str) -> str:
+    """Generate S3 key for subset DTM"""
+    return f"tastes/{owner_id}/{taste_id}/dtm_subsets/{subset_hash}.json"
+
+
+def get_dtm_subset_index_key(owner_id: str, taste_id: str) -> str:
+    """Generate S3 key for subset index"""
+    return f"tastes/{owner_id}/{taste_id}/dtm_subsets/subset_index.json"

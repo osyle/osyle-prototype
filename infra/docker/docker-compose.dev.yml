@@ -7,8 +7,6 @@ services:
     container_name: osyle-backend
     volumes:
       - ../../services/backend:/app
-      - ../../dtr_outputs:/app/dtr_outputs # DTR storage (Pass 1-6 outputs)
-      - ../../dtm_outputs:/app/dtm_outputs # DTM storage (Pass 7 outputs)
     ports:
       - "8000:8000"
     env_file:

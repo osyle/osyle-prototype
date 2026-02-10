@@ -1,48 +1,21 @@
 """
-DTR Storage
-
-Local file storage for DTR extraction results.
-For now, saves to local JSON files instead of database.
+DTR Storage - S3-based storage for DTR extraction results
+Migrated from local filesystem to S3 for production use
 """
 import json
-import os
 from typing import Dict, Any, Optional
-from pathlib import Path
 from datetime import datetime
-
-
-# Storage directory (mounted via Docker volume)
-STORAGE_DIR = Path("/app/dtr_outputs")
-
-
-def ensure_storage_dir():
-    """Ensure storage directory exists"""
-    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def get_resource_dir(resource_id: str) -> Path:
-    """
-    Get directory for a specific resource
-    
-    Args:
-        resource_id: Resource UUID
-    
-    Returns:
-        Path to resource directory
-    """
-    ensure_storage_dir()
-    resource_dir = STORAGE_DIR / resource_id
-    resource_dir.mkdir(parents=True, exist_ok=True)
-    return resource_dir
+from app import storage as s3_storage
+from app import db
 
 
 def save_pass_result(
     resource_id: str,
     pass_name: str,
     data: Dict[str, Any]
-) -> Path:
+) -> str:
     """
-    Save pass result to local JSON file
+    Save pass result to S3
     
     Args:
         resource_id: Resource UUID
@@ -50,27 +23,29 @@ def save_pass_result(
         data: Pass result data
     
     Returns:
-        Path to saved file
+        S3 key of saved file
     """
-    resource_dir = get_resource_dir(resource_id)
+    # Get resource to find owner_id and taste_id
+    resource = db.get_resource(resource_id)
+    if not resource:
+        raise ValueError(f"Resource {resource_id} not found")
     
-    # Create filename with timestamp
+    owner_id = resource["owner_id"]
+    taste_id = resource["taste_id"]
+    
+    # Generate timestamp
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    filename = f"{pass_name}_{timestamp}.json"
-    filepath = resource_dir / filename
     
-    # Also save as "latest"
-    latest_filepath = resource_dir / f"{pass_name}_latest.json"
+    # Save latest version
+    latest_key = s3_storage.get_dtr_pass_key(owner_id, taste_id, resource_id, pass_name)
+    s3_storage.save_json_to_s3(latest_key, data)
     
-    # Save data
-    with open(filepath, 'w') as f:
-        json.dump(data, f, indent=2, default=str)
+    # Save timestamped version (S3 versioning will handle this, but we also save explicitly)
+    versioned_key = s3_storage.get_dtr_pass_versioned_key(owner_id, taste_id, resource_id, pass_name, timestamp)
+    s3_storage.save_json_to_s3(versioned_key, data)
     
-    # Save as latest
-    with open(latest_filepath, 'w') as f:
-        json.dump(data, f, indent=2, default=str)
-    
-    return filepath
+    print(f"✅ Saved {pass_name} to S3: {latest_key}")
+    return latest_key
 
 
 def load_pass_result(
@@ -79,7 +54,7 @@ def load_pass_result(
     version: str = "latest"
 ) -> Optional[Dict[str, Any]]:
     """
-    Load pass result from local JSON file
+    Load pass result from S3
     
     Args:
         resource_id: Resource UUID
@@ -89,27 +64,29 @@ def load_pass_result(
     Returns:
         Pass result data, or None if not found
     """
-    resource_dir = get_resource_dir(resource_id)
-    
-    if version == "latest":
-        filepath = resource_dir / f"{pass_name}_latest.json"
-    else:
-        filepath = resource_dir / f"{pass_name}_{version}.json"
-    
-    if not filepath.exists():
+    # Get resource to find owner_id and taste_id
+    resource = db.get_resource(resource_id)
+    if not resource:
         return None
     
-    with open(filepath, 'r') as f:
-        return json.load(f)
+    owner_id = resource["owner_id"]
+    taste_id = resource["taste_id"]
+    
+    if version == "latest":
+        key = s3_storage.get_dtr_pass_key(owner_id, taste_id, resource_id, pass_name)
+    else:
+        key = s3_storage.get_dtr_pass_versioned_key(owner_id, taste_id, resource_id, pass_name, version)
+    
+    return s3_storage.load_json_from_s3(key)
 
 
 def save_complete_dtr(
     resource_id: str,
     taste_id: str,
     dtr_data: Dict[str, Any]
-) -> Path:
+) -> str:
     """
-    Save complete DTR (all passes)
+    Save complete DTR (all passes) to S3
     
     Args:
         resource_id: Resource UUID
@@ -117,9 +94,14 @@ def save_complete_dtr(
         dtr_data: Complete DTR data
     
     Returns:
-        Path to saved file
+        S3 key of saved file
     """
-    resource_dir = get_resource_dir(resource_id)
+    # Get resource to find owner_id
+    resource = db.get_resource(resource_id)
+    if not resource:
+        raise ValueError(f"Resource {resource_id} not found")
+    
+    owner_id = resource["owner_id"]
     
     # Add IDs and timestamp
     complete_data = {
@@ -129,21 +111,7 @@ def save_complete_dtr(
         **dtr_data
     }
     
-    # Save with timestamp
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    filename = f"complete_dtr_{timestamp}.json"
-    filepath = resource_dir / filename
-    
-    # Also save as "latest"
-    latest_filepath = resource_dir / "complete_dtr_latest.json"
-    
-    with open(filepath, 'w') as f:
-        json.dump(complete_data, f, indent=2, default=str)
-    
-    with open(latest_filepath, 'w') as f:
-        json.dump(complete_data, f, indent=2, default=str)
-    
-    return filepath
+    return save_pass_result(resource_id, "pass_6_complete_dtr", complete_data)
 
 
 def load_complete_dtr(
@@ -151,7 +119,7 @@ def load_complete_dtr(
     version: str = "latest"
 ) -> Optional[Dict[str, Any]]:
     """
-    Load complete DTR (Pass 6 output)
+    Load complete DTR (Pass 6 output) from S3
     
     Args:
         resource_id: Resource UUID
@@ -160,57 +128,64 @@ def load_complete_dtr(
     Returns:
         Complete DTR data, or None if not found
     """
-    resource_dir = get_resource_dir(resource_id)
-    
-    if version == "latest":
-        # Pass 6 saves as "pass_6_complete_dtr_latest.json"
-        filepath = resource_dir / "pass_6_complete_dtr_latest.json"
-    else:
-        filepath = resource_dir / f"pass_6_complete_dtr_{version}.json"
-    
-    if not filepath.exists():
-        print(f"⚠️  DTR file not found: {filepath}")
-        return None
-    
-    with open(filepath, 'r') as f:
-        return json.load(f)
+    return load_pass_result(resource_id, "pass_6_complete_dtr", version)
 
 
 def list_resource_files(resource_id: str) -> list[str]:
     """
     List all DTR files for a resource
     
+    Note: In S3 implementation, this would require listing objects
+    which is expensive. For now, return empty list.
+    Individual files can still be loaded by name.
+    
     Args:
         resource_id: Resource UUID
     
     Returns:
-        List of filenames
+        List of filenames (empty in S3 implementation)
     """
-    resource_dir = get_resource_dir(resource_id)
-    
-    if not resource_dir.exists():
-        return []
-    
-    return [f.name for f in resource_dir.iterdir() if f.is_file()]
+    # In S3 implementation, listing all files is expensive
+    # Individual files can be loaded by name using load_pass_result
+    return []
 
 
 def delete_resource_dtr(resource_id: str):
     """
-    Delete all DTR data for a resource
+    Delete all DTR data for a resource from S3
     
     Args:
         resource_id: Resource UUID
     """
-    resource_dir = get_resource_dir(resource_id)
+    # Get resource to find owner_id and taste_id
+    resource = db.get_resource(resource_id)
+    if not resource:
+        return
     
-    if resource_dir.exists():
-        import shutil
-        shutil.rmtree(resource_dir)
+    owner_id = resource["owner_id"]
+    taste_id = resource["taste_id"]
+    
+    # Delete main DTR files (passes 1-6 and status)
+    # Note: Versioned files remain in S3 for history
+    passes = [
+        "pass_1_structure",
+        "pass_2_surface",
+        "pass_3_typography",
+        "pass_4_image_usage",
+        "pass_5_components",
+        "pass_6_complete_dtr"
+    ]
+    
+    for pass_name in passes:
+        key = s3_storage.get_dtr_pass_key(owner_id, taste_id, resource_id, pass_name)
+        s3_storage.delete_object(key)
+    
+    # Delete extraction status
+    status_key = s3_storage.get_dtr_extraction_status_key(owner_id, taste_id, resource_id)
+    s3_storage.delete_object(status_key)
+    
+    print(f"✅ Deleted DTR files for resource {resource_id}")
 
-
-# ============================================================================
-# EXTRACTION STATUS TRACKING
-# ============================================================================
 
 def save_extraction_status(
     resource_id: str,
@@ -220,16 +195,22 @@ def save_extraction_status(
     quality_tier: Optional[str] = None
 ):
     """
-    Save extraction status
+    Save extraction status to S3
     
     Args:
         resource_id: Resource UUID
-        status: Status string (pending, processing, completed, failed)
+        status: Status ("pending", "processing", "completed", "failed")
         current_pass: Current pass being processed
         error: Error message if failed
         quality_tier: Quality tier (base, corrected, approved) - set when Pass 6 completes
     """
-    resource_dir = get_resource_dir(resource_id)
+    # Get resource to find owner_id and taste_id
+    resource = db.get_resource(resource_id)
+    if not resource:
+        raise ValueError(f"Resource {resource_id} not found")
+    
+    owner_id = resource["owner_id"]
+    taste_id = resource["taste_id"]
     
     status_data = {
         "resource_id": resource_id,
@@ -240,15 +221,13 @@ def save_extraction_status(
         "updated_at": datetime.utcnow().isoformat()
     }
     
-    filepath = resource_dir / "extraction_status.json"
-    
-    with open(filepath, 'w') as f:
-        json.dump(status_data, f, indent=2)
+    key = s3_storage.get_dtr_extraction_status_key(owner_id, taste_id, resource_id)
+    s3_storage.save_json_to_s3(key, status_data)
 
 
 def load_extraction_status(resource_id: str) -> Optional[Dict[str, Any]]:
     """
-    Load extraction status
+    Load extraction status from S3
     
     Args:
         resource_id: Resource UUID
@@ -256,11 +235,13 @@ def load_extraction_status(resource_id: str) -> Optional[Dict[str, Any]]:
     Returns:
         Status data, or None if not found
     """
-    resource_dir = get_resource_dir(resource_id)
-    filepath = resource_dir / "extraction_status.json"
-    
-    if not filepath.exists():
+    # Get resource to find owner_id and taste_id
+    resource = db.get_resource(resource_id)
+    if not resource:
         return None
     
-    with open(filepath, 'r') as f:
-        return json.load(f)
+    owner_id = resource["owner_id"]
+    taste_id = resource["taste_id"]
+    
+    key = s3_storage.get_dtr_extraction_status_key(owner_id, taste_id, resource_id)
+    return s3_storage.load_json_from_s3(key)
