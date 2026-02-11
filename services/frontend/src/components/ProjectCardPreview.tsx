@@ -69,9 +69,10 @@ const ProjectCardPreview: React.FC<ProjectCardPreviewProps> = ({
       )
     }
 
-    // Get dimensions from entry screen
-    const baseWidth = entryScreen.dimensions.width
-    const baseHeight = entryScreen.dimensions.height
+    // Get dimensions from entry screen (with fallback for old projects)
+    const dimensions = entryScreen.dimensions || { width: 1280, height: 720 }
+    const baseWidth = dimensions.width
+    const baseHeight = dimensions.height
 
     // Card content area height (subtract footer height ~70px)
     const availableHeight = cardHeight - 70
