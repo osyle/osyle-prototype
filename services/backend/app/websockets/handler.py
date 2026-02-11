@@ -1,42 +1,35 @@
 """
-WebSocket Handler for Long-Running LLM Operations - V2
-Updated to use DTR v5 and DTM v2 with visual-first taste learning
-Supports both single-screen and flow-based generation
+WebSocket Handler for Long-Running LLM Operations - V3
+Updated to use NEW DTR/DTM system (S3-based, Pass 6/7)
+Supports default taste-driven generation (Phase 1 focus)
 """
 import json
 import base64
 import re
 from decimal import Decimal
 from fastapi import WebSocket, WebSocketDisconnect
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from app.llm import get_llm_service
+from app.llm.types import Message, MessageRole
 from app.core import db, storage
 from app.core.db import convert_decimals  # Import for Decimal conversion
 
-# Generation imports (keep for other handlers)
+# Generation imports
 from app.generation.orchestrator import GenerationOrchestrator
 from app.generation.parametric import ParametricGenerator
 
-# DTM imports (Pass 7)
-from app.dtm import synthesizer as dtm_synthesizer
+# NEW DTM/DTR imports (S3-based system)
+from app.dtm import builder as dtm_builder
 from app.dtm import storage as dtm_storage
 from app.dtr import storage as dtr_storage
 
-# Import helper for Figma compression (used by other handlers)
-from app.unified_dtr_builder import prepare_figma_for_llm
-
-# Import wireframe processor for redesign mode
-from app.generation.reference_modes.redesign.wireframe_processor import process_redesign_references, prepare_wireframe_for_llm
-
-# Import rethink processor for rethink mode
-from app.generation.reference_modes.rethink.processor import RethinkProcessor
+# PHASE 2: Reference modes (commented out for Phase 1)
+# from app.generation.reference_modes.redesign.wireframe_processor import process_redesign_references
+# from app.generation.reference_modes.rethink.processor import RethinkProcessor
 
 # Import progressive streaming
 from app.generation.streaming import generate_screen_ui_progressive
-
-# Import prompt selector for granular checkpoint mode
-from app.generation.prompt_selector_old import get_prompt_name
 
 from app.feedback.router import FeedbackRouter
 from app.feedback.applier import FeedbackApplier
@@ -590,7 +583,17 @@ async def handle_generate_ui(websocket: WebSocket, data: Dict[str, Any], user_id
 
 
 async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_id: str):
-    """Handle generate-flow WebSocket request with progressive screen updates"""
+    """
+    Handle generate-flow WebSocket request - PHASE 1 NEW SYSTEM
+    
+    Flow:
+    1. Load project from DB
+    2. Load DTM via new builder (subset or full)
+    3. Generate flow architecture
+    4. Generate each screen with new 4-layer taste system
+    5. Validate taste adherence
+    6. Stream progressive updates to frontend
+    """
     import asyncio
     
     try:
@@ -600,7 +603,10 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
             await send_error(websocket, "Missing project_id")
             return
         
-        # Get project
+        # ============================================================================
+        # STEP 1: Load Project
+        # ============================================================================
+        
         await send_progress(websocket, "init", "Loading project...")
         project = db.get_project(project_id)
         
@@ -615,703 +621,415 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
         task_description = project.get("task_description", "")
         device_info = project.get("device_info", {})
         max_screens = project.get("max_screens", 5)
-        screen_definitions = project.get("screen_definitions", [])  # NEW: Get screen definitions
+        selected_taste_id = project.get("selected_taste_id")
+        selected_resource_ids = project.get("selected_resource_ids", [])
+        rendering_mode = project.get("rendering_mode", "react")
         
         if not device_info:
             await send_error(websocket, "Device info required")
             return
         
-        # Load DTM if available (with filtering for rethink mode)
+        print(f"\n{'='*80}")
+        print(f"GENERATE FLOW - NEW SYSTEM")
+        print(f"{'='*80}")
+        print(f"Project ID: {project_id}")
+        print(f"Task: {task_description[:100]}...")
+        print(f"Taste ID: {selected_taste_id}")
+        print(f"Resources: {len(selected_resource_ids) if selected_resource_ids else 'all'}")
+        print(f"Device: {device_info.get('platform')} {device_info.get('screen', {}).get('width')}x{device_info.get('screen', {}).get('height')}")
+        print(f"Max screens: {max_screens}")
+        print(f"{'='*80}\n")
+        
+        # ============================================================================
+        # STEP 2: Load DTM via NEW Builder
+        # ============================================================================
+        
         await send_progress(websocket, "loading_dtm", "Loading designer taste model...")
-        dtm_guidance = None
-        dtm = None  # Full DTM object for rethink mode
-        selected_taste_id = project.get("selected_taste_id")
-        selected_resource_ids = project.get("selected_resource_ids", [])
+        
+        dtm = None
+        taste_source = "full_dtm"  # Default
         
         if selected_taste_id:
             try:
-                # Load raw DTM
-                raw_dtm = storage.get_taste_dtm(user_id, selected_taste_id)
+                print("🎨 Loading DTM via new builder...")
                 
-                if raw_dtm:
-                    # Filter if specific resources selected
-                    if selected_resource_ids and len(selected_resource_ids) > 0:
-                        from app.dtm_context_filter_v2 import DTMContextFilterV2
-                        
-                        filter = DTMContextFilterV2()
-                        dtm = filter.filter_by_resources(
-                            dtm=raw_dtm,
-                            selected_resource_ids=selected_resource_ids
-                        )
-                        print(f"  DTM filtered to {len(selected_resource_ids)} selected resources")
-                    else:
-                        dtm = raw_dtm
-                        total_resources = dtm.get('meta', {}).get('total_resources', 0)
-                        print(f"  DTM loaded ({total_resources} total resources)")
-                    
-                    # Create DTM guidance string for flow architecture (legacy)
-                    dtm_guidance = f"DTM (Designer Taste Model):\n{json.dumps(dtm, indent=2)}"
-            except Exception as e:
-                print(f"  Warning: Could not load DTM: {e}")
-        
-        # Load inspiration images
-        await send_progress(websocket, "loading_images", "Loading inspiration images...")
-        inspiration_images = []
-        image_keys = project.get("inspiration_image_keys", [])
-        
-        if image_keys:
-            MAX_INSPIRATION_IMAGES_FOR_LLM = 5
-            limited_keys = image_keys[-MAX_INSPIRATION_IMAGES_FOR_LLM:]
-            inspiration_images = storage.get_inspiration_images(user_id, project_id, limited_keys)
-        
-        # Rethink mode processing
-        has_rethink_screens = any(
-            screen_def.get('mode') == 'rethink'
-            for screen_def in screen_definitions
-        )
-        
-        rethink_data = None
-        
-        if has_rethink_screens:
-            # Get reference files for first rethink screen
-            rethink_screen_index = next(
-                i for i, sd in enumerate(screen_definitions)
-                if sd.get('mode') == 'rethink'
-            )
-            
-            screen_def = screen_definitions[rethink_screen_index]
-            has_figma = screen_def.get('has_figma', False)
-            image_count = screen_def.get('image_count', 0)
-            
-            reference_files = {}
-            
-            if has_figma or image_count > 0:
-                try:
-                    ref_files = storage.get_screen_reference_files(
-                        user_id, project_id, rethink_screen_index, has_figma, image_count
-                    )
-                    reference_files = ref_files
-                except Exception as e:
-                    print(f"Warning: Could not load rethink reference files: {e}")
-            
-            # Run rethink pipeline with DTM
-            try:
-                llm = get_llm_service()
-                
-                # Create progress callback for rethink steps
-                async def rethink_progress(stage: str, message: str):
-                    await send_progress(websocket, stage, message)
-                
-                rethink_processor = RethinkProcessor(llm, progress_callback=rethink_progress)
-                
-                rethink_data = await rethink_processor.process_rethink_complete(
-                    reference_files=reference_files,
-                    task_description=task_description,
-                    device_info=device_info,
-                    domain=None,  # Will be inferred
-                    dtm=dtm  # Pass DTM for quirk-informed rethinking
+                dtm_result = await dtm_builder.get_or_build_dtm(
+                    taste_id=selected_taste_id,
+                    resource_ids=selected_resource_ids,
+                    mode="auto"
                 )
                 
-                # Send rethink results to client
-                await websocket.send_json({
-                    "type": "rethink_complete",
-                    "data": {
-                        "intent_analysis": rethink_data.get('intent_analysis'),
-                        "first_principles": rethink_data.get('first_principles'),
-                        "explorations": rethink_data.get('explorations'),
-                        "optimal_design": rethink_data.get('optimal_design'),
-                        "has_designer_philosophy": rethink_data.get('designer_philosophy') is not None
-                    }
-                })
+                # Convert Pydantic model to dict for easier access
+                dtm_model = dtm_result["dtm"]
+                dtm = dtm_model.model_dump() if hasattr(dtm_model, 'model_dump') else dtm_model
+                taste_source = dtm_result["mode"]  # "dtr", "subset", or "full"
                 
-                print(f"  ✓ Strategic rethinking complete")
+                print(f"  ✓ DTM loaded successfully")
+                print(f"    Mode: {taste_source}")
+                print(f"    Cached: {dtm_result.get('was_cached', False)}")
+                if selected_resource_ids:
+                    print(f"    Prioritized resources: {len(selected_resource_ids)}")
                 
             except Exception as e:
-                print(f"Error in rethink pipeline: {e}")
+                print(f"  ✗ Warning: Could not load DTM: {e}")
                 import traceback
                 traceback.print_exc()
-                await send_error(websocket, f"Rethink pipeline failed: {str(e)}")
-                return
+                # Continue without DTM (will generate generic UI)
         
-        # Generate flow architecture
-        await send_progress(websocket, "generating_flow", "Generating flow architecture...")
-        flow_arch_message = f"TASK: {task_description}\n\nDEVICE CONTEXT:\n{json.dumps(device_info, indent=2)}\n\nMAX SCREENS: {max_screens}"
+        # ============================================================================
+        # STEP 3: Generate Flow Architecture
+        # ============================================================================
         
-        # Add screen definitions if provided
-        if screen_definitions:
-            flow_arch_message += f"\n\nSCREEN DEFINITIONS:\n{json.dumps(screen_definitions, indent=2)}"
-        else:
-            flow_arch_message += f"\n\nSCREEN DEFINITIONS: None provided - design the optimal flow from scratch based on the task."
-        
-        # Add rethink context if available
-        if rethink_data:
-            rethink_flow_context = rethink_processor.prepare_rethink_for_flow_architecture(
-                rethink_data, task_description, device_info
-            )
-            flow_arch_message += f"\n\n{rethink_flow_context}"
-            
-        flow_arch_content = [
-            {"type": "text", "text": flow_arch_message}
-        ]
-        
-        if dtm_guidance:
-            flow_arch_content.append({"type": "text", "text": f"\n\n{dtm_guidance}"})
-        
-        for img in inspiration_images:
-            flow_arch_content.append({
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": img.get('media_type', 'image/png'),
-                    "data": img['data']
-                }
-            })
-        
-        # Determine which flow architecture prompt to use
-        if has_rethink_screens:
-            flow_arch_prompt = "generate_flow_architecture_rethink"
-        else:
-            flow_arch_prompt = "generate_flow_architecture_v2"
+        await send_progress(websocket, "generating_architecture", "Designing flow architecture...")
         
         llm = get_llm_service()
-        flow_arch_response = await llm.call_claude(
-            prompt_name=flow_arch_prompt,
-            user_message=flow_arch_content,
-            parse_json=True
+        
+        print("\n🏗️  Generating flow architecture...")
+        
+        flow_architecture = await generate_flow_architecture_default(
+            llm=llm,
+            task_description=task_description,
+            dtm=dtm,
+            device_info=device_info,
+            max_screens=max_screens
         )
         
-        flow_architecture = flow_arch_response["json"]
+        print(f"  ✓ Flow architecture complete")
+        print(f"    Flow: {flow_architecture.get('flow_name')}")
+        print(f"    Screens: {len(flow_architecture.get('screens', []))}")
         
-        # Send flow architecture to client immediately
-        await websocket.send_json({
-            "type": "flow_architecture",
-            "data": flow_architecture
-        })
-        
-        # Generate UI for each screen in parallel
-        async def generate_screen_ui(screen, screen_index):
-            try:
-                await send_progress(websocket, "generating_screen", f"Generating screen: {screen['name']}...", {
-                    "screen_id": screen['screen_id'],
-                    "screen_name": screen['name']
-                })
-                
-                outgoing_transitions = [
-                    t for t in flow_architecture.get('transitions', [])
-                    if t['from_screen_id'] == screen['screen_id']
+        # Send architecture to client
+        await send_progress(
+            websocket,
+            "architecture_complete",
+            "Flow architecture ready",
+            data={
+                "flow_name": flow_architecture.get("flow_name"),
+                "display_title": flow_architecture.get("display_title"),
+                "display_description": flow_architecture.get("display_description"),
+                "screens": [
+                    {
+                        "screen_id": s["screen_id"],
+                        "name": s["name"],
+                        "description": s.get("description", "")
+                    }
+                    for s in flow_architecture.get("screens", [])
                 ]
-                
-                flow_context = {
-                    "flow_name": flow_architecture.get('flow_name'),
-                    "screen_id": screen['screen_id'],
-                    "screen_name": screen['name'],
-                    "position_in_flow": screen_index + 1,
-                    "total_screens": len(flow_architecture['screens']),
-                    "outgoing_transitions": outgoing_transitions
-                }
-                
-                # Build base message
-                screen_message = f"TASK: {screen['task_description']}\n\nDEVICE CONTEXT:\n{json.dumps(device_info, indent=2)}\n\nFLOW CONTEXT:\n{json.dumps(flow_context, indent=2)}"
-                
-                # PARAMETRIC MODE ROUTING
-                rendering_mode = project.get('rendering_mode', 'react')
-                
-                if rendering_mode == 'parametric':
-                    # Use ParametricGenerator for parametric mode
-                    print(f"  🎛️  PARAMETRIC MODE: Generating screen with variation dimensions...")
-                    
-                    parametric_generator = ParametricGenerator(llm)
-                    
-                    try:
-                        parametric_result = await parametric_generator.generate(
-                            task_description=screen['task_description'],
-                            dtm=dtm or {},
-                            device_info=device_info,
-                            screen_context=screen
-                        )
-                        
-                        ui_code = parametric_result['ui_code']
-                        variation_space = parametric_result['variation_space']
-                        
-                        print(f"  ✓ Parametric generation complete with {len(variation_space['dimensions'])} dimensions")
-                        
-                        # Send screen completion with variation_space
-                        await websocket.send_json({
-                            "type": "screen_ready",
-                            "data": {
-                                "screen_id": screen['screen_id'],
-                                "ui_code": ui_code,
-                                "variation_space": variation_space
-                            }
-                        })
-                        
-                        # Update flow architecture
-                        for s in flow_architecture['screens']:
-                            if s['screen_id'] == screen['screen_id']:
-                                s['ui_code'] = ui_code
-                                s['variation_space'] = variation_space
-                                s['ui_loading'] = False
-                                break
-                        
-                        return {
-                            "screen_id": screen['screen_id'],
-                            "ui_code": ui_code,
-                            "variation_space": variation_space
-                        }
-                        
-                    except Exception as e:
-                        print(f"Error in parametric generation: {e}")
-                        import traceback
-                        traceback.print_exc()
-                        
-                        await websocket.send_json({
-                            "type": "screen_error",
-                            "data": {
-                                "screen_id": screen['screen_id'],
-                                "error": str(e)
-                            }
-                        })
-                        
-                        for s in flow_architecture['screens']:
-                            if s['screen_id'] == screen['screen_id']:
-                                s['ui_error'] = True
-                                s['ui_loading'] = False
-                                break
-                        
-                        return {
-                            "screen_id": screen['screen_id'],
-                            "ui_code": None,
-                            "error": str(e)
-                        }
-                
-                # REACT MODE (existing code continues below)
-                # Add reference mode and screen description if from user-provided screen
-                user_provided = screen.get('user_provided', False)
-                reference_mode = screen.get('reference_mode')
-                screen_desc = screen.get('description', '')
-                
-                if user_provided and screen_desc:
-                    screen_message += f"\n\nSCREEN DESCRIPTION: {screen_desc}"
-                
-                if reference_mode:
-                    screen_message += f"\n\nREFERENCE MODE: {reference_mode}"
-                    
-                    # Load screen reference files if available
-                    user_screen_index = screen.get('user_screen_index')
-                    if user_screen_index is not None and screen_definitions:
-                        screen_def = screen_definitions[user_screen_index]
-                        has_figma = screen_def.get('has_figma', False)
-                        image_count = screen_def.get('image_count', 0)
-                        
-                        if has_figma or image_count > 0:
-                            try:
-                                ref_files = storage.get_screen_reference_files(
-                                    user_id, project_id, user_screen_index, has_figma, image_count
-                                )
-                                
-                                # Add figma data if available
-                                if ref_files['figma_data']:
-                                    compressed_figma = prepare_figma_for_llm(ref_files['figma_data'], max_depth=6)
-                                    screen_message += f"\n\nREFERENCE FIGMA DATA:\n{compressed_figma}"
-                                
-                                # Note: reference images will be added as image blocks below
-                            except Exception as e:
-                                print(f"Error loading screen {user_screen_index} reference files: {e}")
-                
-                # Determine which prompt to use based on reference mode
-                if reference_mode == "exact":
-                    # Exact mode: Use exact recreation prompt (no DTM)
-                    prompt_name = "generate_ui_exact_recreation"
-                    screen_content = [
-                        {"type": "text", "text": screen_message}
-                    ]
-                    
-                    # Add reference files for exact mode
-                    if reference_mode and user_screen_index is not None and screen_definitions:
-                        screen_def = screen_definitions[user_screen_index]
-                        has_figma = screen_def.get('has_figma', False)
-                        image_count = screen_def.get('image_count', 0)
-                        
-                        if has_figma or image_count > 0:
-                            try:
-                                ref_files = storage.get_screen_reference_files(
-                                    user_id, project_id, user_screen_index, has_figma, image_count
-                                )
-                                
-                                # Add figma data
-                                if ref_files.get('figma_data'):
-                                    compressed_figma = prepare_figma_for_llm(ref_files['figma_data'], max_depth=6)
-                                    screen_content.append({
-                                        "type": "text",
-                                        "text": f"\nReference Figma Data:\n{compressed_figma}"
-                                    })
-                                
-                                # Add images
-                                for img in ref_files.get('images', []):
-                                    screen_content.append({
-                                        "type": "image",
-                                        "source": {
-                                            "type": "base64",
-                                            "media_type": img.get('media_type', 'image/png'),
-                                            "data": img['data']
-                                        }
-                                    })
-                            except Exception as e:
-                                print(f"Error loading screen {user_screen_index} reference files: {e}")
-                
-                elif reference_mode == "rethink":
-                    # RETHINK MODE: Use rethink-specific prompt with strategic context
-                    prompt_name = get_prompt_name("generate_ui_rethink")
-                    screen_content = [
-                        {"type": "text", "text": screen_message}
-                    ]
-                    
-                    # Add rethink context (strategic structure + DTM)
-                    if rethink_data:
-                        rethink_ui_context = rethink_processor.prepare_rethink_for_ui_generation(
-                            rethink_data, screen['task_description'], device_info
-                        )
-                        screen_content.append({
-                            "type": "text",
-                            "text": f"\n\n{rethink_ui_context}"
-                        })
-                    
-                    # Note: DTM is included in rethink context, no need to add separately
-                
-                else:
-                    # Redesign or Inspiration mode: Use taste-based prompt (with DTM)
-                    prompt_name = "generate_ui_with_taste"
-                    screen_content = [
-                        {"type": "text", "text": screen_message}
-                    ]
-                    
-                    if dtm_guidance:
-                        screen_content.append({"type": "text", "text": f"\n\n{dtm_guidance}"})
-                    
-                    # Add reference images based on mode
-                    if reference_mode == "redesign" and user_screen_index is not None:
-                        # REDESIGN MODE: Use wireframe processing to strip all styling
-                        screen_def = screen_definitions[user_screen_index]
-                        image_count = screen_def.get('image_count', 0)
-                        has_figma = screen_def.get('has_figma', False)
-                        
-                        if has_figma or image_count > 0:
-                            try:
-                                print(f"\n  ⚙️  REDESIGN MODE: Processing wireframes for screen {user_screen_index}...")
-                                
-                                # Load reference files
-                                ref_files = storage.get_screen_reference_files(
-                                    user_id, project_id, user_screen_index, has_figma, image_count
-                                )
-                                
-                                # Process into wireframes (strips all styling)
-                                wireframe_data = await process_redesign_references(
-                                    ref_files,
-                                    llm
-                                )
-                                
-                                if wireframe_data.get('has_wireframes'):
-                                    # Add wireframe Figma data if available
-                                    if wireframe_data.get('wireframe_figma'):
-                                        wireframe_json = prepare_wireframe_for_llm(
-                                            wireframe_data['wireframe_figma'],
-                                            max_depth=6
-                                        )
-                                        screen_content.append({
-                                            "type": "text",
-                                            "text": f"\n{wireframe_json}"
-                                        })
-                                    
-                                    # Add wireframe descriptions and images
-                                    for idx, (description, wireframe_img) in enumerate(zip(
-                                        wireframe_data.get('wireframe_descriptions', []),
-                                        wireframe_data.get('wireframe_images', [])
-                                    )):
-                                        # Add text description
-                                        screen_content.append({
-                                            "type": "text",
-                                            "text": f"\n### Wireframe Structure (Image {idx + 1}):\n\n{description}\n"
-                                        })
-                                        
-                                        # Add wireframe image
-                                        screen_content.append({
-                                            "type": "image",
-                                            "source": {
-                                                "type": "base64",
-                                                "media_type": wireframe_img.get('media_type', 'image/png'),
-                                                "data": wireframe_img['data']
-                                            }
-                                        })
-                                    
-                                    # Add explicit redesign mode instruction
-                                    screen_content.append({
-                                        "type": "text",
-                                        "text": "\n\n**REDESIGN MODE ACTIVE**: The above wireframes show ONLY structure and content. All styling has been removed. Your task is to preserve the component types, text labels, and layout arrangement exactly, but apply DTM styling completely. Do not try to recreate any visual styling from the wireframes.\n"
-                                    })
-                                    
-                                    print(f"  ✓ Wireframe processing complete!")
-                                else:
-                                    print(f"  ⚠️  No wireframes extracted, proceeding without reference")
-                                
-                            except Exception as e:
-                                print(f"Error processing wireframes for screen {user_screen_index}: {e}")
-                                import traceback
-                                traceback.print_exc()
-                    elif reference_mode == "inspiration":
-                        # Use general inspiration images
-                        for img in inspiration_images:
-                            screen_content.append({
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": img.get('media_type', 'image/png'),
-                                    "data": img['data']
-                                }
-                            })
-                    else:
-                        # No reference mode or null - use general inspiration images
-                        for img in inspiration_images:
-                            screen_content.append({
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": img.get('media_type', 'image/png'),
-                                    "data": img['data']
-                                }
-                            })
-                
-                # Use progressive streaming with checkpoints
-                result = await generate_screen_ui_progressive(
-                    screen=screen,
-                    screen_index=screen_index,
-                    llm=llm,
-                    websocket=websocket,
-                    prompt_name=prompt_name,
-                    screen_content=screen_content,
-                    device_info=device_info
+            }
+        )
+        
+        # ============================================================================
+        # STEP 4: Generate Each Screen
+        # ============================================================================
+        
+        screens = flow_architecture.get("screens", [])
+        transitions = flow_architecture.get("transitions", [])
+        
+        orchestrator = GenerationOrchestrator(llm, storage)
+        
+        print(f"\n🎨 Generating {len(screens)} screens...")
+        
+        for idx, screen in enumerate(screens):
+            screen_id = screen["screen_id"]
+            screen_name = screen["name"]
+            screen_task = screen.get("task_description", screen.get("description", ""))
+            
+            print(f"\n  [{idx+1}/{len(screens)}] Generating: {screen_name}")
+            
+            await send_progress(
+                websocket,
+                "generating_screen",
+                f"Generating {screen_name}...",
+                data={"screen_id": screen_id, "progress": idx + 1, "total": len(screens)}
+            )
+            
+            # Build flow context for this screen
+            outgoing_transitions = [
+                t for t in transitions if t.get("from_screen_id") == screen_id
+            ]
+            
+            flow_context = {
+                "flow_name": flow_architecture.get("flow_name"),
+                "screen_id": screen_id,
+                "screen_name": screen_name,
+                "position_in_flow": idx + 1,
+                "total_screens": len(screens),
+                "outgoing_transitions": outgoing_transitions
+            }
+            
+            try:
+                # Generate screen using NEW orchestrator with 4-layer system
+                result = await orchestrator.generate_ui(
+                    task_description=screen_task,
+                    taste_data=dtm if dtm else {},
+                    taste_source=taste_source,
+                    device_info=device_info,
+                    flow_context=flow_context,
+                    rendering_mode=rendering_mode,
+                    model="claude-sonnet-4.5",
+                    validate_taste=bool(dtm)  # Only validate if we have DTM
                 )
                 
-                return result
-            
+                ui_code = result["code"]
+                validation = result.get("validation")
+                metadata = result.get("metadata", {})
+                
+                # Calculate fidelity score if validation available
+                fidelity_score = None
+                if validation:
+                    from app.generation.validator import TasteValidator
+                    validator = TasteValidator(dtm)
+                    fidelity_score = validator.get_fidelity_score(validation)
+                    
+                    print(f"    Fidelity: {fidelity_score:.1f}%")
+                    if validation.violations:
+                        print(f"    Violations: {len(validation.violations)}")
+                
+                # Save to DynamoDB
+                db.save_screen(
+                    project_id=project_id,
+                    screen_id=screen_id,
+                    screen_data={
+                        "screen_id": screen_id,
+                        "name": screen_name,
+                        "description": screen.get("description", ""),
+                        "ui_code": ui_code,
+                        "device_info": device_info,
+                        "task_description": screen_task,
+                        "metadata": {
+                            "taste_source": taste_source,
+                            "taste_fidelity_score": fidelity_score,
+                            "validation_stats": validation.stats if validation else None,
+                            "model": metadata.get("model"),
+                            "prompt_length": metadata.get("prompt_length"),
+                        }
+                    }
+                )
+                
+                print(f"    ✓ Screen saved to DB")
+                
+                # Send screen to client
+                await websocket.send_json({
+                    "type": "screen_complete",
+                    "screen_id": screen_id,
+                    "screen_name": screen_name,
+                    "ui_code": ui_code,
+                    "validation": {
+                        "passed": validation.passed if validation else True,
+                        "fidelity_score": fidelity_score,
+                        "violations_count": len(validation.violations) if validation else 0
+                    } if validation else None
+                })
+                
             except Exception as e:
+                print(f"    ✗ Error generating screen: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                # Send error but continue with other screens
                 await websocket.send_json({
                     "type": "screen_error",
-                    "data": {
-                        "screen_id": screen['screen_id'],
-                        "error": str(e)
-                    }
+                    "screen_id": screen_id,
+                    "screen_name": screen_name,
+                    "error": str(e)
                 })
-                return {"screen_id": screen['screen_id'], "ui_code": None, "error": str(e)}
         
-        # Run all screen generations in parallel
-        screen_tasks = [
-            generate_screen_ui(screen, i)
-            for i, screen in enumerate(flow_architecture['screens'])
-        ]
-        screen_results = await asyncio.gather(*screen_tasks)
+        # ============================================================================
+        # STEP 5: Save Flow Architecture
+        # ============================================================================
         
-        # Merge results into flow architecture
-        for result in screen_results:
-            for screen in flow_architecture['screens']:
-                if screen['screen_id'] == result['screen_id']:
-                    screen['ui_code'] = result['ui_code']
-                    if result.get('variation_space'):
-                        screen['variation_space'] = result['variation_space']
-                    if result.get('error'):
-                        screen['ui_error'] = True
-                    break
+        db.update_project(
+            project_id=project_id,
+            updates={
+                "flow_architecture": flow_architecture,
+                "status": "completed"
+            }
+        )
         
-        # Calculate layout positions
-        await send_progress(websocket, "calculating_layout", "Calculating screen positions...")
+        print(f"\n✅ Flow generation complete!")
+        print(f"{'='*80}\n")
         
-        def calculate_layout(flow_arch):
-            screens = flow_arch['screens']
-            transitions = flow_arch.get('transitions', [])
-            
-            graph = {screen['screen_id']: [] for screen in screens}
-            for trans in transitions:
-                if trans['from_screen_id'] in graph:
-                    graph[trans['from_screen_id']].append(trans['to_screen_id'])
-            
-            entry_id = flow_arch['entry_screen_id']
-            depths = {entry_id: 0}
-            visited = set()
-            
-            def assign_depth(screen_id, depth):
-                if screen_id in visited:
-                    return
-                visited.add(screen_id)
-                depths[screen_id] = depth
-                for next_id in graph.get(screen_id, []):
-                    assign_depth(next_id, depth + 1)
-            
-            assign_depth(entry_id, 0)
-            
-            for screen in screens:
-                if screen['screen_id'] not in depths:
-                    depths[screen['screen_id']] = max(depths.values(), default=0) + 1
-            
-            level_groups = {}
-            for screen_id, depth in depths.items():
-                if depth not in level_groups:
-                    level_groups[depth] = []
-                level_groups[depth].append(screen_id)
-            
-            positions = {}
-            HORIZONTAL_GAP = 800
-            VERTICAL_GAP = 600
-            
-            for level, screen_ids in level_groups.items():
-                x = level * HORIZONTAL_GAP
-                total_height = len(screen_ids) * VERTICAL_GAP
-                start_y = -total_height / 2
-                
-                for idx, screen_id in enumerate(screen_ids):
-                    y = start_y + idx * VERTICAL_GAP
-                    positions[screen_id] = {"x": x, "y": y}
-            
-            return positions
-        
-        layout_positions = calculate_layout(flow_architecture)
-        flow_architecture['layout_positions'] = layout_positions
-        
-        # Save to S3
-        await send_progress(websocket, "saving", "Saving flow...")
-        current_version = project.get("metadata", {}).get("flow_version", 0)
-        new_version = current_version + 1
-        
-        storage.put_project_flow(user_id, project_id, flow_architecture, version=new_version)
-        
-        # Update project metadata
-        metadata = project.get("metadata", {})
-        metadata["flow_version"] = new_version
-        db.update_project(project_id, metadata=metadata)
-        
-        # Convert floats to Decimals for DynamoDB compatibility
-        flow_architecture_for_db = convert_floats_to_decimals(flow_architecture)
-        
-        # Update project flow_graph
-        db.update_project_flow_graph(project_id, flow_architecture_for_db)
-        
-        # Send completion (use original flow_architecture with floats for JSON response)
-        await send_complete(websocket, {
-            "status": "success",
-            "flow_graph": flow_architecture,
-            "version": new_version
+        # Send completion
+        await websocket.send_json({
+            "type": "complete",
+            "message": "Flow generation complete",
+            "project_id": project_id,
+            "screens_generated": len(screens)
         })
         
     except Exception as e:
+        print(f"\n❌ Error in handle_generate_flow: {e}")
         import traceback
         traceback.print_exc()
-        await send_error(websocket, str(e))
+        await send_error(websocket, f"Generation failed: {str(e)}")
 
 
-def _convert_dtr_to_dtm(dtr: Dict[str, Any], taste_id: str, owner_id: str) -> Dict[str, Any]:
+async def generate_flow_architecture_default(
+    llm,
+    task_description: str,
+    dtm: Optional[Dict[str, Any]],
+    device_info: Dict[str, Any],
+    max_screens: int = 5
+) -> Dict[str, Any]:
     """
-    Convert single DTR to minimal DTM structure for generation
+    Generate flow architecture - Default taste-driven mode
     
-    This allows generation to work with 1 resource by creating a DTM-like
-    structure from the DTR data
+    No screen definitions, just pure taste-driven architecture
     """
-    from datetime import datetime
     
-    # Extract from DTR
-    resource_id = dtr["meta"]["resource_id"]
-    quantitative = dtr.get("quantitative", {})
-    visual_patterns = dtr.get("visual_patterns", [])
-    signature_patterns = dtr.get("signature_patterns", [])
-    semantic = dtr.get("semantic", {})
-    context = dtr["meta"].get("context", {})
+    # Build prompt for flow architecture
+    prompt_parts = []
     
-    # Build minimal DTM structure
-    minimal_dtm = {
-        "version": "2.0",
-        "taste_id": taste_id,
-        "owner_id": owner_id,
-        "meta": {
-            "created_at": datetime.utcnow().isoformat() + "Z",
-            "updated_at": datetime.utcnow().isoformat() + "Z",
-            "total_resources": 1,
-            "total_dtrs_analyzed": 1,
-            "overall_confidence": dtr["meta"]["confidence_scores"]["overall"],
-            "analysis_method": "single_dtr_conversion",
-            "note": "Minimal DTM from single resource - add more resources for better patterns"
-        },
-        
-        # Tier 1: Universal principles (standard)
-        "universal_principles": {
-            "accessibility": {
-                "min_contrast_ratio": 4.5,
-                "min_touch_target": 44,
-                "note": "Based on WCAG 2.1 AA standards"
-            },
-            "usability": {
-                "clear_hierarchy": "MUST",
-                "consistent_spacing": "SHOULD",
-                "predictable_interactions": "MUST"
-            }
-        },
-        
-        # Tier 2: Designer systems from quantitative data
-        "designer_systems": {
-            "spacing": {
-                "by_context": {
-                    context.get("primary_use_case", "general"): {
-                        "quantum": quantitative.get("spacing", {}).get("quantum", 8),
-                        "confidence": 1.0,
-                        "evidence_count": 1
-                    }
-                },
-                "default": quantitative.get("spacing", {}).get("quantum", 8)
-            },
-            "typography": {
-                "scale_ratio": {
-                    "mean": quantitative.get("typography", {}).get("scale_ratio", 1.5),
-                    "range": [quantitative.get("typography", {}).get("scale_ratio", 1.5)],
-                    "consistency": 1.0
-                },
-                "common_sizes": quantitative.get("typography", {}).get("common_sizes", [16]),
-                "weights": quantitative.get("typography", {}).get("weights", ["Regular"])
-            },
-            "color_system": {
-                "common_palette": quantitative.get("colors", {}).get("primary_palette", [])[:15],
-                "temperature_preference": quantitative.get("colors", {}).get("temperature", {}),
-                "saturation_preference": quantitative.get("colors", {}).get("saturation", {})
-            },
-            "form_language": {
-                "common_radii": quantitative.get("forms", {}).get("common_radii", [8])
-            }
-        },
-        
-        # Tier 3: Signature patterns from DTR
-        "signature_patterns": signature_patterns,
-        
-        # Visual library
-        "visual_library": {
-            "by_context": {
-                context.get("primary_use_case", "general"): [resource_id]
-            },
-            "by_signature": {
-                sig.get("pattern_type", "unknown"): [resource_id]
-                for sig in signature_patterns
-            },
-            "all_resources": [resource_id]
-        },
-        
-        # Context map
-        "context_map": {
-            resource_id: {
-                "use_case": context.get("primary_use_case"),
-                "platform": context.get("platform"),
-                "content_density": context.get("content_density"),
-                "confidence": dtr["meta"]["confidence_scores"]["overall"]
-            }
-        }
+    prompt_parts.append("""# Flow Architecture Generation
+
+You are a UX flow architect creating a multi-screen application flow.
+
+## Task
+
+Design the screen-by-screen flow for this application based on the task description.
+
+## Output Format
+
+Return ONLY a valid JSON object (no markdown code fences, no explanations):
+
+{
+  "flow_name": "string",
+  "display_title": "string (3-5 word punchy title)",
+  "display_description": "string (10-15 word concise description)",
+  "entry_screen_id": "string",
+  "screens": [
+    {
+      "screen_id": "string (e.g., 'screen_1', 'screen_2')",
+      "name": "string (screen name)",
+      "description": "string (brief description)",
+      "task_description": "string (detailed - what to build on this screen)",
+      "platform": "web" | "phone",
+      "dimensions": {"width": number, "height": number},
+      "screen_type": "entry" | "intermediate" | "success" | "error" | "exit"
     }
+  ],
+  "transitions": [
+    {
+      "transition_id": "string",
+      "from_screen_id": "string",
+      "to_screen_id": "string",
+      "trigger": "string (user action description)",
+      "trigger_type": "tap" | "submit" | "auto" | "link",
+      "flow_type": "forward" | "back" | "error" | "branch" | "success",
+      "label": "string (button/link text)"
+    }
+  ]
+}
+
+## Guidelines
+
+1. **Logical flow**: Create screens in logical progression
+2. **Screen limit**: Stay within max_screens limit
+3. **Entry point**: First screen should be entry_screen_id
+4. **Clear transitions**: Every screen should have clear navigation paths
+5. **Detailed tasks**: task_description should be specific and actionable (what components, what data, what interactions)
+6. **Complete flows**: Include success, error, and navigation paths
+
+""")
     
-    return minimal_dtm
-
-
+    # Add DTM context if available
+    if dtm:
+        consensus = dtm.get("consensus_narrative", {})
+        personality = dtm.get("unified_personality", {})
+        
+        if consensus or personality:
+            prompt_parts.append("\n## Designer Taste Context\n\n")
+            prompt_parts.append("Consider these patterns when designing the flow:\n\n")
+            
+            if "component_vocabulary" in consensus:
+                prompt_parts.append(f"**Component approach**: {consensus['component_vocabulary'][:300]}...\n\n")
+            
+            if "decision_heuristics" in personality:
+                heuristics = personality["decision_heuristics"]
+                if "complexity_approach" in heuristics:
+                    prompt_parts.append(f"**Complexity philosophy**: {heuristics['complexity_approach'][:300]}...\n\n")
+    
+    # Add task
+    prompt_parts.append(f"\n## Task Description\n\n{task_description}\n\n")
+    
+    # Add device context
+    platform = device_info.get("platform", "web")
+    width = device_info.get("screen", {}).get("width", 1440)
+    height = device_info.get("screen", {}).get("height", 900)
+    
+    prompt_parts.append(f"## Device Context\n\n")
+    prompt_parts.append(f"- Platform: {platform}\n")
+    prompt_parts.append(f"- Screen dimensions: {width}x{height}px\n")
+    prompt_parts.append(f"- Maximum screens: {max_screens}\n\n")
+    
+    prompt_parts.append("Generate the flow architecture JSON now:")
+    
+    prompt = "\n".join(prompt_parts)
+    
+    # Generate
+    gen_response = await llm.generate(
+        model="claude-sonnet-4.5",
+        messages=[
+            Message(role=MessageRole.USER, content=prompt)
+        ],
+        temperature=0.7,
+        max_tokens=4000
+    )
+    
+    # Extract text from response object
+    response = gen_response.text
+    
+    # Extract JSON
+    import json
+    import re
+    
+    # Try to extract JSON from markdown blocks
+    json_match = re.search(r'```(?:json)?\s*\n(.*?)\n```', response, re.DOTALL)
+    if json_match:
+        json_str = json_match.group(1)
+    else:
+        # Try to find JSON object directly
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(0)
+        else:
+            json_str = response
+    
+    try:
+        architecture = json.loads(json_str)
+        
+        # Ensure all screens have required platform/dimensions
+        for screen in architecture.get("screens", []):
+            if "platform" not in screen:
+                screen["platform"] = platform
+            if "dimensions" not in screen:
+                screen["dimensions"] = {"width": width, "height": height}
+        
+        return architecture
+        
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse flow architecture JSON: {e}")
+        print(f"Response: {response[:500]}...")
+        
+        # Return minimal fallback
+        return {
+            "flow_name": "Generated Flow",
+            "display_title": "Application Flow",
+            "display_description": "Multi-screen application based on your description",
+            "entry_screen_id": "screen_1",
+            "screens": [
+                {
+                    "screen_id": "screen_1",
+                    "name": "Main Screen",
+                    "description": "Primary application screen",
+                    "task_description": task_description,
+                    "platform": platform,
+                    "dimensions": {"width": width, "height": height},
+                    "screen_type": "entry"
+                }
+            ],
+            "transitions": []
+        }
 async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id: str):
     """
     Handle iterate-ui WebSocket request
@@ -1416,13 +1134,26 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
             }
         })
         
+        # ========================================================================
+        # PHASE 1.5 TODO: Update to use new DTM builder
+        # ========================================================================
         # Load DTM for code generation
+        # TODO Phase 1.5: Replace with:
+        #   from app.dtm import builder as dtm_builder
+        #   dtm_result = await dtm_builder.get_or_build_dtm(
+        #       taste_id=taste_id,
+        #       resource_ids=project.get("selected_resource_ids", []),
+        #       mode="auto"
+        #   )
+        #   dtm = dtm_result["dtm"]
+        # ========================================================================
+        
         taste_id = project.get("selected_taste_id")
         dtm = None
         
         if taste_id:
             try:
-                dtm = storage.get_taste_dtm(user_id, taste_id)
+                dtm = storage.get_taste_dtm(user_id, taste_id)  # OLD - still works for Phase 1
             except:
                 print("Warning: Could not load DTM, will use minimal defaults")
         

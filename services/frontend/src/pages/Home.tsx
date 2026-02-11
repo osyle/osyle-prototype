@@ -787,8 +787,6 @@ export default function Home() {
     }
   }
 
-  // COMMENTED OUT: handleCreateProject - not needed since we skip project modal
-  /*
   const handleCreateProject = async (projectName: string) => {
     if (!selectedTasteId) return
 
@@ -888,7 +886,6 @@ export default function Home() {
       setIsCreatingProject(false)
     }
   }
-  */
 
   const handleContinueProject = () => {
     // User wants to continue working on existing project
@@ -1013,10 +1010,11 @@ export default function Home() {
       // Show success state
       setDtmTrainingState('success')
 
-      // Auto-close modal after 2 seconds
+      // After brief pause, close DTM modal and open project modal
       setTimeout(() => {
         setIsDtmTrainingModalOpen(false)
-      }, 2000)
+        setIsCreateProjectModalOpen(true)
+      }, 1000)
     } catch (err) {
       console.error('Failed to build subset DTM:', err)
       setDtmTrainingState('error')
@@ -1515,8 +1513,8 @@ export default function Home() {
             </div>
           )}
 
-          {/* Screens section - HIDDEN IN PARAMETRIC MODE */}
-          {rendering_mode !== 'parametric' && (
+          {/* Screens section - HIDDEN FOR PHASE 1 */}
+          {false && rendering_mode !== 'parametric' && (
             <div className="mb-6">
               <label
                 className="block text-sm font-medium mb-4"
@@ -2603,15 +2601,12 @@ export default function Home() {
       />
 
       {/* Create Project Modal */}
-      {/* COMMENTED OUT: CreateProjectModal - not needed since we skip project creation */}
-      {/*
       <CreateProjectModal
         isOpen={isCreateProjectModalOpen}
         onClose={() => setIsCreateProjectModalOpen(false)}
         onConfirm={handleCreateProject}
         isLoading={isCreatingProject}
       />
-      */}
 
       {/* Project Loading Modal */}
       {isLoadingProject && (
