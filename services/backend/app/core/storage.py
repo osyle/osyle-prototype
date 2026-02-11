@@ -831,3 +831,33 @@ def get_dtm_subset_key(owner_id: str, taste_id: str, subset_hash: str) -> str:
 def get_dtm_subset_index_key(owner_id: str, taste_id: str) -> str:
     """Generate S3 key for subset index"""
     return f"tastes/{owner_id}/{taste_id}/dtm_subsets/subset_index.json"
+
+
+# ============================================================================
+# FLOW VERSION MANAGEMENT
+# ============================================================================
+
+def save_flow_version(user_id: str, project_id: str, flow_graph: dict, version: int):
+    """
+    Save flow graph to S3 with version number
+    Stored at: user-{user_id}/project-{project_id}/flow/v{version}.json
+    """
+    from app.core.db import convert_decimals
+    
+    # Convert Decimals back to regular numbers for JSON serialization
+    flow_graph_json = convert_decimals(flow_graph)
+    
+    key = f"user-{user_id}/project-{project_id}/flow/v{version}.json"
+    
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=key,
+            Body=json.dumps(flow_graph_json, indent=2),
+            ContentType="application/json"
+        )
+        
+        print(f"  ✓ Flow v{version} saved to S3: {key}")
+    except Exception as e:
+        print(f"  ✗ Failed to save flow to S3: {e}")
+        raise

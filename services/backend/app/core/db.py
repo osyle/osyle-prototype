@@ -588,3 +588,41 @@ def delete_design_mutation(mutation_id: str) -> bool:
         return True
     except ClientError:
         return False
+
+
+# ============================================================================
+# FLOW VERSION MANAGEMENT
+# ============================================================================
+
+def get_next_flow_version(project_id: str) -> int:
+    """Get the next version number for a project's flow"""
+    project = get_project(project_id)
+    if not project:
+        return 1
+    
+    metadata = project.get("metadata", {})
+    current_version = metadata.get("flow_version", 0)
+    return current_version + 1
+
+
+def update_project_flow_version(project_id: str, version: int):
+    """Update project's flow version number in metadata"""
+    now = get_timestamp()
+    
+    # Get current project to merge metadata
+    project = get_project(project_id)
+    metadata = project.get("metadata", {})
+    metadata["flow_version"] = version
+    metadata["status"] = "completed"
+    
+    response = projects_table.update_item(
+        Key={"project_id": project_id},
+        UpdateExpression="SET metadata = :metadata, updated_at = :updated",
+        ExpressionAttributeValues={
+            ":metadata": metadata,
+            ":updated": now
+        },
+        ReturnValues="ALL_NEW"
+    )
+    
+    return response.get("Attributes", {})

@@ -680,7 +680,7 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
         # STEP 3: Generate Flow Architecture
         # ============================================================================
         
-        await send_progress(websocket, "generating_architecture", "Designing flow architecture...")
+        await send_progress(websocket, "generating_flow", "Designing flow architecture...")
         
         llm = get_llm_service()
         
@@ -694,29 +694,47 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
             max_screens=max_screens
         )
         
+        # CRITICAL: Calculate layout positions
+        layout_positions = calculate_layout_positions(flow_architecture)
+        flow_architecture["layout_positions"] = layout_positions
+        flow_architecture["layout_algorithm"] = "hierarchical"
+        
+        # Add flow_id if missing
+        if "flow_id" not in flow_architecture:
+            flow_architecture["flow_id"] = f"flow_{project_id[:8]}"
+        
         print(f"  ✓ Flow architecture complete")
         print(f"    Flow: {flow_architecture.get('flow_name')}")
         print(f"    Screens: {len(flow_architecture.get('screens', []))}")
         
-        # Send architecture to client
-        await send_progress(
-            websocket,
-            "architecture_complete",
-            "Flow architecture ready",
-            data={
+        # Send architecture to client as DEDICATED MESSAGE TYPE (not progress!)
+        await websocket.send_json({
+            "type": "flow_architecture",
+            "data": {
+                "flow_id": flow_architecture.get("flow_id"),
                 "flow_name": flow_architecture.get("flow_name"),
-                "display_title": flow_architecture.get("display_title"),
-                "display_description": flow_architecture.get("display_description"),
+                "description": flow_architecture.get("display_description", ""),
+                "entry_screen_id": flow_architecture.get("entry_screen_id"),
                 "screens": [
                     {
                         "screen_id": s["screen_id"],
                         "name": s["name"],
-                        "description": s.get("description", "")
+                        "description": s.get("description", ""),
+                        "task_description": s.get("task_description", s.get("description", "")),
+                        "platform": device_info.get("platform", "web"),
+                        "dimensions": device_info.get("screen", {"width": 1280, "height": 720}),
+                        "screen_type": s.get("screen_type"),
+                        "semantic_role": s.get("semantic_role"),
+                        "ui_loading": True,  # CRITICAL: Tells FE to show loading spinner
+                        "ui_code": None
                     }
                     for s in flow_architecture.get("screens", [])
-                ]
+                ],
+                "transitions": flow_architecture.get("transitions", []),
+                "layout_positions": layout_positions,
+                "layout_algorithm": "hierarchical"
             }
-        )
+        })
         
         # ============================================================================
         # STEP 4: Generate Each Screen
@@ -728,6 +746,19 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
         orchestrator = GenerationOrchestrator(llm, storage)
         
         print(f"\n🎨 Generating {len(screens)} screens...")
+        
+        # Build flow_graph as we generate screens
+        flow_graph = {
+            "flow_id": flow_architecture.get("flow_id", f"flow_{project_id[:8]}"),
+            "flow_name": flow_architecture.get("flow_name"),
+            "display_title": flow_architecture.get("display_title"),
+            "display_description": flow_architecture.get("display_description"),
+            "entry_screen_id": flow_architecture.get("entry_screen_id"),
+            "screens": [],
+            "transitions": transitions,
+            "layout_positions": flow_architecture.get("layout_positions", {}),
+            "layout_algorithm": flow_architecture.get("layout_algorithm", "hierarchical")
+        }
         
         for idx, screen in enumerate(screens):
             screen_id = screen["screen_id"]
@@ -758,7 +789,7 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
             }
             
             try:
-                # Generate screen using NEW orchestrator with 4-layer system
+                # Generate screen using NEW orchestrator with progressive rendering
                 result = await orchestrator.generate_ui(
                     task_description=screen_task,
                     taste_data=dtm if dtm else {},
@@ -767,7 +798,10 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
                     flow_context=flow_context,
                     rendering_mode=rendering_mode,
                     model="claude-sonnet-4.5",
-                    validate_taste=bool(dtm)  # Only validate if we have DTM
+                    validate_taste=bool(dtm),
+                    websocket=websocket,
+                    screen_id=screen_id,
+                    screen_name=screen_name
                 )
                 
                 ui_code = result["code"]
@@ -785,41 +819,24 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
                     if validation.violations:
                         print(f"    Violations: {len(validation.violations)}")
                 
-                # Save to DynamoDB
-                db.save_screen(
-                    project_id=project_id,
-                    screen_id=screen_id,
-                    screen_data={
-                        "screen_id": screen_id,
-                        "name": screen_name,
-                        "description": screen.get("description", ""),
-                        "ui_code": ui_code,
-                        "device_info": device_info,
-                        "task_description": screen_task,
-                        "metadata": {
-                            "taste_source": taste_source,
-                            "taste_fidelity_score": fidelity_score,
-                            "validation_stats": validation.stats if validation else None,
-                            "model": metadata.get("model"),
-                            "prompt_length": metadata.get("prompt_length"),
-                        }
-                    }
-                )
-                
-                print(f"    ✓ Screen saved to DB")
-                
-                # Send screen to client
-                await websocket.send_json({
-                    "type": "screen_complete",
+                # Add screen to flow_graph
+                flow_graph["screens"].append({
                     "screen_id": screen_id,
-                    "screen_name": screen_name,
+                    "name": screen_name,
+                    "description": screen.get("description", ""),
                     "ui_code": ui_code,
-                    "validation": {
-                        "passed": validation.passed if validation else True,
-                        "fidelity_score": fidelity_score,
-                        "violations_count": len(validation.violations) if validation else 0
-                    } if validation else None
+                    "device_info": device_info,
+                    "task_description": screen_task,
+                    "metadata": {
+                        "taste_source": taste_source,
+                        "taste_fidelity_score": Decimal(str(fidelity_score)) if fidelity_score is not None else None,
+                        "validation_stats": validation.stats if validation else None,
+                        "model": metadata.get("model"),
+                        "prompt_length": metadata.get("prompt_length"),
+                    }
                 })
+                
+                print(f"    ✓ Screen generated")
                 
             except Exception as e:
                 print(f"    ✗ Error generating screen: {e}")
@@ -835,26 +852,63 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
                 })
         
         # ============================================================================
-        # STEP 5: Save Flow Architecture
+        # STEP 5: Version Management and Save Flow
         # ============================================================================
         
-        db.update_project(
+        # Get next version number
+        try:
+            version = db.get_next_flow_version(project_id)
+        except Exception as e:
+            # Fallback if function doesn't exist yet
+            print(f"  ⚠️  get_next_flow_version not available: {e}")
+            project = db.get_project(project_id)
+            metadata = project.get("metadata", {})
+            version = metadata.get("flow_version", 0) + 1
+        
+        print(f"\n💾 Saving flow (version {version})...")
+        
+        # CRITICAL: Convert floats to Decimals for DynamoDB
+        flow_graph_for_db = convert_floats_to_decimals(flow_graph)
+        
+        # Save to DynamoDB
+        db.update_project_flow_graph(
             project_id=project_id,
-            updates={
-                "flow_architecture": flow_architecture,
-                "status": "completed"
-            }
+            flow_graph=flow_graph_for_db
         )
         
+        # Update version number and status
+        try:
+            db.update_project_flow_version(project_id, version)
+        except Exception as e:
+            # Fallback if function doesn't exist yet
+            print(f"  ⚠️  update_project_flow_version not available: {e}")
+            db.update_project(
+                project_id=project_id,
+                metadata={"flow_version": version, "status": "completed"}
+            )
+        
+        # Save to S3 for version history
+        try:
+            storage.save_flow_version(user_id, project_id, flow_graph, version)
+        except Exception as e:
+            print(f"  ⚠️  Could not save to S3: {e}")
+            # Continue anyway - DynamoDB save is primary
+        
         print(f"\n✅ Flow generation complete!")
+        print(f"  Version: {version}")
         print(f"{'='*80}\n")
         
-        # Send completion
+        # Send completion with proper structure
+        # CRITICAL: Convert Decimals back to floats for JSON serialization
+        flow_graph_for_client = convert_decimals(flow_graph)
+        
         await websocket.send_json({
             "type": "complete",
-            "message": "Flow generation complete",
-            "project_id": project_id,
-            "screens_generated": len(screens)
+            "result": {
+                "status": "success",
+                "version": version,
+                "flow_graph": flow_graph_for_client  # Frontend needs this for localStorage
+            }
         })
         
     except Exception as e:
@@ -862,6 +916,71 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
         import traceback
         traceback.print_exc()
         await send_error(websocket, f"Generation failed: {str(e)}")
+
+
+def calculate_layout_positions(flow_architecture: Dict[str, Any]) -> Dict[str, Dict[str, float]]:
+    """
+    Calculate layout positions for screens in a flow graph
+    Uses hierarchical layout based on entry point and transitions
+    """
+    screens = flow_architecture.get("screens", [])
+    transitions = flow_architecture.get("transitions", [])
+    entry_screen_id = flow_architecture.get("entry_screen_id")
+    
+    if not screens:
+        return {}
+    
+    # Build adjacency graph
+    graph = {screen["screen_id"]: [] for screen in screens}
+    for trans in transitions:
+        from_id = trans.get("from_screen_id")
+        to_id = trans.get("to_screen_id")
+        if from_id in graph and to_id:
+            graph[from_id].append(to_id)
+    
+    # Calculate depths using BFS from entry screen
+    depths = {}
+    visited = set()
+    
+    def assign_depth(screen_id: str, depth: int):
+        if screen_id in visited:
+            return
+        visited.add(screen_id)
+        depths[screen_id] = depth
+        for next_id in graph.get(screen_id, []):
+            assign_depth(next_id, depth + 1)
+    
+    if entry_screen_id:
+        assign_depth(entry_screen_id, 0)
+    
+    # Assign depth to unvisited screens
+    for screen in screens:
+        screen_id = screen["screen_id"]
+        if screen_id not in depths:
+            depths[screen_id] = max(depths.values(), default=0) + 1
+    
+    # Group screens by depth level
+    level_groups = {}
+    for screen_id, depth in depths.items():
+        if depth not in level_groups:
+            level_groups[depth] = []
+        level_groups[depth].append(screen_id)
+    
+    # Calculate positions
+    HORIZONTAL_GAP = 800
+    VERTICAL_GAP = 600
+    
+    positions = {}
+    for level, screen_ids in level_groups.items():
+        x = level * HORIZONTAL_GAP
+        total_height = len(screen_ids) * VERTICAL_GAP
+        start_y = -total_height / 2
+        
+        for idx, screen_id in enumerate(screen_ids):
+            y = start_y + idx * VERTICAL_GAP
+            positions[screen_id] = {"x": x, "y": y}
+    
+    return positions
 
 
 async def generate_flow_architecture_default(
