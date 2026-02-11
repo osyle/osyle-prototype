@@ -2,7 +2,9 @@
 Feedback Applier - Generates updated UI code based on user feedback
 """
 import re
+from pathlib import Path
 from typing import List, Dict, Any, AsyncGenerator
+from app.llm.types import Message, MessageRole, GenerationConfig
 
 
 class FeedbackApplier:
@@ -14,6 +16,19 @@ class FeedbackApplier:
             llm_client: LLM service for making API calls
         """
         self.llm = llm_client
+        
+        # Load prompt template
+        prompts_dir = Path(__file__).parent / "prompts"
+        prompt_file = prompts_dir / "feedback_applier_prompt.md"
+        
+        if not prompt_file.exists():
+            # Fallback to legacy location
+            legacy_file = Path(__file__).parent.parent / "generation" / "prompts" / "legacy" / "feedback_applier_prompt.md"
+            if legacy_file.exists():
+                prompt_file = legacy_file
+        
+        with open(prompt_file, 'r', encoding='utf-8') as f:
+            self.system_prompt = f.read()
     
     async def apply_feedback(
         self,
@@ -47,17 +62,32 @@ class FeedbackApplier:
                 annotations=annotations
             )
             
+            # Build messages for new LLM service
+            messages = [
+                Message(role=MessageRole.SYSTEM, content=self.system_prompt),
+                Message(role=MessageRole.USER, content=user_message)
+            ]
+            
             delimiter_found = False
             buffer = ""
             
-            # Stream from LLM
-            async for chunk in self.llm.call_claude_streaming(
-                prompt_name="feedback_applier_prompt",
-                user_message=user_message,
-                model="claude-sonnet",
+            # CRITICAL FIX: LLM service's retry wrapper breaks async generators
+            # Access provider directly to bypass retry wrapper for streaming
+            config = GenerationConfig(
+                model="claude-sonnet-4.5",
                 max_tokens=8000,
-                temperature=0.5
-            ):
+                temperature=0.5,
+                stream=True
+            )
+            
+            provider = self.llm.factory.get_provider_for_model("claude-sonnet-4.5")
+            stream = provider.generate_stream(
+                messages=messages,
+                config=config
+            )
+            
+            # Stream from LLM using direct provider access
+            async for chunk in stream:
                 # Only add to buffer before delimiter is found
                 if not delimiter_found:
                     buffer += chunk

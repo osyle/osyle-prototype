@@ -2,7 +2,9 @@
 Feedback Router - Analyzes user feedback and routes to appropriate screens
 """
 import json
+from pathlib import Path
 from typing import Dict, Any, List
+from app.llm.types import Message, MessageRole
 
 
 class FeedbackRouter:
@@ -14,6 +16,19 @@ class FeedbackRouter:
             llm_client: LLM service for making API calls
         """
         self.llm = llm_client
+        
+        # Load prompt template
+        prompts_dir = Path(__file__).parent / "prompts"
+        prompt_file = prompts_dir / "feedback_router_prompt.md"
+        
+        if not prompt_file.exists():
+            # Fallback to legacy location
+            legacy_file = Path(__file__).parent.parent / "generation" / "prompts" / "legacy" / "feedback_router_prompt.md"
+            if legacy_file.exists():
+                prompt_file = legacy_file
+        
+        with open(prompt_file, 'r', encoding='utf-8') as f:
+            self.system_prompt = f.read()
     
     async def route_feedback(
         self,
@@ -49,40 +64,76 @@ class FeedbackRouter:
                 annotations
             )
             
-            # Call LLM with feedback_router_prompt
-            result = await self.llm.call_claude(
-                prompt_name="feedback_router_prompt",
-                user_message=user_message,
-                model="claude-sonnet",
+            # Build messages for new LLM service
+            messages = [
+                Message(role=MessageRole.SYSTEM, content=self.system_prompt),
+                Message(role=MessageRole.USER, content=user_message)
+            ]
+            
+            # Call LLM with new service API
+            response = await self.llm.generate(
+                model="claude-sonnet-4.5",
+                messages=messages,
                 max_tokens=2000,
-                temperature=0.3,
-                parse_json=True
+                temperature=0.3
             )
             
-            # Return parsed JSON with annotations attached
-            if "json" in result:
-                routing_result = result["json"]
-                
-                # Attach annotations to each screen that has them
-                if annotations and "screens_to_edit" in routing_result:
-                    for screen_edit in routing_result["screens_to_edit"]:
-                        screen_name = screen_edit.get("screen_name", "")
-                        if screen_name in annotations:
-                            screen_edit["annotations"] = annotations[screen_name]
-                
-                return routing_result
-            else:
-                # Fallback if JSON parsing failed
-                return {
-                    "needs_regeneration": False,
-                    "conversation_only": True,
-                    "response": result.get("text", "I'm not sure what you'd like me to change."),
-                    "reasoning": "Failed to parse routing decision, defaulting to conversation"
-                }
+            # Parse JSON from response
+            routing_result = self._parse_json_response(response.text)
+            
+            # Attach annotations to each screen that has them
+            if routing_result and annotations and "screens_to_edit" in routing_result:
+                for screen_edit in routing_result["screens_to_edit"]:
+                    screen_name = screen_edit.get("screen_name", "")
+                    if screen_name in annotations:
+                        screen_edit["annotations"] = annotations[screen_name]
+            
+            return routing_result if routing_result else {
+                "needs_regeneration": False,
+                "conversation_only": True,
+                "response": "I'm not sure what you'd like me to change.",
+                "reasoning": "Failed to parse routing decision, defaulting to conversation"
+            }
         
         except Exception as e:
             print(f"Error routing feedback: {e}")
             raise
+    
+    def _parse_json_response(self, text: str) -> Dict[str, Any]:
+        """
+        Parse JSON from LLM response
+        
+        Handles responses that may contain JSON wrapped in markdown code blocks
+        or explanatory text before/after the JSON.
+        """
+        try:
+            # First try direct JSON parse
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+        
+        # Try to extract JSON from markdown code blocks
+        import re
+        
+        # Look for ```json ... ``` blocks
+        json_match = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group(1))
+            except json.JSONDecodeError:
+                pass
+        
+        # Look for {...} anywhere in the text
+        brace_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if brace_match:
+            try:
+                return json.loads(brace_match.group(0))
+            except json.JSONDecodeError:
+                pass
+        
+        # If all parsing failed, return None
+        print(f"Failed to parse JSON from response: {text[:200]}")
+        return None
     
     def _build_user_message(
         self,
