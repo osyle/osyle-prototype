@@ -12,6 +12,7 @@ import json
 import re
 
 from app.llm.types import Message, MessageRole, GenerationConfig
+from app.llm.config import get_config
 from app.generation.parametric import ParametricGenerator
 from app.generation.prompt_assembler import PromptAssembler
 from app.generation.validator import TasteValidator
@@ -39,7 +40,7 @@ class GenerationOrchestrator:
         device_info: Dict[str, Any],
         flow_context: Optional[Dict[str, Any]] = None,
         rendering_mode: str = "react",
-        model: str = "claude-sonnet-4.5",
+        model: str = None,
         validate_taste: bool = True,
         websocket=None,
         screen_id: str = None,
@@ -47,6 +48,9 @@ class GenerationOrchestrator:
     ) -> Dict[str, Any]:
         """
         Generate UI with PROGRESSIVE STREAMING and 4-layer taste constraints.
+        
+        Args:
+            model: Model to use (defaults to DEFAULT_LLM_MODEL from env)
         
         Always uses streaming with checkpoints for real-time preview.
         Sends checkpoint updates via WebSocket as code is generated.
@@ -70,6 +74,10 @@ class GenerationOrchestrator:
                 - validation: ValidationResult (if validate_taste=True)
                 - metadata: Generation metadata
         """
+        
+        # Use env default model if not specified
+        if model is None:
+            model = get_config().default_model
         
         # Handle parametric mode
         if rendering_mode == "parametric":

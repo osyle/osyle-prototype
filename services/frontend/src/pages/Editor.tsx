@@ -840,8 +840,10 @@ export default function Editor() {
         },
         onFlowArchitecture: flowArch => {
           console.log('✅ Flow architecture ready!')
-          // Dismiss modal and show flow graph
-          setGenerationStage('complete')
+
+          // Keep modal visible and show "Generating screens" stage
+          setRethinkStage('screens')
+
           // Add ui_loading flag to each screen for progressive rendering
           const flowWithLoading: FlowGraph = {
             ...flowArch,
@@ -852,6 +854,11 @@ export default function Editor() {
             })),
           }
           setFlowGraph(flowWithLoading)
+
+          // Dismiss modal after 1 second minimum (allows "Generating screens" to show)
+          setTimeout(() => {
+            setGenerationStage('complete')
+          }, 1000)
         },
         onUICheckpoint: (screenId, uiCode, checkpointNumber) => {
           console.log(`📍 Checkpoint ${checkpointNumber} for ${screenId}`)

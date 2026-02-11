@@ -797,7 +797,7 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
                     device_info=device_info,
                     flow_context=flow_context,
                     rendering_mode=rendering_mode,
-                    model="claude-sonnet-4.5",
+                    model=llm.config.default_model,
                     validate_taste=bool(dtm),
                     websocket=websocket,
                     screen_id=screen_id,
@@ -1087,7 +1087,7 @@ Return ONLY a valid JSON object (no markdown code fences, no explanations):
     
     # Generate
     gen_response = await llm.generate(
-        model="claude-sonnet-4.5",
+        model=llm.config.default_model,
         messages=[
             Message(role=MessageRole.USER, content=prompt)
         ],
