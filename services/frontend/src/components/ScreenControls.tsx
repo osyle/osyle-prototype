@@ -4,6 +4,7 @@ interface ScreenControlsProps {
   // eslint-disable-next-line no-unused-vars
   onPresetResize: (width: number, height: number) => void
   onReset: () => void
+  position: { x: number; y: number }
 }
 
 const PRESETS = [
@@ -16,13 +17,14 @@ const PRESETS = [
 export default function ScreenControls({
   onPresetResize,
   onReset,
+  position,
 }: ScreenControlsProps) {
   return (
     <div
       style={{
         position: 'absolute',
-        left: 0,
-        top: -45,
+        left: position.x,
+        top: position.y - 55, // 10px gap above screen
         display: 'flex',
         gap: '8px',
         backgroundColor: 'rgba(31, 31, 32, 0.95)',

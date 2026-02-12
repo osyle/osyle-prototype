@@ -79,11 +79,14 @@ class PromptAssembler:
         # 1. Core role and rules
         sections.append(self._load_template("core/role_and_rules.md"))
         
-        # 2. Responsive system (if enabled)
+        # 2. Design quality standards (ALWAYS included)
+        sections.append(self._load_template("core/design_quality.md"))
+        
+        # 3. Responsive system (if enabled)
         if responsive:
             sections.append(self._load_template("core/responsive_system.md"))
         
-        # 3. Taste context (4-layer system)
+        # 4. Taste context (4-layer system)
         taste_context = self._format_taste_context(
             taste_data,
             taste_source,

@@ -1324,16 +1324,6 @@ export default function Editor() {
                     </div>
                   )}
 
-                  {/* Control bar when selected (only in responsive mode) */}
-                  {responsive_mode && selectedScreenId === screen.screen_id && (
-                    <ScreenControls
-                      onPresetResize={(width, height) =>
-                        handlePresetResize(screen.screen_id, width, height)
-                      }
-                      onReset={() => handleResetSize(screen.screen_id)}
-                    />
-                  )}
-
                   {/* Spotlight effect when screen is being updated */}
                   {isIterating && (
                     <>
@@ -1640,22 +1630,45 @@ export default function Editor() {
               // Wrap in ResizableScreen if responsive mode, otherwise fixed position
               if (responsive_mode) {
                 return (
-                  <ResizableScreen
-                    key={screen.screen_id}
-                    initialWidth={size.width}
-                    initialHeight={size.height}
-                    isSelected={selectedScreenId === screen.screen_id}
-                    onSelect={() => setSelectedScreenId(screen.screen_id)}
-                    onResize={(width, height) =>
-                      handleScreenResize(screen.screen_id, width, height)
-                    }
-                    onPositionChange={(x, y) =>
-                      handleScreenPositionChange(screen.screen_id, x, y)
-                    }
-                    position={position}
-                  >
-                    {screenContent}
-                  </ResizableScreen>
+                  <>
+                    {/* Control bar when selected - rendered outside ResizableScreen */}
+                    {selectedScreenId === screen.screen_id && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 0,
+                          zIndex: 2000,
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        <ScreenControls
+                          onPresetResize={(width, height) =>
+                            handlePresetResize(screen.screen_id, width, height)
+                          }
+                          onReset={() => handleResetSize(screen.screen_id)}
+                          position={position}
+                        />
+                      </div>
+                    )}
+
+                    <ResizableScreen
+                      key={screen.screen_id}
+                      initialWidth={size.width}
+                      initialHeight={size.height}
+                      isSelected={selectedScreenId === screen.screen_id}
+                      onSelect={() => setSelectedScreenId(screen.screen_id)}
+                      onResize={(width, height) =>
+                        handleScreenResize(screen.screen_id, width, height)
+                      }
+                      onPositionChange={(x, y) =>
+                        handleScreenPositionChange(screen.screen_id, x, y)
+                      }
+                      position={position}
+                    >
+                      {screenContent}
+                    </ResizableScreen>
+                  </>
                 )
               } else {
                 // Fixed position (non-responsive mode)

@@ -6,20 +6,6 @@ Your design must look **SPECTACULAR at ANY viewport size** while maintaining the
 
 The user can resize the viewport freely. Your UI must adapt gracefully from mobile (320px) to ultra-wide desktop (2560px+).
 
-## Design Quality Standards
-
-While following the designer's taste constraints (colors, fonts, spacing quantum), you MUST apply **professional design judgment** to create visually stunning, modern UIs:
-
-- **Visual Polish**: Add depth through shadows, gradients, subtle animations
-- **Modern Patterns**: Use contemporary UI patterns (glassmorphism, neumorphism, depth layers)
-- **Sophisticated Layouts**: Create interesting, asymmetric, or dynamic layouts (not just boring grids)
-- **Micro-interactions**: Hover states, focus states, transition animations
-- **Visual Hierarchy**: Strong contrast between primary/secondary/tertiary elements
-- **White Space**: Generous, intentional spacing (not cramped)
-- **Content Quality**: Use realistic, engaging content (not Lorem ipsum)
-
-**Your goal**: Make designs that look like they came from **Dribbble's top shots** or **Awwwards** while respecting the taste model.
-
 ## ⚠️ CRITICAL: Full-Width Usage & Layout Adaptation
 
 **NEVER create fixed-width centered cards that waste space.** Responsive design means:
