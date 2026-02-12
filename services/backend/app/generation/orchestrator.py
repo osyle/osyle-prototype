@@ -115,130 +115,83 @@ class GenerationOrchestrator:
         print(f"Streaming: {websocket is not None}")
         print(f"{'='*70}\n")
         
-        # RETRY LOOP for taste validation
-        max_retries = 2  # Try up to 3 times total (1 initial + 2 retries)
-        best_result = None
-        best_fidelity = 0.0
+        # Single generation attempt - no retries
+        buffer = ""
+        last_checkpoint_count = 0
+        last_sent_code = None
         
-        for attempt in range(max_retries + 1):
-            if attempt > 0:
-                print(f"\n🔄 RETRY ATTEMPT {attempt}/{max_retries}")
-                print(f"Previous fidelity: {best_fidelity:.1f}% - Retrying with violation feedback...\n")
-                
-                # Add violation feedback to prompt
-                violation_context = self._format_violation_feedback(best_result)
-                prompt = prompt + "\n\n" + violation_context
-        
-            # Stream with checkpoint detection  
-            buffer = ""
-            last_checkpoint_count = 0
-            last_sent_code = None
+        try:
+            # Use LLM service with streaming support
+            stream = self.llm.generate_stream(
+                model=model,
+                messages=[Message(role=MessageRole.USER, content=prompt)],
+                max_tokens=16000,
+                temperature=0.7,
+            )
             
-            try:
-                # Use LLM service properly with streaming support
-                stream = self.llm.generate_stream(
-                    model=model,
-                    messages=[Message(role=MessageRole.USER, content=prompt)],
-                    max_tokens=16000,
-                    temperature=0.7 if attempt == 0 else 0.5,  # Lower temperature on retries
-                )
+            async for chunk in stream:
+                buffer += chunk
                 
-                async for chunk in stream:
-                    buffer += chunk
+                # Stream checkpoints on first (and only) attempt
+                if websocket:
+                    current_checkpoint_count = count_checkpoints(buffer)
                     
-                    # Check for new checkpoint if websocket available
-                    if websocket and attempt == max_retries:  # Only stream checkpoints on final attempt
-                        current_checkpoint_count = count_checkpoints(buffer)
+                    if current_checkpoint_count > last_checkpoint_count:
+                        print(f"    🔍 Checkpoint {current_checkpoint_count} detected")
                         
-                        if current_checkpoint_count > last_checkpoint_count:
-                            print(f"    🔍 Checkpoint {current_checkpoint_count} detected")
+                        # Extract code at this checkpoint
+                        checkpoint_code = extract_at_checkpoint(buffer)
+                        
+                        if checkpoint_code and checkpoint_code != last_sent_code:
+                            # Send checkpoint update to frontend
+                            await websocket.send_json({
+                                "type": "ui_checkpoint",
+                                "data": {
+                                    "screen_id": screen_id,
+                                    "ui_code": checkpoint_code,
+                                    "checkpoint_number": current_checkpoint_count,
+                                    "is_final": False
+                                }
+                            })
                             
-                            # Extract code at this checkpoint
-                            checkpoint_code = extract_at_checkpoint(buffer)
-                            
-                            if checkpoint_code and checkpoint_code != last_sent_code:
-                                # Send checkpoint update to frontend (NO validation - don't block!)
-                                await websocket.send_json({
-                                    "type": "ui_checkpoint",
-                                    "data": {
-                                        "screen_id": screen_id,
-                                        "ui_code": checkpoint_code,
-                                        "checkpoint_number": current_checkpoint_count,
-                                        "is_final": False
-                                    }
-                                })
-                                
-                                last_sent_code = checkpoint_code
-                                last_checkpoint_count = current_checkpoint_count
-                                print(f"    ✓ Checkpoint {current_checkpoint_count} sent")
+                            last_sent_code = checkpoint_code
+                            last_checkpoint_count = current_checkpoint_count
+                            print(f"    ✓ Checkpoint {current_checkpoint_count} sent")
+            
+            # Stream complete - clean final code
+            print(f"\n    🏁 Stream complete. Cleaning final code...")
+            
+            # Remove code fences and checkpoints
+            final_code = self._clean_code_fences(buffer)
+            final_code = _aggressive_clean_checkpoints(final_code)
+            
+            # Validate taste for logging/metrics only (non-blocking)
+            validation_result = None
+            fidelity_score = 0.0
+            
+            if validate_taste:
+                print(f"    🔍 Validating taste (logging only)...")
+                validator = TasteValidator(taste_data)
+                validation_result = validator.validate(final_code)
+                fidelity_score = validator.get_fidelity_score(validation_result)
                 
-                # Stream complete - clean final code
-                print(f"\n    🏁 Stream complete. Cleaning final code...")
+                print(f"\n{'='*70}")
+                print(f"TASTE VALIDATION RESULTS (LOGGING)")
+                print(f"{'='*70}")
+                print(f"Fidelity score: {fidelity_score:.1f}%")
+                print(f"Violations: {len(validation_result.violations)}")
+                print(f"Warnings: {len(validation_result.warnings)}")
                 
-                # Remove code fences and checkpoints
-                final_code = self._clean_code_fences(buffer)
-                final_code = _aggressive_clean_checkpoints(final_code)
+                if validation_result.violations:
+                    print(f"\nViolations (logged for future improvements):")
+                    for v in validation_result.violations[:10]:
+                        print(f"  - {v}")
                 
-                # Validate taste to decide if retry needed
-                validation_result = None
-                fidelity_score = 0.0
-                
-                if validate_taste:
-                    print(f"    🔍 Validating taste...")
-                    validator = TasteValidator(taste_data)
-                    validation_result = validator.validate(final_code)
-                    fidelity_score = validator.get_fidelity_score(validation_result)
-                    
-                    print(f"\n{'='*70}")
-                    print(f"TASTE VALIDATION RESULTS")
-                    print(f"{'='*70}")
-                    print(f"Fidelity score: {fidelity_score:.1f}%")
-                    print(f"Passed: {validation_result.passed}")
-                    print(f"Violations: {len(validation_result.violations)}")
-                    print(f"Warnings: {len(validation_result.warnings)}")
-                    
-                    if validation_result.violations:
-                        print(f"\nViolations:")
-                        for v in validation_result.violations[:10]:  # Show top 10
-                            print(f"  - {v}")
-                    
-                    if validation_result.warnings:
-                        print(f"\nWarnings:")
-                        for w in validation_result.warnings[:5]:  # Show first 5
-                            print(f"  - {w}")
-                    
-                    print(f"{'='*70}\n")
-                
-                # Save best result
-                if fidelity_score > best_fidelity:
-                    best_fidelity = fidelity_score
-                    best_result = {
-                        "code": final_code,
-                        "validation": validation_result,
-                        "fidelity": fidelity_score
-                    }
-                
-                # Check if we should stop retrying
-                if fidelity_score >= 90.0:  # Target: 90%+ fidelity
-                    print(f"✅ EXCELLENT FIDELITY ({fidelity_score:.1f}%) - Accepting result")
-                    break
-                elif attempt < max_retries:
-                    print(f"⚠️ FIDELITY TOO LOW ({fidelity_score:.1f}%) - Will retry")
-                else:
-                    print(f"⚠️ FIDELITY ({fidelity_score:.1f}%) - Max retries reached, using best result")
-                
-            except Exception as e:
-                print(f"Error during generation attempt {attempt}: {e}")
-                if attempt == max_retries:
-                    raise
-                continue
-        
-        # Use best result from all attempts
-        if best_result is None:
-            raise Exception("All generation attempts failed")
-        
-        final_code = best_result["code"]
-        validation_result = best_result["validation"]
+                print(f"{'='*70}\n")
+            
+        except Exception as e:
+            print(f"Error during generation: {e}")
+            raise
         
         # Send final code via WebSocket
         if websocket:
@@ -248,64 +201,21 @@ class GenerationOrchestrator:
                     "screen_id": screen_id,
                     "ui_code": final_code,
                     "is_final": True,
-                    "fidelity_score": best_fidelity if validation_result else None
+                    "fidelity_score": fidelity_score if validation_result else None
                 }
             })
-            print(f"    ✓ Final code sent to frontend (Fidelity: {best_fidelity:.1f}%)")
+            print(f"    ✓ Final code sent to frontend (Fidelity: {fidelity_score:.1f}%)")
         
         return {
             "code": final_code,
             "validation": validation_result,
-            "fidelity_score": best_fidelity,
+            "fidelity_score": fidelity_score,
             "metadata": {
                 "model": model,
                 "taste_source": taste_source,
-                "attempts": attempt + 1
+                "attempts": 1
             }
         }
-    
-    def _format_violation_feedback(self, previous_result: Dict[str, Any]) -> str:
-        """Format validation violations as feedback for retry"""
-        if not previous_result or not previous_result.get("validation"):
-            return ""
-        
-        validation = previous_result["validation"]
-        violations = validation.violations
-        
-        if not violations:
-            return ""
-        
-        feedback = [
-            "\n\n# ⚠️ CRITICAL CORRECTIONS NEEDED ⚠️\n",
-            "The previous attempt had taste violations. You MUST fix these:\n"
-        ]
-        
-        # Group violations by type
-        font_violations = [v for v in violations if "font" in v.lower()]
-        spacing_violations = [v for v in violations if "spacing" in v.lower()]
-        color_violations = [v for v in violations if "color" in v.lower()]
-        
-        if font_violations:
-            feedback.append("\n## Font Violations - FIX THESE:\n")
-            for v in font_violations[:5]:
-                feedback.append(f"- {v}\n")
-            feedback.append("\n**ACTION**: Review approved font families and use ONLY those fonts.\n")
-        
-        if spacing_violations:
-            feedback.append("\n## Spacing Violations - FIX THESE:\n")
-            for v in spacing_violations[:5]:
-                feedback.append(f"- {v}\n")
-            feedback.append("\n**ACTION**: Check approved spacing scale and use ONLY those values.\n")
-        
-        if color_violations:
-            feedback.append("\n## Color Violations - FIX THESE:\n")
-            for v in color_violations[:5]:
-                feedback.append(f"- {v}\n")
-            feedback.append("\n**ACTION**: Review approved color palette and use ONLY those hex values.\n")
-        
-        feedback.append("\n**REMEMBER**: Layer 1 constraints are NON-NEGOTIABLE. You must use ONLY approved tokens.\n")
-        
-        return "".join(feedback)
     
     def _clean_code_fences(self, code: str) -> str:
         """Remove markdown code fences"""
