@@ -988,21 +988,40 @@ export default function Home() {
     if (!selectedTasteId) return
 
     // ========================================================================
-    // BUILD SUBSET DTM DIRECTLY (skip project modal)
+    // BUILD DTM (subset or full based on selection)
     // ========================================================================
     try {
+      // Determine if using entire taste profile or specific resources
+      const isUsingEntireTaste = selectedResourceIds.length === 0
+
+      // If using entire taste, get all resource IDs
+      let resourceIdsToUse = selectedResourceIds
+      if (isUsingEntireTaste) {
+        console.log('🌍 Using entire taste profile - fetching all resources...')
+        const selectedTaste = tastes.find(t => t.taste_id === selectedTasteId)
+        if (selectedTaste) {
+          // Get all resource IDs (backend will validate which have DTRs)
+          resourceIdsToUse = selectedTaste.resources.map(r => r.resource_id)
+          console.log(`Found ${resourceIdsToUse.length} total resources`)
+        }
+      }
+
       // Show DTM training modal
-      setDtmResourceCount(selectedResourceIds.length)
+      setDtmResourceCount(resourceIdsToUse.length)
       setDtmTrainingState('training')
       setDtmTrainingError(null)
       setIsDtmTrainingModalOpen(true)
 
-      console.log('🎨 Building subset DTM for selected resources...')
+      console.log('🎨 Building DTM...')
       console.log('Taste ID:', selectedTasteId)
-      console.log('Selected Resource IDs:', selectedResourceIds)
+      console.log(
+        'Mode:',
+        isUsingEntireTaste ? 'full (entire taste)' : 'subset (selected)',
+      )
+      console.log('Resource IDs:', resourceIdsToUse)
 
       const dtmResult = await api.dtm.getOrBuild(selectedTasteId, {
-        resource_ids: selectedResourceIds,
+        resource_ids: resourceIdsToUse,
         mode: 'auto',
       })
 
