@@ -135,19 +135,12 @@ class GenerationOrchestrator:
             last_sent_code = None
             
             try:
-                # CRITICAL FIX: LLM service's retry wrapper breaks async generators
-                # Access provider directly to bypass retry wrapper for streaming
-                config = GenerationConfig(
+                # Use LLM service properly with streaming support
+                stream = self.llm.generate_stream(
                     model=model,
+                    messages=[Message(role=MessageRole.USER, content=prompt)],
                     max_tokens=16000,
                     temperature=0.7 if attempt == 0 else 0.5,  # Lower temperature on retries
-                    stream=True
-                )
-                
-                provider = self.llm.factory.get_provider_for_model(model)
-                stream = provider.generate_stream(
-                    messages=[Message(role=MessageRole.USER, content=prompt)],
-                    config=config
                 )
                 
                 async for chunk in stream:
@@ -230,9 +223,9 @@ class GenerationOrchestrator:
                     print(f"✅ EXCELLENT FIDELITY ({fidelity_score:.1f}%) - Accepting result")
                     break
                 elif attempt < max_retries:
-                    print(f"⚠️  FIDELITY TOO LOW ({fidelity_score:.1f}%) - Will retry")
+                    print(f"⚠️ FIDELITY TOO LOW ({fidelity_score:.1f}%) - Will retry")
                 else:
-                    print(f"⚠️  FIDELITY ({fidelity_score:.1f}%) - Max retries reached, using best result")
+                    print(f"⚠️ FIDELITY ({fidelity_score:.1f}%) - Max retries reached, using best result")
                 
             except Exception as e:
                 print(f"Error during generation attempt {attempt}: {e}")

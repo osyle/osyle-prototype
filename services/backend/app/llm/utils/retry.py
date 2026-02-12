@@ -162,6 +162,100 @@ def with_retry_sync(config: Optional[RetryConfig] = None):
     return decorator
 
 
+def with_retry_stream(config: Optional[RetryConfig] = None):
+    """
+    Decorator for retrying async generator functions (streaming) with exponential backoff
+    
+    This decorator properly handles async generators by:
+    1. Only retrying on the initial connection/setup errors
+    2. Once streaming starts, errors are propagated immediately (no retry mid-stream)
+    
+    Example:
+        @with_retry_stream(RetryConfig(max_retries=3))
+        async def stream_llm():
+            async for chunk in provider.stream():
+                yield chunk
+    """
+    if config is None:
+        config = RetryConfig()
+    
+    def decorator(func: Callable):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            last_exception = None
+            
+            for attempt in range(config.max_retries + 1):
+                try:
+                    # Call the generator function to get the async generator
+                    gen = func(*args, **kwargs)
+                    
+                    # Try to get the first chunk - this is where connection errors happen
+                    try:
+                        first_chunk = await gen.__anext__()
+                    except StopAsyncIteration:
+                        # Empty stream - just return
+                        return
+                    except config.retry_on as e:
+                        # Connection/setup error - retry allowed
+                        if attempt >= config.max_retries:
+                            logger.error(
+                                f"Max retries ({config.max_retries}) exceeded for {func.__name__}: {e}"
+                            )
+                            raise
+                        
+                        last_exception = e
+                        delay = config.calculate_delay(attempt)
+                        
+                        logger.warning(
+                            f"Retry {attempt + 1}/{config.max_retries} for {func.__name__} "
+                            f"after {delay:.2f}s: {e}"
+                        )
+                        
+                        await asyncio.sleep(delay)
+                        continue  # Retry the whole generator
+                    
+                    # Successfully got first chunk - yield it and stream the rest
+                    yield first_chunk
+                    
+                    # Stream remaining chunks - no retries mid-stream
+                    async for chunk in gen:
+                        yield chunk
+                    
+                    # Successfully completed streaming
+                    return
+                    
+                except config.retry_on as e:
+                    # This shouldn't happen since we handle it above, but just in case
+                    last_exception = e
+                    
+                    if attempt >= config.max_retries:
+                        logger.error(
+                            f"Max retries ({config.max_retries}) exceeded for {func.__name__}: {e}"
+                        )
+                        raise
+                    
+                    delay = config.calculate_delay(attempt)
+                    
+                    logger.warning(
+                        f"Retry {attempt + 1}/{config.max_retries} for {func.__name__} "
+                        f"after {delay:.2f}s: {e}"
+                    )
+                    
+                    await asyncio.sleep(delay)
+                
+                except Exception as e:
+                    # Don't retry on other exceptions
+                    logger.error(f"Non-retryable error in {func.__name__}: {e}")
+                    raise
+            
+            # Should never reach here, but just in case
+            if last_exception:
+                raise last_exception
+        
+        return wrapper
+    return decorator
+
+
 async def retry_with_config(
     func: Callable[[], T],
     config: Optional[RetryConfig] = None

@@ -4,7 +4,7 @@ Feedback Applier - Generates updated UI code based on user feedback
 import re
 from pathlib import Path
 from typing import List, Dict, Any, AsyncGenerator
-from app.llm.types import Message, MessageRole, GenerationConfig
+from app.llm.types import Message, MessageRole
 
 
 class FeedbackApplier:
@@ -62,7 +62,7 @@ class FeedbackApplier:
                 annotations=annotations
             )
             
-            # Build messages for new LLM service
+            # Build messages for LLM service
             messages = [
                 Message(role=MessageRole.SYSTEM, content=self.system_prompt),
                 Message(role=MessageRole.USER, content=user_message)
@@ -71,22 +71,15 @@ class FeedbackApplier:
             delimiter_found = False
             buffer = ""
             
-            # CRITICAL FIX: LLM service's retry wrapper breaks async generators
-            # Access provider directly to bypass retry wrapper for streaming
-            config = GenerationConfig(
+            # Use LLM service properly with streaming support
+            stream = self.llm.generate_stream(
                 model="claude-sonnet-4.5",
+                messages=messages,
                 max_tokens=8000,
                 temperature=0.5,
-                stream=True
             )
             
-            provider = self.llm.factory.get_provider_for_model("claude-sonnet-4.5")
-            stream = provider.generate_stream(
-                messages=messages,
-                config=config
-            )
-            
-            # Stream from LLM using direct provider access
+            # Stream from LLM using service API
             async for chunk in stream:
                 # Only add to buffer before delimiter is found
                 if not delimiter_found:

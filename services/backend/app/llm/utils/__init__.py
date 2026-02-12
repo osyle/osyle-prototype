@@ -1,7 +1,7 @@
 """
 Utility modules for LLM infrastructure
 """
-from .retry import RetryConfig, with_retry, with_retry_sync, retry_with_config
+from .retry import RetryConfig, with_retry, with_retry_sync, with_retry_stream, retry_with_config
 from .cost import CostTracker, RequestCost, get_tracker, set_tracker
 
 __all__ = [
@@ -9,6 +9,7 @@ __all__ = [
     "RetryConfig",
     "with_retry",
     "with_retry_sync",
+    "with_retry_stream",
     "retry_with_config",
     
     # Cost tracking

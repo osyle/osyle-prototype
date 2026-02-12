@@ -11,7 +11,7 @@ from .types import (
     ToolConfig, ReasoningConfig
 )
 from .providers import ProviderFactory, get_recommended_models
-from .utils import RetryConfig, with_retry, get_tracker
+from .utils import RetryConfig, with_retry, with_retry_stream, get_tracker
 from .config import get_config
 from .exceptions import ModelNotFoundError
 
@@ -214,9 +214,9 @@ class LLMService:
         # Get provider
         provider = self.factory.get_provider_for_model(model)
         
-        # Stream with retry if enabled
+        # Stream with retry if enabled (using stream-specific retry decorator)
         if self.enable_retries:
-            @with_retry(self.retry_config)
+            @with_retry_stream(self.retry_config)
             async def _stream():
                 async for chunk in provider.generate_stream(messages, config):
                     yield chunk
