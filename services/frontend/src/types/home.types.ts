@@ -77,6 +77,21 @@ export interface FlowGraph {
   [key: string]: unknown // Allow additional properties from backend
 }
 
+export interface Project {
+  project_id: string
+  name: string
+  task_description: string
+  selected_taste_id: string
+  selected_resource_ids: string[]
+  device_info?: { platform: string; screen: { width: number; height: number } }
+  rendering_mode?: 'react' | 'parametric'
+  responsive_mode?: boolean
+  flow_mode?: boolean
+  max_screens?: number
+  flow_graph?: FlowGraph
+  metadata?: Record<string, unknown>
+}
+
 export interface ProjectDisplay {
   project_id: string
   name: string
@@ -100,8 +115,20 @@ export interface CreateProjectPayload {
   selected_taste_id: string
   selected_resource_ids: string[]
   inspiration_images?: File[]
+  device_info?: { platform: string; screen: { width: number; height: number } }
+  rendering_mode?: 'react' | 'parametric'
+  responsive_mode?: boolean // NEW: Responsive design toggle
   flow_mode?: boolean // NEW
   max_screens?: number // NEW
+  screen_definitions?: Array<{
+    name: string
+    description?: string
+    mode?: string
+    has_figma?: boolean
+    has_images?: boolean
+    image_count?: number
+  }>
+  screen_files?: Record<string, File>
   metadata?: Record<string, unknown>
 }
 
@@ -111,6 +138,9 @@ export interface ProjectDetails {
   task_description: string
   selected_taste_id: string
   selected_resource_ids: string[]
+  device_info?: { platform: string; screen: { width: number; height: number } }
+  rendering_mode?: 'react' | 'parametric'
+  responsive_mode?: boolean
   inspiration_image_keys?: string[] // S3 keys
   inspiration_image_urls?: string[] // Presigned URLs (when requested)
   flow_mode?: boolean // NEW

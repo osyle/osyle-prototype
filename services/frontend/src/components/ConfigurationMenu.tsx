@@ -19,8 +19,14 @@ export default function ConfigurationMenu() {
   const [isOpen, setIsOpen] = useState(false)
   const [activeSection, setActiveSection] = useState<string | null>('device')
   const menuRef = useRef<HTMLDivElement>(null)
-  const { device_info, setDeviceInfo, rendering_mode, setRenderingMode } =
-    useDeviceContext()
+  const {
+    device_info,
+    setDeviceInfo,
+    rendering_mode,
+    setRenderingMode,
+    responsive_mode,
+    setResponsiveMode,
+  } = useDeviceContext()
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -583,6 +589,63 @@ export default function ConfigurationMenu() {
                                 Generate UI with parametric controls for
                                 real-time style adjustments. Single screen only,
                                 with dynamic sliders for customization.
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Responsive Mode Toggle */}
+                    <div>
+                      <div className="text-xs text-gray-400 mb-2">
+                        Responsive Design
+                      </div>
+                      <div
+                        className="rounded-full p-1 flex gap-1"
+                        style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+                      >
+                        <div
+                          className={getOptionStyle(responsive_mode)}
+                          onClick={() => setResponsiveMode(true)}
+                        >
+                          <Maximize2 size={14} />
+                          <span className="text-sm">Fluid</span>
+                        </div>
+                        <div
+                          className={getOptionStyle(!responsive_mode)}
+                          onClick={() => setResponsiveMode(false)}
+                        >
+                          <Grid3X3 size={14} />
+                          <span className="text-sm">Fixed</span>
+                        </div>
+                      </div>
+
+                      {/* Responsive Description */}
+                      <div
+                        className="mt-3 p-3 rounded-lg"
+                        style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+                      >
+                        <div className="text-xs text-gray-300">
+                          {responsive_mode ? (
+                            <>
+                              <div className="font-medium mb-1">
+                                Fluid Responsive Layout
+                              </div>
+                              <div className="text-gray-400">
+                                UIs adapt to any viewport size. Screens can be
+                                resized on canvas to test responsiveness at
+                                different breakpoints.
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="font-medium mb-1">
+                                Fixed Dimensions
+                              </div>
+                              <div className="text-gray-400">
+                                UIs render at exact pixel dimensions. Useful for
+                                pixel-perfect design recreation.
                               </div>
                             </>
                           )}

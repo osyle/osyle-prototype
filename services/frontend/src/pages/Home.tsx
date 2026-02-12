@@ -54,8 +54,13 @@ export default function Home() {
   // ============================================================================
 
   const navigate = useNavigate()
-  const { device_info, rendering_mode, setDeviceInfo, setRenderingMode } =
-    useDeviceContext()
+  const {
+    device_info,
+    rendering_mode,
+    responsive_mode,
+    setDeviceInfo,
+    setRenderingMode,
+  } = useDeviceContext()
 
   // ============================================================================
   // STATE MANAGEMENT
@@ -835,6 +840,7 @@ export default function Home() {
         selected_resource_ids: selectedResourceIds,
         device_info: device_info, // Save current device settings
         rendering_mode: rendering_mode, // Save current rendering mode
+        responsive_mode: responsive_mode, // Save responsive mode setting
         // PARAMETRIC MODE RESTRICTIONS: Force single screen, no flow mode, no screen definitions
         flow_mode: rendering_mode === 'parametric' ? false : true,
         max_screens:
@@ -860,6 +866,7 @@ export default function Home() {
           selected_resource_ids: project.selected_resource_ids,
           device_info: project.device_info,
           rendering_mode: project.rendering_mode,
+          responsive_mode: project.responsive_mode,
           flow_mode: project.flow_mode, // NEW: Store flow_mode
           max_screens: project.max_screens, // NEW: Store max_screens
         }),

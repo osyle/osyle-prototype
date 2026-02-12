@@ -46,6 +46,10 @@ export default function DeviceContextProvider({
     'react' | 'parametric'
   >(() => getStoredValue('rendering_mode', 'react'))
 
+  const [responsive_mode, setResponsiveModeState] = useState<boolean>(() =>
+    getStoredValue('responsive_mode', true),
+  )
+
   // Wrapper setters that update both state and localStorage
   const setDeviceInfo = (info: DeviceInfo) => {
     setDeviceInfoState(info)
@@ -57,6 +61,11 @@ export default function DeviceContextProvider({
     localStorage.setItem('rendering_mode', JSON.stringify(mode))
   }
 
+  const setResponsiveMode = (enabled: boolean) => {
+    setResponsiveModeState(enabled)
+    localStorage.setItem('responsive_mode', JSON.stringify(enabled))
+  }
+
   return (
     <DeviceContext.Provider
       value={{
@@ -64,6 +73,8 @@ export default function DeviceContextProvider({
         setDeviceInfo,
         rendering_mode,
         setRenderingMode,
+        responsive_mode,
+        setResponsiveMode,
       }}
     >
       {children}

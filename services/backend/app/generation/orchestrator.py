@@ -44,13 +44,15 @@ class GenerationOrchestrator:
         validate_taste: bool = True,
         websocket=None,
         screen_id: str = None,
-        screen_name: str = None
+        screen_name: str = None,
+        responsive: bool = True  # NEW: Enable responsive design (default True)
     ) -> Dict[str, Any]:
         """
         Generate UI with PROGRESSIVE STREAMING and 4-layer taste constraints.
         
         Args:
             model: Model to use (defaults to DEFAULT_LLM_MODEL from env)
+            responsive: Enable responsive design mode (default: True for fluid layouts)
         
         Always uses streaming with checkpoints for real-time preview.
         Sends checkpoint updates via WebSocket as code is generated.
@@ -67,6 +69,7 @@ class GenerationOrchestrator:
             websocket: WebSocket connection for progressive updates
             screen_id: Screen identifier for WebSocket messages
             screen_name: Screen name for logging
+            responsive: Enable responsive design (True = fluid layouts, False = fixed dimensions)
             
         Returns:
             Dict with:
@@ -96,7 +99,8 @@ class GenerationOrchestrator:
             device_info=device_info,
             flow_context=flow_context,
             mode="default",
-            model=model
+            model=model,
+            responsive=responsive  # Pass responsive flag
         )
         
         print(f"\n{'='*70}")
@@ -106,6 +110,7 @@ class GenerationOrchestrator:
         print(f"Taste source: {taste_source}")
         print(f"Device: {device_info.get('platform')} {device_info.get('screen', {}).get('width')}x{device_info.get('screen', {}).get('height')}")
         print(f"Model: {model}")
+        print(f"Responsive: {responsive}")
         print(f"Prompt length: {len(prompt)} chars")
         print(f"Streaming: {websocket is not None}")
         print(f"{'='*70}\n")

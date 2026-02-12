@@ -54,7 +54,8 @@ class PromptAssembler:
         device_info: Dict[str, Any],
         flow_context: Optional[Dict[str, Any]] = None,
         mode: str = "default",
-        model: str = "claude-sonnet-4.5"
+        model: str = "claude-sonnet-4.5",
+        responsive: bool = True
     ) -> str:
         """
         Assemble complete generation prompt
@@ -67,6 +68,7 @@ class PromptAssembler:
             flow_context: Optional flow context for multi-screen
             mode: Generation mode ("default", "parametric", etc.)
             model: Target LLM model
+            responsive: Enable responsive design mode (default: True)
         
         Returns:
             Complete prompt string
@@ -77,25 +79,31 @@ class PromptAssembler:
         # 1. Core role and rules
         sections.append(self._load_template("core/role_and_rules.md"))
         
-        # 2. Taste context (4-layer system)
+        # 2. Responsive system (if enabled)
+        if responsive:
+            sections.append(self._load_template("core/responsive_system.md"))
+        
+        # 3. Taste context (4-layer system)
         taste_context = self._format_taste_context(
             taste_data,
-            taste_source
+            taste_source,
+            responsive=responsive
         )
         sections.append(taste_context)
         
-        # 3. Task and constraints
+        # 4. Task and constraints
         task_section = self._format_task(
             task_description,
             device_info,
-            flow_context
+            flow_context,
+            is_responsive=responsive
         )
         sections.append(task_section)
         
-        # 4. Output structure
+        # 5. Output structure
         sections.append(self._load_template("core/output_structure.md"))
         
-        # 5. Mode-specific additions (if needed)
+        # 6. Mode-specific additions (if needed)
         if mode == "parametric":
             # Add parametric-specific instructions
             pass
@@ -115,13 +123,19 @@ class PromptAssembler:
     def _format_taste_context(
         self,
         taste_data: Dict[str, Any],
-        taste_source: str
+        taste_source: str,
+        responsive: bool = True
     ) -> str:
         """
         Convert DTM/DTR data into 4-layer constraint system
         
         This is where the magic happens - taking raw DTM JSON and
         formatting it into explicit, hierarchical constraints.
+        
+        Args:
+            taste_data: DTM or DTR data
+            taste_source: Source type
+            responsive: Enable responsive adaptations
         """
         
         # Start with source-specific emphasis
@@ -133,7 +147,7 @@ class PromptAssembler:
         consensus = taste_data.get("consensus_narrative", taste_data.get("cross_cutting_patterns", {}))
         
         # Build each layer
-        layer1 = self._format_layer1_exact_tokens(exact_tokens)
+        layer1 = self._format_layer1_exact_tokens(exact_tokens, responsive=responsive)
         layer2 = self._format_layer2_patterns(consensus)
         layer3 = self._format_layer3_personality(personality)
         layer4 = self._format_layer4_examples(exact_tokens.get("components", []))
@@ -176,12 +190,20 @@ class PromptAssembler:
 
 **EMPHASIS**: This represents the designer's overall aesthetic across all their work. Apply the consensus patterns and unified personality."""
     
-    def _format_layer1_exact_tokens(self, exact_tokens: Dict[str, Any]) -> str:
+    def _format_layer1_exact_tokens(self, exact_tokens: Dict[str, Any], responsive: bool = True) -> str:
         """Format Layer 1: Hard constraints (exact tokens)"""
         
         sections = []
         sections.append("# LAYER 1: HARD CONSTRAINTS - ABSOLUTELY NON-NEGOTIABLE\n")
-        sections.append("These are EXACT tokens extracted from the designer's work. You are **FORBIDDEN** from using anything not explicitly listed here.\n")
+        
+        if responsive:
+            sections.append("These are EXACT tokens extracted from the designer's work. In **RESPONSIVE MODE**, you must MAINTAIN THE ESSENCE while adapting to viewport:\n")
+            sections.append("- **Colors**: Use exact hex values at ALL viewport sizes")
+            sections.append("- **Fonts**: Use exact families/weights at ALL sizes, scale sizes proportionally with responsive classes")
+            sections.append("- **Spacing**: Maintain quantum multiples, scale quantum with viewport (0.75x mobile, 1x tablet, 1.25x desktop)")
+            sections.append("- **Effects**: Same materials/shadows/radii at all viewport sizes\n")
+        else:
+            sections.append("These are EXACT tokens extracted from the designer's work. You are **FORBIDDEN** from using anything not explicitly listed here.\n")
         
         # Colors
         if "colors" in exact_tokens:
@@ -189,11 +211,11 @@ class PromptAssembler:
         
         # Typography
         if "typography" in exact_tokens:
-            sections.append(self._format_typography(exact_tokens["typography"]))
+            sections.append(self._format_typography(exact_tokens["typography"], responsive=responsive))
         
         # Spacing
         if "spacing" in exact_tokens:
-            sections.append(self._format_spacing(exact_tokens["spacing"]))
+            sections.append(self._format_spacing(exact_tokens["spacing"], responsive=responsive))
         
         # Materials & Effects
         if "materials" in exact_tokens:
@@ -239,7 +261,7 @@ class PromptAssembler:
         
         return "\n".join(parts)
     
-    def _format_typography(self, typography: Dict[str, Any]) -> str:
+    def _format_typography(self, typography: Dict[str, Any], responsive: bool = True) -> str:
         """Format typography constraints"""
         parts = []
         parts.append("## Typography - ONLY USE THESE\n")
@@ -260,6 +282,11 @@ class PromptAssembler:
         if "sizes_used" in typography:
             sizes = typography["sizes_used"]
             parts.append(f"### Font Sizes (px)\n")
+            if responsive:
+                parts.append("**RESPONSIVE MODE**: These are BASE sizes. Scale proportionally:")
+                parts.append("- Mobile (< 640px): ~0.75-0.85x")
+                parts.append("- Desktop (> 1024px): ~1.0-1.15x")
+                parts.append("- Use responsive classes: `text-xl md:text-2xl lg:text-3xl`\n")
             parts.append(f"Approved sizes: {', '.join(map(str, sorted(sizes)))}\n")
         
         # Scale metrics
@@ -271,18 +298,26 @@ class PromptAssembler:
             parts.append(f"### Type Scale")
             parts.append(f"- Scale ratio: {ratio:.2f}")
             parts.append(f"- Consistency: {consistency:.2f}")
-            parts.append("- This ratio MUST be maintained when choosing sizes\n")
+            if responsive:
+                parts.append("- **CRITICAL**: Maintain this ratio across ALL viewport sizes")
+            else:
+                parts.append("- This ratio MUST be maintained when choosing sizes")
+            parts.append("")
         
         # Critical rules
         parts.append("**CRITICAL RULES**:")
         parts.append("- ❌ FORBIDDEN: Any font family not listed")
         parts.append("- ❌ FORBIDDEN: Font weights not in approved list")
-        parts.append("- ❌ FORBIDDEN: Font sizes not in the scale")
+        if responsive:
+            parts.append("- ⚠️  Font sizes: Scale proportionally with responsive classes")
+            parts.append("- ⚠️  Hierarchy ratios: MUST maintain at all viewport sizes")
+        else:
+            parts.append("- ❌ FORBIDDEN: Font sizes not in the scale")
         parts.append("- ✅ ALLOWED: Only listed fonts, weights, and sizes")
         
         return "\n".join(parts)
     
-    def _format_spacing(self, spacing: Dict[str, Any]) -> str:
+    def _format_spacing(self, spacing: Dict[str, Any], responsive: bool = True) -> str:
         """Format spacing constraints"""
         parts = []
         parts.append("## Spacing - ONLY USE THESE VALUES\n")
@@ -291,21 +326,39 @@ class PromptAssembler:
         quantum = spacing.get("quantum", "4px")
         parts.append(f"### Spacing Quantum\n")
         parts.append(f"**Base quantum**: {quantum}\n")
-        parts.append("All spacing MUST be a multiple of this quantum.\n")
+        
+        if responsive:
+            parts.append("\n**RESPONSIVE MODE - Quantum Scaling**:")
+            parts.append(f"- Mobile (< 640px): {quantum} × 0.75")
+            parts.append(f"- Tablet (640-1024px): {quantum} × 1.0 (base)")
+            parts.append(f"- Desktop (> 1024px): {quantum} × 1.25")
+            parts.append("\nAll spacing at each breakpoint MUST be multiples of the scaled quantum.")
+            parts.append("Use responsive classes: `p-4 md:p-6 lg:p-8`\n")
+        else:
+            parts.append("All spacing MUST be a multiple of this quantum.\n")
         
         # Scale
         if "scale" in spacing:
             scale = spacing["scale"]
             parts.append(f"### Spacing Scale\n")
-            parts.append(f"Approved values (px): {', '.join(map(str, scale))}\n")
+            if responsive:
+                parts.append(f"Base scale (tablet): {', '.join(map(str, scale))} px\n")
+            else:
+                parts.append(f"Approved values (px): {', '.join(map(str, scale))}\n")
         
         # Critical rules
         parts.append("**CRITICAL RULES**:")
-        parts.append("- ❌ FORBIDDEN: Values not in the scale (e.g., 10px, 15px if not listed)")
-        parts.append("- ❌ FORBIDDEN: Arbitrary spacing that breaks the quantum")
-        parts.append("- ✅ ALLOWED: Only values from the approved scale")
+        if responsive:
+            parts.append("- ⚠️  Scale quantum with viewport (0.75x, 1x, 1.25x)")
+            parts.append("- ⚠️  Maintain quantum multiples at each breakpoint")
+            parts.append("- ✅ Use responsive classes: `p-4 md:p-6 lg:p-8`")
+            parts.append("- ❌ FORBIDDEN: Fixed pixel values that don't scale")
+        else:
+            parts.append("- ❌ FORBIDDEN: Values not in the scale (e.g., 10px, 15px if not listed)")
+            parts.append("- ❌ FORBIDDEN: Arbitrary spacing that breaks the quantum")
+            parts.append("- ✅ ALLOWED: Only values from the approved scale")
         parts.append("")
-        parts.append("**Before using ANY spacing value**: Verify it's in the scale or a multiple of the quantum.")
+        parts.append("**Before using ANY spacing value**: Verify it maintains quantum multiples at each breakpoint.")
         
         return "\n".join(parts)
     
@@ -505,7 +558,8 @@ class PromptAssembler:
         self,
         task_description: str,
         device_info: Dict[str, Any],
-        flow_context: Optional[Dict[str, Any]]
+        flow_context: Optional[Dict[str, Any]],
+        is_responsive: bool = True
     ) -> str:
         """Format task description and constraints"""
         
@@ -524,13 +578,47 @@ class PromptAssembler:
         height = device_info.get("screen", {}).get("height", 900)
         
         parts.append(f"- Platform: {platform}")
-        parts.append(f"- Screen: {width}x{height}px")
+        parts.append(f"- Initial viewport: {width}x{height}px")
         parts.append("")
         
-        parts.append("**Root div must match these exact dimensions**:")
-        parts.append(f"```jsx")
-        parts.append(f'<div style={{ width: "{width}px", height: "{height}px" }}>')
-        parts.append("```\n")
+        if is_responsive:
+            # Responsive mode
+            parts.append("## Responsive Design Requirements\n")
+            parts.append(f"**Initial rendering size**: {width}x{height}px (this is your starting reference)")
+            parts.append("")
+            parts.append("**CRITICAL**: The design will be viewed at MANY different viewport sizes.")
+            parts.append("The user can freely resize from mobile (320px) to ultra-wide (2560px+).\n")
+            parts.append("**Root container MUST be fluid**:")
+            parts.append("```jsx")
+            parts.append('<div className="w-full h-full min-h-screen">')
+            parts.append("  {/* NOT fixed pixels */}")
+            parts.append("</div>")
+            parts.append("```\n")
+            parts.append("**Platform determines UX patterns, NOT layout adaptation**:")
+            if platform == "phone":
+                parts.append("- Platform='phone' → Use touch-friendly interactions (≥44px tap targets, bottom nav)")
+                parts.append("- BUT: Layout MUST still adapt - use multi-column grids when space allows")
+                parts.append("- A phone app at 1440px wide should use that space efficiently")
+            else:
+                parts.append("- Platform='web' → Use desktop-capable interactions (hover states, keyboard nav)")
+                parts.append("- Adapt down gracefully if viewport shrinks to mobile size")
+                parts.append("- Always fill available space - never create fixed-width centered cards")
+            parts.append("")
+            parts.append("**Implementation approach**:")
+            parts.append("1. Use the initial size as your BASE for proportion decisions")
+            parts.append("2. Make everything fluid with Tailwind responsive classes")
+            parts.append("3. Scale spacing quantum: 0.75x (mobile), 1x (tablet), 1.25x (desktop)")
+            parts.append("4. Scale typography proportionally while maintaining hierarchy ratios")
+            parts.append("5. Adapt layout from single-column → multi-column as space allows")
+            parts.append("")
+        else:
+            # Legacy fixed-size mode
+            parts.append(f"- Screen: {width}x{height}px (fixed)")
+            parts.append("")
+            parts.append("**Root div must match these exact dimensions**:")
+            parts.append(f"```jsx")
+            parts.append(f'<div style={{ width: "{width}px", height: "{height}px" }}>')
+            parts.append("```\n")
         
         # Flow context (if multi-screen)
         if flow_context:

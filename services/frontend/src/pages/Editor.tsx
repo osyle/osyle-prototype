@@ -21,7 +21,9 @@ import InfiniteCanvas, {
 } from '../components/InfiniteCanvas'
 import PrototypeCanvas from '../components/PrototypeCanvas'
 import PrototypeRunner from '../components/PrototypeRunner'
+import ResizableScreen from '../components/ResizableScreen'
 import RightPanel from '../components/RightPanel'
+import ScreenControls from '../components/ScreenControls'
 import { StyleOverlayApplicator } from '../components/StyleOverlayApplicator'
 import VersionHistory from '../components/VersionHistory'
 import { useDeviceContext } from '../hooks/useDeviceContext'
@@ -37,7 +39,7 @@ import {
   type Message,
   type ConversationAnnotation,
 } from '../services/iterationWebSocket'
-import { type FlowGraph } from '../types/home.types'
+import type { FlowGraph, Project } from '../types/home.types'
 import type {
   ParameterValues,
   VariationSpace,
@@ -206,8 +208,13 @@ function validateCheckpointCode(code: string): boolean {
 export default function Editor() {
   const navigate = useNavigate()
 
-  const { device_info, rendering_mode, setDeviceInfo, setRenderingMode } =
-    useDeviceContext()
+  const {
+    device_info,
+    rendering_mode,
+    setDeviceInfo,
+    setRenderingMode,
+    responsive_mode,
+  } = useDeviceContext()
 
   // Canvas ref for programmatic control
   const canvasRef = useRef<InfiniteCanvasHandle>(null)
@@ -236,12 +243,20 @@ export default function Editor() {
   const [error, setError] = useState<string | null>(null)
 
   // Project state (for persistence)
-  const [project, setProject] = useState<{ project_id: string } | null>(null)
+  const [project, setProject] = useState<Project | null>(null)
 
   // Progressive UI checkpoint state
   const [screenCheckpoints, setScreenCheckpoints] = useState<
     Record<string, string>
   >({})
+
+  // Screen sizing and positioning state (for responsive canvas)
+  const [screenSizes, setScreenSizes] = useState<
+    Map<string, { width: number; height: number }>
+  >(new Map())
+  const [screenPositions, setScreenPositions] = useState<
+    Map<string, { x: number; y: number }>
+  >(new Map())
 
   // Compute selected screen for parametric controls
   const selectedScreen =
@@ -611,6 +626,124 @@ export default function Editor() {
     return positions
   }
 
+  // Helper to get screen size (custom or reference)
+  const getScreenSize = (screenId: string) => {
+    const customSize = screenSizes.get(screenId)
+    if (customSize) return customSize
+
+    // Return reference size
+    return {
+      width:
+        device_info.platform === 'phone'
+          ? device_info.screen.width + 24
+          : device_info.screen.width,
+      height:
+        device_info.platform === 'phone'
+          ? device_info.screen.height + 48
+          : device_info.screen.height + 40,
+    }
+  }
+
+  // Helper to get screen position (custom or auto-layout)
+  const getScreenPosition = (screenId: string) => {
+    const customPosition = screenPositions.get(screenId)
+    if (customPosition) return customPosition
+
+    // Fall back to auto-layout
+    if (!flowGraph) return { x: 0, y: 0 }
+    const autoPositions = calculateFlowLayout(flowGraph)
+    return autoPositions[screenId] || { x: 0, y: 0 }
+  }
+
+  // Handle screen resize
+  const handleScreenResize = (
+    screenId: string,
+    width: number,
+    height: number,
+  ) => {
+    setScreenSizes(prev => new Map(prev).set(screenId, { width, height }))
+
+    // Save to project metadata
+    if (project) {
+      const updatedProject = {
+        ...project,
+        metadata: {
+          ...project.metadata,
+          screenSizes: Array.from(
+            new Map(screenSizes).set(screenId, { width, height }).entries(),
+          ),
+        },
+      }
+      localStorage.setItem('current_project', JSON.stringify(updatedProject))
+    }
+  }
+
+  // Handle screen position change
+  const handleScreenPositionChange = (
+    screenId: string,
+    x: number,
+    y: number,
+  ) => {
+    setScreenPositions(prev => new Map(prev).set(screenId, { x, y }))
+
+    // Save to project metadata
+    if (project) {
+      const updatedProject = {
+        ...project,
+        metadata: {
+          ...project.metadata,
+          screenPositions: Array.from(
+            new Map(screenPositions).set(screenId, { x, y }).entries(),
+          ),
+        },
+      }
+      localStorage.setItem('current_project', JSON.stringify(updatedProject))
+    }
+  }
+
+  // Handle preset resize
+  const handlePresetResize = (
+    screenId: string,
+    width: number,
+    height: number,
+  ) => {
+    handleScreenResize(screenId, width, height)
+  }
+
+  // Handle reset to reference size
+  const handleResetSize = (screenId: string) => {
+    setScreenSizes(prev => {
+      const newMap = new Map(prev)
+      newMap.delete(screenId)
+      return newMap
+    })
+
+    // Also reset position to auto-layout
+    setScreenPositions(prev => {
+      const newMap = new Map(prev)
+      newMap.delete(screenId)
+      return newMap
+    })
+
+    // Save to project metadata
+    if (project) {
+      const newSizes = new Map(screenSizes)
+      newSizes.delete(screenId)
+      const newPositions = new Map(screenPositions)
+      newPositions.delete(screenId)
+
+      const updatedProject = {
+        ...project,
+        metadata: {
+          ...project.metadata,
+          screenSizes: Array.from(newSizes.entries()),
+          screenPositions: Array.from(newPositions.entries()),
+        },
+      }
+      localStorage.setItem('current_project', JSON.stringify(updatedProject))
+    }
+  }
+
   // Calculate available viewport bounds (excluding UI elements)
   const getAvailableViewport = () => {
     const windowWidth = window.innerWidth
@@ -727,6 +860,14 @@ export default function Editor() {
       }
       if (project.rendering_mode) {
         setRenderingMode(project.rendering_mode)
+      }
+
+      // Load saved screen sizes and positions
+      if (project.metadata?.screenSizes) {
+        setScreenSizes(new Map(project.metadata.screenSizes))
+      }
+      if (project.metadata?.screenPositions) {
+        setScreenPositions(new Map(project.metadata.screenPositions))
       }
 
       if (!project.selected_taste_id) {
@@ -1151,21 +1292,15 @@ export default function Editor() {
               }}
             />
             {flowGraph.screens.map(screen => {
-              const position = positions[screen.screen_id] || { x: 0, y: 0 }
+              const position = getScreenPosition(screen.screen_id)
+              const size = getScreenSize(screen.screen_id)
               const isEntry = screen.screen_type === 'entry'
               const isIterating = currentIteratingScreenId === screen.screen_id
               const isGenerating =
                 screenCheckpoints[screen.screen_id] !== undefined
 
-              return (
-                <div
-                  key={screen.screen_id}
-                  style={{
-                    position: 'absolute',
-                    left: position.x,
-                    top: position.y,
-                  }}
-                >
+              const screenContent = (
+                <>
                   {/* START badge for entry screen */}
                   {isEntry && (
                     <div
@@ -1187,6 +1322,16 @@ export default function Editor() {
                     >
                       START
                     </div>
+                  )}
+
+                  {/* Control bar when selected (only in responsive mode) */}
+                  {responsive_mode && selectedScreenId === screen.screen_id && (
+                    <ScreenControls
+                      onPresetResize={(width, height) =>
+                        handlePresetResize(screen.screen_id, width, height)
+                      }
+                      onReset={() => handleResetSize(screen.screen_id)}
+                    />
                   )}
 
                   {/* Spotlight effect when screen is being updated */}
@@ -1351,7 +1496,13 @@ export default function Editor() {
                     </>
                   )}
 
-                  <DeviceFrame>
+                  <DeviceFrame
+                    scaledDimensions={{
+                      width: size.width,
+                      height: size.height,
+                      scale: 1,
+                    }}
+                  >
                     <Agentator
                       screenId={screen.screen_id}
                       screenName={screen.name}
@@ -1478,12 +1629,51 @@ export default function Editor() {
                       color: 'rgba(255, 255, 255, 0.7)',
                       fontWeight: 500,
                       fontFamily: 'system-ui, sans-serif',
+                      pointerEvents: 'none',
                     }}
                   >
                     {screen.name}
                   </div>
-                </div>
+                </>
               )
+
+              // Wrap in ResizableScreen if responsive mode, otherwise fixed position
+              if (responsive_mode) {
+                return (
+                  <ResizableScreen
+                    key={screen.screen_id}
+                    initialWidth={size.width}
+                    initialHeight={size.height}
+                    isSelected={selectedScreenId === screen.screen_id}
+                    onSelect={() => setSelectedScreenId(screen.screen_id)}
+                    onResize={(width, height) =>
+                      handleScreenResize(screen.screen_id, width, height)
+                    }
+                    onPositionChange={(x, y) =>
+                      handleScreenPositionChange(screen.screen_id, x, y)
+                    }
+                    position={position}
+                  >
+                    {screenContent}
+                  </ResizableScreen>
+                )
+              } else {
+                // Fixed position (non-responsive mode)
+                return (
+                  <div
+                    key={screen.screen_id}
+                    style={{
+                      position: 'absolute',
+                      left: position.x,
+                      top: position.y,
+                      width: size.width,
+                      height: size.height,
+                    }}
+                  >
+                    {screenContent}
+                  </div>
+                )
+              }
             })}
           </>
         )

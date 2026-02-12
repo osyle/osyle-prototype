@@ -64,6 +64,7 @@ export interface Project {
   inspiration_image_urls?: string[] // Presigned URLs (when requested)
   device_info?: DeviceInfo // Device settings when project was created
   rendering_mode?: 'react' | 'parametric' // Rendering mode when project was created
+  responsive_mode?: boolean // Responsive design mode
   flow_mode?: boolean // Enable flow mode
   max_screens?: number // Max screens in flow
   flow_graph?: FlowGraph // Flow graph structure
@@ -375,6 +376,7 @@ export const projectsAPI = {
     screen_files?: Record<string, File> // e.g., { 'screen_0_figma': file, 'screen_0_image_0': file }
     device_info?: DeviceInfo
     rendering_mode?: 'react' | 'parametric'
+    responsive_mode?: boolean
     flow_mode?: boolean
     max_screens?: number
     metadata?: Record<string, unknown>
@@ -401,6 +403,9 @@ export const projectsAPI = {
     }
     if (data.rendering_mode) {
       formData.append('rendering_mode', data.rendering_mode)
+    }
+    if (data.responsive_mode !== undefined) {
+      formData.append('responsive_mode', data.responsive_mode.toString())
     }
     if (data.flow_mode !== undefined) {
       formData.append('flow_mode', data.flow_mode.toString())

@@ -22,6 +22,10 @@ export interface DeviceProperties {
   rendering_mode: 'react' | 'parametric'
   // eslint-disable-next-line no-unused-vars
   setRenderingMode: (mode: 'react' | 'parametric') => void
+
+  responsive_mode: boolean
+  // eslint-disable-next-line no-unused-vars
+  setResponsiveMode: (enabled: boolean) => void
 }
 
 export const DeviceContext = createContext<DeviceProperties | undefined>(
