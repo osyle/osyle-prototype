@@ -45,21 +45,64 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
   const [extractedStyles, setExtractedStyles] = // eslint-disable-line @typescript-eslint/no-unused-vars, no-unused-vars
     useState<ExtractedStyles | null>(null)
 
+  // Local editing state - for smooth typing without resets
+  const [editingValues, setEditingValues] = useState<Record<string, string>>({})
+
   // Extract styles when element changes
   useEffect(() => {
-    if (inspectedElement && inspectedElement.boundingBox) {
-      // Find the actual DOM element to extract styles
-      // This is a placeholder - in real implementation, we'd need to pass the actual element
-      // For now, we'll show the computed styles from InspectedElement if available
+    if (inspectedElement && inspectedElement.computedStyles) {
+      const styles = inspectedElement.computedStyles
+
+      // Categorize the computed styles
       setExtractedStyles({
-        layout: {},
-        typography: {},
-        background: {},
-        border: {},
-        effects: {},
+        layout: {
+          display: styles.display || '',
+          position: styles.position || '',
+          width: styles.width || '',
+          height: styles.height || '',
+          margin: styles.margin || '',
+          padding: styles.padding || '',
+          flexDirection: styles.flexDirection || styles['flex-direction'] || '',
+          justifyContent:
+            styles.justifyContent || styles['justify-content'] || '',
+          alignItems: styles.alignItems || styles['align-items'] || '',
+          gap: styles.gap || '',
+        },
+        typography: {
+          fontSize: styles.fontSize || styles['font-size'] || '',
+          fontWeight: styles.fontWeight || styles['font-weight'] || '',
+          fontFamily: styles.fontFamily || styles['font-family'] || '',
+          lineHeight: styles.lineHeight || styles['line-height'] || '',
+          letterSpacing: styles.letterSpacing || styles['letter-spacing'] || '',
+          color: styles.color || '',
+          textAlign: styles.textAlign || styles['text-align'] || '',
+          textDecoration:
+            styles.textDecoration || styles['text-decoration'] || '',
+        },
+        background: {
+          backgroundColor:
+            styles.backgroundColor || styles['background-color'] || '',
+          backgroundImage:
+            styles.backgroundImage || styles['background-image'] || '',
+        },
+        border: {
+          borderWidth: styles.borderWidth || styles['border-width'] || '',
+          borderStyle: styles.borderStyle || styles['border-style'] || '',
+          borderColor: styles.borderColor || styles['border-color'] || '',
+          borderRadius: styles.borderRadius || styles['border-radius'] || '',
+        },
+        effects: {
+          opacity: styles.opacity || '',
+          boxShadow: styles.boxShadow || styles['box-shadow'] || '',
+          transform: styles.transform || '',
+        },
       })
+
+      // Clear editing values when element changes
+      setEditingValues({})
     } else {
       setExtractedStyles(null)
+      setEditingValues({})
     }
   }, [inspectedElement])
 
@@ -110,6 +153,10 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
   const categories = getStyleCategories()
 
   const handlePropertyChange = (cssProperty: string, value: string) => {
+    // Update local editing state immediately
+    setEditingValues(prev => ({ ...prev, [cssProperty]: value }))
+
+    // Update the actual override
     onStyleChange(
       inspectedElement.elementPath,
       inspectedElement.elementIndex,
@@ -119,6 +166,11 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
   }
 
   const getCurrentValue = (cssProperty: string): string => {
+    // If user is currently editing this property, show their input
+    if (editingValues[cssProperty] !== undefined) {
+      return editingValues[cssProperty]
+    }
+
     // Check if there's an override first
     if (currentOverrides?.styles[cssProperty]) {
       return currentOverrides.styles[cssProperty]
@@ -130,6 +182,15 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
     }
 
     return ''
+  }
+
+  // Clear editing value when user finishes editing (on blur)
+  const handleBlur = (cssProperty: string) => {
+    setEditingValues(prev => {
+      const newValues = { ...prev }
+      delete newValues[cssProperty]
+      return newValues
+    })
   }
 
   return (
@@ -278,6 +339,7 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
                               e.target.value + unit,
                             )
                           }}
+                          onBlur={() => handleBlur(property.cssProperty)}
                           style={{
                             flex: 1,
                             padding: '8px 12px',
@@ -323,6 +385,7 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
                               e.target.value,
                             )
                           }
+                          onBlur={() => handleBlur(property.cssProperty)}
                           style={{
                             width: '48px',
                             height: '40px',
@@ -341,6 +404,7 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
                               e.target.value,
                             )
                           }
+                          onBlur={() => handleBlur(property.cssProperty)}
                           style={{
                             flex: 1,
                             padding: '8px 12px',

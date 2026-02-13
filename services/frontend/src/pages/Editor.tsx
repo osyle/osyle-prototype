@@ -14,24 +14,13 @@ import AddInspirationModal from '../components/AddInspirationModal'
 import CodeViewer from '../components/CodeViewer'
 import ConversationBar from '../components/ConversationBar'
 import DeviceFrame from '../components/DeviceFrame'
-import DynamicReactRenderer from '../components/DynamicReactRenderer'
-import FlowConnections from '../components/FlowConnections'
-import InfiniteCanvas, {
-  type InfiniteCanvasHandle,
-} from '../components/InfiniteCanvas'
 import PrototypeCanvas from '../components/PrototypeCanvas'
 import PrototypeRunner from '../components/PrototypeRunner'
-import ResizableScreen from '../components/ResizableScreen'
+import ReactFlowCanvas from '../components/ReactFlowCanvas'
 import RightPanel from '../components/RightPanel'
-import ScreenControls from '../components/ScreenControls'
-import { StyleOverlayApplicator } from '../components/StyleOverlayApplicator'
 import VersionHistory from '../components/VersionHistory'
 import { useDeviceContext } from '../hooks/useDeviceContext'
-import {
-  Agentator,
-  AgentatorGlobalProvider,
-  useAgentatorGlobal,
-} from '../lib/Agentator'
+import { AgentatorGlobalProvider } from '../lib/Agentator'
 
 import api from '../services/api'
 import {
@@ -45,6 +34,7 @@ import type {
   VariationSpace,
   VariationDimension,
 } from '../types/parametric.types'
+import { calculateFlowLayout } from '../utils/flowLayout'
 
 type GenerationStage = 'idle' | 'generating' | 'complete' | 'error'
 type RethinkStage =
@@ -61,96 +51,6 @@ interface UserInfo {
   email: string
   initials: string
   picture?: string
-}
-
-// Extended screen type with loading states
-// These fields are added dynamically during progressive generation
-interface ScreenWithLoadingState {
-  screen_id: string
-  name: string
-  description?: string
-  task_description: string
-  platform: string
-  dimensions: { width: number; height: number }
-  screen_type?: string
-  semantic_role?: string
-  ui_code?: string | null
-  ui_loading?: boolean
-  ui_error?: boolean
-  [key: string]: unknown // Allow other fields from FlowGraph
-}
-
-/**
- * Wrapper component for Concept screens that applies style overrides and loads them from database
- * Uses useAgentatorGlobal hook (must be inside AgentatorGlobalProvider)
- */
-interface ConceptScreenWithStylesProps {
-  projectId: string | undefined
-  screenId: string
-  jsxCode: string
-  propsToInject: Record<string, unknown>
-  children?: React.ReactNode
-}
-
-function ConceptScreenWithStyles({
-  projectId,
-  screenId,
-  jsxCode,
-  propsToInject,
-  children,
-}: ConceptScreenWithStylesProps) {
-  const {
-    getStyleOverrides,
-    loadStyleOverrides,
-    isLoadingMutations,
-    applyReorderMutations,
-  } = useAgentatorGlobal()
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [hasLoadedMutations, setHasLoadedMutations] = useState(false)
-
-  // Load mutations from database on mount
-  useEffect(() => {
-    if (projectId && screenId && !hasLoadedMutations) {
-      loadStyleOverrides(projectId, screenId)
-      setHasLoadedMutations(true)
-    }
-  }, [projectId, screenId, hasLoadedMutations, loadStyleOverrides])
-
-  // Apply reorder mutations after DOM is rendered
-  useEffect(() => {
-    if (jsxCode && containerRef.current && hasLoadedMutations) {
-      // Small delay to ensure React has finished rendering
-      const timer = setTimeout(() => {
-        if (containerRef.current) {
-          applyReorderMutations(screenId, containerRef.current)
-        }
-      }, 100)
-      return () => clearTimeout(timer)
-    }
-  }, [jsxCode, screenId, hasLoadedMutations, applyReorderMutations])
-
-  const styleOverrides = getStyleOverrides(screenId)
-  const isLoading = isLoadingMutations(screenId)
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
-      </div>
-    )
-  }
-
-  return (
-    <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
-      <StyleOverlayApplicator
-        overrides={styleOverrides}
-        containerRef={containerRef}
-      >
-        <DynamicReactRenderer jsxCode={jsxCode} propsToInject={propsToInject} />
-      </StyleOverlayApplicator>
-      {children}
-    </div>
-  )
 }
 
 /**
@@ -208,16 +108,11 @@ function validateCheckpointCode(code: string): boolean {
 export default function Editor() {
   const navigate = useNavigate()
 
-  const {
-    device_info,
-    rendering_mode,
-    setDeviceInfo,
-    setRenderingMode,
-    responsive_mode,
-  } = useDeviceContext()
+  const { device_info, rendering_mode, setDeviceInfo, setRenderingMode } =
+    useDeviceContext()
 
-  // Canvas ref for programmatic control
-  const canvasRef = useRef<InfiniteCanvasHandle>(null)
+  // Canvas ref for programmatic control (not used with React Flow)
+  // const canvasRef = useRef<InfiniteCanvasHandle>(null)
   const hasInitialized = useRef(false)
 
   const [activeTab, setActiveTab] = useState('Concept')
@@ -291,6 +186,18 @@ export default function Editor() {
   const [currentIteratingScreenId, setCurrentIteratingScreenId] = useState<
     string | null
   >(null)
+
+  // Auto-layout screens when flowGraph first loads
+  useEffect(() => {
+    if (
+      flowGraph &&
+      flowGraph.screens.length > 0 &&
+      screenPositions.size === 0
+    ) {
+      const positions = calculateFlowLayout(flowGraph, device_info)
+      setScreenPositions(positions)
+    }
+  }, [flowGraph, device_info, screenPositions.size])
 
   // Initialize parameter values from variation_space when screen changes
   useEffect(() => {
@@ -539,122 +446,6 @@ export default function Editor() {
     }
   }
 
-  // Calculate optimized layout positions for flow screens
-  const calculateFlowLayout = (flow: FlowGraph) => {
-    if (!flow || !flow.screens.length) return {}
-
-    // Calculate actual device dimensions (including bezel/chrome)
-    const deviceWidth =
-      device_info.platform === 'phone'
-        ? device_info.screen.width + 24
-        : device_info.screen.width
-    const deviceHeight =
-      device_info.platform === 'phone'
-        ? device_info.screen.height + 48
-        : device_info.screen.height + 40
-
-    // Generous proportional spacing based on device size
-    const HORIZONTAL_GAP = deviceWidth * 1.2 // 120% of device width for better spacing
-    const VERTICAL_GAP = deviceHeight * 0.8 // 80% of device height
-
-    // Find entry screen
-    const entryScreen = flow.screens.find(s => s.screen_type === 'entry')
-    if (!entryScreen) return flow.layout_positions || {}
-
-    // Build adjacency map from transitions
-    const adjacency: Record<string, string[]> = {}
-    flow.screens.forEach(s => (adjacency[s.screen_id] = []))
-
-    flow.transitions.forEach(t => {
-      if (!adjacency[t.from_screen_id]) adjacency[t.from_screen_id] = []
-      adjacency[t.from_screen_id].push(t.to_screen_id)
-    })
-
-    // BFS to assign levels (columns)
-    const levels: Record<string, number> = {}
-    const queue: Array<{ id: string; level: number }> = [
-      { id: entryScreen.screen_id, level: 0 },
-    ]
-    const visited = new Set<string>()
-
-    while (queue.length > 0) {
-      const { id, level } = queue.shift()!
-      if (visited.has(id)) continue
-      visited.add(id)
-      levels[id] = level
-
-      const children = adjacency[id] || []
-      children.forEach(childId => {
-        if (!visited.has(childId)) {
-          queue.push({ id: childId, level: level + 1 })
-        }
-      })
-    }
-
-    // Assign any unvisited screens to the end
-    flow.screens.forEach(s => {
-      if (!(s.screen_id in levels)) {
-        levels[s.screen_id] = Math.max(...Object.values(levels), 0) + 1
-      }
-    })
-
-    // Group screens by level
-    const levelGroups: Record<number, string[]> = {}
-    Object.entries(levels).forEach(([id, level]) => {
-      if (!levelGroups[level]) levelGroups[level] = []
-      levelGroups[level].push(id)
-    })
-
-    // Calculate positions using device dimensions
-    const positions: Record<string, { x: number; y: number }> = {}
-
-    Object.entries(levelGroups).forEach(([levelStr, screenIds]) => {
-      const level = parseInt(levelStr)
-      const x = level * (deviceWidth + HORIZONTAL_GAP)
-
-      // Center vertically within this column with generous spacing
-      screenIds.forEach((id, index) => {
-        const totalHeight =
-          screenIds.length * (deviceHeight + VERTICAL_GAP) - VERTICAL_GAP
-        const startY = -totalHeight / 2
-        const y = startY + index * (deviceHeight + VERTICAL_GAP)
-
-        positions[id] = { x, y }
-      })
-    })
-
-    return positions
-  }
-
-  // Helper to get screen size (custom or reference)
-  const getScreenSize = (screenId: string) => {
-    const customSize = screenSizes.get(screenId)
-    if (customSize) return customSize
-
-    // Return reference size
-    return {
-      width:
-        device_info.platform === 'phone'
-          ? device_info.screen.width + 24
-          : device_info.screen.width,
-      height:
-        device_info.platform === 'phone'
-          ? device_info.screen.height + 48
-          : device_info.screen.height + 40,
-    }
-  }
-
-  // Helper to get screen position (custom or auto-layout)
-  const getScreenPosition = (screenId: string) => {
-    const customPosition = screenPositions.get(screenId)
-    if (customPosition) return customPosition
-
-    // Fall back to auto-layout
-    if (!flowGraph) return { x: 0, y: 0 }
-    const autoPositions = calculateFlowLayout(flowGraph)
-    return autoPositions[screenId] || { x: 0, y: 0 }
-  }
-
   // Handle screen resize
   const handleScreenResize = (
     screenId: string,
@@ -701,121 +492,6 @@ export default function Editor() {
     }
   }
 
-  // Handle preset resize
-  const handlePresetResize = (
-    screenId: string,
-    width: number,
-    height: number,
-  ) => {
-    handleScreenResize(screenId, width, height)
-  }
-
-  // Handle reset to reference size
-  const handleResetSize = (screenId: string) => {
-    setScreenSizes(prev => {
-      const newMap = new Map(prev)
-      newMap.delete(screenId)
-      return newMap
-    })
-
-    // Also reset position to auto-layout
-    setScreenPositions(prev => {
-      const newMap = new Map(prev)
-      newMap.delete(screenId)
-      return newMap
-    })
-
-    // Save to project metadata
-    if (project) {
-      const newSizes = new Map(screenSizes)
-      newSizes.delete(screenId)
-      const newPositions = new Map(screenPositions)
-      newPositions.delete(screenId)
-
-      const updatedProject = {
-        ...project,
-        metadata: {
-          ...project.metadata,
-          screenSizes: Array.from(newSizes.entries()),
-          screenPositions: Array.from(newPositions.entries()),
-        },
-      }
-      localStorage.setItem('current_project', JSON.stringify(updatedProject))
-    }
-  }
-
-  // Calculate available viewport bounds (excluding UI elements)
-  const getAvailableViewport = () => {
-    const windowWidth = window.innerWidth
-    const windowHeight = window.innerHeight
-
-    // Left side: 80px for menus/buttons
-    const leftOffset = 80
-
-    // Right side: 20% when panel open + 40px padding, or 80px when closed
-    const rightOffset = isRightPanelCollapsed ? 80 : windowWidth * 0.2 + 40
-
-    // Top: ~80px for tabs
-    const topOffset = 80
-
-    // Bottom: ~100px for feedback bar
-    const bottomOffset = 100
-
-    return {
-      x: leftOffset,
-      y: topOffset,
-      width: windowWidth - leftOffset - rightOffset,
-      height: windowHeight - topOffset - bottomOffset,
-    }
-  }
-
-  // Center a specific screen in the available viewport
-  const centerScreen = (screenId: string, animated: boolean = true) => {
-    if (!flowGraph || !canvasRef.current) return
-
-    const positions = calculateFlowLayout(flowGraph)
-    const screenPosition = positions[screenId]
-
-    if (!screenPosition) return
-
-    const viewport = getAvailableViewport()
-
-    // Calculate device dimensions (including bezel for phone, chrome for web)
-    const deviceWidth =
-      device_info.platform === 'phone'
-        ? device_info.screen.width + 24
-        : device_info.screen.width
-    const deviceHeight =
-      device_info.platform === 'phone'
-        ? device_info.screen.height + 48
-        : device_info.screen.height + 40 // Add browser chrome
-
-    // Calculate zoom to fit with margins (15% on each side = 70% of viewport)
-    const targetWidth = viewport.width * 0.7
-    const targetHeight = viewport.height * 0.7
-    const zoomX = targetWidth / deviceWidth
-    const zoomY = targetHeight / deviceHeight
-    const fitZoom = Math.min(zoomX, zoomY, 1) // Don't zoom in beyond 100%
-
-    // Calculate scaled device dimensions
-    const scaledWidth = deviceWidth * fitZoom
-    const scaledHeight = deviceHeight * fitZoom
-
-    // Calculate pan to center the screen in viewport
-    // Screen is at (screenPosition.x, screenPosition.y) in world coordinates
-    // We want it centered in the viewport
-    const targetPanX =
-      viewport.x +
-      (viewport.width - scaledWidth) / 2 -
-      screenPosition.x * fitZoom
-    const targetPanY =
-      viewport.y +
-      (viewport.height - scaledHeight) / 2 -
-      screenPosition.y * fitZoom
-
-    canvasRef.current.panToPosition(targetPanX, targetPanY, fitZoom, animated)
-  }
-
   // Center start screen on mount and when flow loads
   useEffect(() => {
     if (
@@ -827,8 +503,8 @@ export default function Editor() {
       const entryScreen = flowGraph.screens.find(s => s.screen_type === 'entry')
       if (entryScreen) {
         setSelectedScreenId(entryScreen.screen_id)
-        // Delay to ensure canvas is rendered
-        setTimeout(() => centerScreen(entryScreen.screen_id, false), 200)
+        // React Flow fitView handles auto-centering
+        // setTimeout(() => centerScreen(entryScreen.screen_id, false), 200)
       }
     }
   }, [generationStage, flowGraph, activeTab])
@@ -836,7 +512,8 @@ export default function Editor() {
   // Re-center when right panel toggles
   useEffect(() => {
     if (selectedScreenId && activeTab === 'Concept') {
-      setTimeout(() => centerScreen(selectedScreenId, true), 100)
+      // React Flow handles re-centering
+      // setTimeout(() => centerScreen(selectedScreenId, true), 100)
     }
   }, [isRightPanelCollapsed])
 
@@ -1270,427 +947,8 @@ export default function Editor() {
             </div>
           </DeviceFrame>
         )
-      } else {
-        // Use calculated positions instead of backend positions
-        const calculatedPositions = calculateFlowLayout(flowGraph)
-        const positions = calculatedPositions
-
-        return (
-          <>
-            <FlowConnections
-              transitions={flowGraph.transitions}
-              screenPositions={positions}
-              screenDimensions={{
-                width:
-                  device_info.platform === 'phone'
-                    ? device_info.screen.width + 24 // Include phone bezel
-                    : device_info.screen.width,
-                height:
-                  device_info.platform === 'phone'
-                    ? device_info.screen.height + 48 // Include phone bezel
-                    : device_info.screen.height + 40, // Include web browser chrome
-              }}
-            />
-            {flowGraph.screens.map(screen => {
-              const position = getScreenPosition(screen.screen_id)
-              const size = getScreenSize(screen.screen_id)
-              const isEntry = screen.screen_type === 'entry'
-              const isIterating = currentIteratingScreenId === screen.screen_id
-              const isGenerating =
-                screenCheckpoints[screen.screen_id] !== undefined
-
-              const screenContent = (
-                <>
-                  {/* START badge for entry screen */}
-                  {isEntry && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '-32px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        backgroundColor: '#10B981',
-                        color: '#FFFFFF',
-                        padding: '4px 12px',
-                        borderRadius: '12px',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        letterSpacing: '0.5px',
-                        boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
-                        zIndex: 10,
-                      }}
-                    >
-                      START
-                    </div>
-                  )}
-
-                  {/* Spotlight effect when screen is being updated */}
-                  {isIterating && (
-                    <>
-                      {/* Pulsing glow border */}
-                      <div
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          pointerEvents: 'none',
-                          zIndex: 50,
-                          borderRadius:
-                            device_info.platform === 'phone' ? '48px' : '12px',
-                          boxShadow:
-                            '0 0 0 4px rgba(102, 126, 234, 0.5), 0 0 40px rgba(102, 126, 234, 0.4), 0 0 80px rgba(102, 126, 234, 0.2)',
-                          border: '3px solid #667EEA',
-                          animation: 'spotlight-pulse 2s ease-in-out infinite',
-                        }}
-                      />
-
-                      {/* Updating badge */}
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: '-40px',
-                          left: '50%',
-                          transform: 'translateX(-50%)',
-                          zIndex: 50,
-                          padding: '8px 20px',
-                          borderRadius: '20px',
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          background:
-                            'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
-                          color: '#FFFFFF',
-                          boxShadow: '0 4px 16px rgba(102, 126, 234, 0.5)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          animation: 'badge-float 2s ease-in-out infinite',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: '8px',
-                            height: '8px',
-                            borderRadius: '50%',
-                            backgroundColor: '#FFFFFF',
-                            animation: 'badge-pulse 1s ease-in-out infinite',
-                          }}
-                        />
-                        ✨ Updating...
-                      </div>
-
-                      {/* Shimmer sweep effect */}
-                      <div
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          pointerEvents: 'none',
-                          zIndex: 40,
-                          overflow: 'hidden',
-                          borderRadius:
-                            device_info.platform === 'phone' ? '48px' : '12px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: '-100%',
-                            width: '100%',
-                            height: '100%',
-                            background:
-                              'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
-                            animation: 'shimmer-sweep 3s ease-in-out infinite',
-                          }}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {/* Spotlight effect during progressive generation */}
-                  {isGenerating && !isIterating && (
-                    <>
-                      {/* Pulsing glow border */}
-                      <div
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          pointerEvents: 'none',
-                          zIndex: 50,
-                          borderRadius:
-                            device_info.platform === 'phone' ? '48px' : '12px',
-                          boxShadow:
-                            '0 0 0 4px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.4), 0 0 80px rgba(59, 130, 246, 0.2)',
-                          border: '3px solid #3B82F6',
-                          animation: 'spotlight-pulse 2s ease-in-out infinite',
-                        }}
-                      />
-
-                      {/* Generating badge */}
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: '-40px',
-                          left: '50%',
-                          transform: 'translateX(-50%)',
-                          zIndex: 50,
-                          padding: '8px 20px',
-                          borderRadius: '20px',
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          background:
-                            'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
-                          color: '#FFFFFF',
-                          boxShadow: '0 4px 16px rgba(59, 130, 246, 0.5)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          animation: 'badge-float 2s ease-in-out infinite',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: '8px',
-                            height: '8px',
-                            borderRadius: '50%',
-                            backgroundColor: '#FFFFFF',
-                            animation: 'badge-pulse 1s ease-in-out infinite',
-                          }}
-                        />
-                        ⏳ Generating...
-                      </div>
-
-                      {/* Shimmer sweep effect */}
-                      <div
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          pointerEvents: 'none',
-                          zIndex: 40,
-                          overflow: 'hidden',
-                          borderRadius:
-                            device_info.platform === 'phone' ? '48px' : '12px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: '-100%',
-                            width: '100%',
-                            height: '100%',
-                            background:
-                              'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
-                            animation: 'shimmer-sweep 3s ease-in-out infinite',
-                          }}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  <DeviceFrame
-                    scaledDimensions={{
-                      width: size.width,
-                      height: size.height,
-                      scale: 1,
-                    }}
-                  >
-                    <Agentator
-                      screenId={screen.screen_id}
-                      screenName={screen.name}
-                      isConceptMode={true}
-                    >
-                      {(screen as ScreenWithLoadingState).ui_loading ? (
-                        // Loading state with spinner
-                        <div
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: '#F9FAFB',
-                            flexDirection: 'column',
-                            gap: '16px',
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: '48px',
-                              height: '48px',
-                              border: '4px solid #E5E7EB',
-                              borderTop: '4px solid #3B82F6',
-                              borderRadius: '50%',
-                              animation: 'spin 1s linear infinite',
-                            }}
-                          />
-                          <div
-                            style={{
-                              fontSize: '13px',
-                              color: '#9CA3AF',
-                              fontWeight: 500,
-                            }}
-                          >
-                            Generating...
-                          </div>
-                        </div>
-                      ) : (screen as ScreenWithLoadingState).ui_error ? (
-                        // Error state
-                        <div
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: '#FEF2F2',
-                            padding: '20px',
-                            textAlign: 'center',
-                          }}
-                        >
-                          <div>
-                            <div
-                              style={{ fontSize: '32px', marginBottom: '8px' }}
-                            >
-                              ⚠️
-                            </div>
-                            <div
-                              style={{
-                                fontSize: '14px',
-                                color: '#DC2626',
-                                fontWeight: 600,
-                              }}
-                            >
-                              Generation Failed
-                            </div>
-                          </div>
-                        </div>
-                      ) : screen.ui_code ||
-                        screenCheckpoints[screen.screen_id] ? (
-                        <>
-                          <ConceptScreenWithStyles
-                            projectId={project?.project_id}
-                            screenId={screen.screen_id}
-                            jsxCode={
-                              screenCheckpoints[screen.screen_id] ||
-                              screen.ui_code ||
-                              ''
-                            }
-                            propsToInject={{
-                              onTransition: () => {},
-                              // Pass parameters for parametric mode
-                              ...(rendering_mode === 'parametric' &&
-                              selectedScreenId === screen.screen_id
-                                ? { parameters: parameterValues }
-                                : {}),
-                            }}
-                          >
-                            {screenCheckpoints[screen.screen_id] && (
-                              <div
-                                style={{
-                                  position: 'absolute',
-                                  top: '8px',
-                                  left: '8px',
-                                  background: 'rgba(59, 130, 246, 0.9)',
-                                  color: 'white',
-                                  padding: '4px 12px',
-                                  borderRadius: '12px',
-                                  fontSize: '11px',
-                                  fontWeight: '600',
-                                  zIndex: 100,
-                                }}
-                              >
-                                ⏳ Generating...
-                              </div>
-                            )}
-                          </ConceptScreenWithStyles>
-                        </>
-                      ) : (
-                        <div className="flex items-center justify-center h-full">
-                          <div className="text-gray-400">Loading...</div>
-                        </div>
-                      )}
-                    </Agentator>
-                  </DeviceFrame>
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '-28px',
-                      left: 0,
-                      fontSize: '13px',
-                      color: 'rgba(255, 255, 255, 0.7)',
-                      fontWeight: 500,
-                      fontFamily: 'system-ui, sans-serif',
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    {screen.name}
-                  </div>
-                </>
-              )
-
-              // Wrap in ResizableScreen if responsive mode, otherwise fixed position
-              if (responsive_mode) {
-                return (
-                  <>
-                    {/* Control bar when selected - rendered outside ResizableScreen */}
-                    {selectedScreenId === screen.screen_id && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          top: 0,
-                          zIndex: 2000,
-                          pointerEvents: 'none',
-                        }}
-                      >
-                        <ScreenControls
-                          onPresetResize={(width, height) =>
-                            handlePresetResize(screen.screen_id, width, height)
-                          }
-                          onReset={() => handleResetSize(screen.screen_id)}
-                          position={position}
-                        />
-                      </div>
-                    )}
-
-                    <ResizableScreen
-                      key={screen.screen_id}
-                      initialWidth={size.width}
-                      initialHeight={size.height}
-                      isSelected={selectedScreenId === screen.screen_id}
-                      onSelect={() => setSelectedScreenId(screen.screen_id)}
-                      onResize={(width, height) =>
-                        handleScreenResize(screen.screen_id, width, height)
-                      }
-                      onPositionChange={(x, y) =>
-                        handleScreenPositionChange(screen.screen_id, x, y)
-                      }
-                      position={position}
-                    >
-                      {screenContent}
-                    </ResizableScreen>
-                  </>
-                )
-              } else {
-                // Fixed position (non-responsive mode)
-                return (
-                  <div
-                    key={screen.screen_id}
-                    style={{
-                      position: 'absolute',
-                      left: position.x,
-                      top: position.y,
-                      width: size.width,
-                      height: size.height,
-                    }}
-                  >
-                    {screenContent}
-                  </div>
-                )
-              }
-            })}
-          </>
-        )
       }
+      // Concept mode is handled by ReactFlowCanvas component, not here
     }
 
     // Fallback - should not be reached
@@ -2111,7 +1369,8 @@ export default function Editor() {
                       key={screen.screen_id}
                       onClick={() => {
                         setSelectedScreenId(screen.screen_id)
-                        centerScreen(screen.screen_id, true)
+                        // React Flow handles screen focusing
+                        // centerScreen(screen.screen_id, true)
                         setIsFlowNavigatorOpen(false)
                       }}
                       className="w-full text-left px-3 py-2 rounded-lg mb-1 transition-all hover:scale-[1.02]"
@@ -2391,46 +1650,22 @@ export default function Editor() {
                 </div>
               </div>
             </div>
-          ) : (
-            // Concept mode - infinite canvas with dark background
-            <InfiniteCanvas
-              ref={canvasRef}
-              width={
-                flowGraph && generationStage === 'complete'
-                  ? (() => {
-                      const positions = calculateFlowLayout(flowGraph)
-                      const deviceWidth =
-                        device_info.platform === 'phone'
-                          ? device_info.screen.width + 24
-                          : device_info.screen.width
-                      return (
-                        Math.max(...Object.values(positions).map(p => p.x), 0) +
-                        deviceWidth +
-                        deviceWidth * 0.6
-                      ) // Match HORIZONTAL_GAP
-                    })()
-                  : device_info.screen.width
-              }
-              height={
-                flowGraph && generationStage === 'complete'
-                  ? (() => {
-                      const positions = calculateFlowLayout(flowGraph)
-                      const yValues = Object.values(positions).map(p => p.y)
-                      const minY = Math.min(...yValues, 0)
-                      const maxY = Math.max(...yValues, 0)
-                      const deviceHeight =
-                        device_info.platform === 'phone'
-                          ? device_info.screen.height + 48
-                          : device_info.screen.height + 40
-                      return maxY - minY + deviceHeight + deviceHeight * 0.5 // Match VERTICAL_GAP
-                    })()
-                  : device_info.screen.height
-              }
-              skipAutoCenter={Object.keys(screenCheckpoints).length > 0}
-            >
-              {renderDeviceContent()}
-            </InfiniteCanvas>
-          )}
+          ) : flowGraph && generationStage === 'complete' ? (
+            // Concept mode - React Flow canvas
+            <ReactFlowCanvas
+              flowGraph={flowGraph}
+              selectedScreenId={selectedScreenId}
+              onScreenSelect={setSelectedScreenId}
+              screenCheckpoints={screenCheckpoints}
+              screenSizes={screenSizes}
+              screenPositions={screenPositions}
+              onScreenResize={handleScreenResize}
+              onScreenMove={handleScreenPositionChange}
+              currentIteratingScreenId={currentIteratingScreenId}
+              deviceInfo={device_info}
+              project={project!}
+            />
+          ) : null}
 
           {/* Conversation Bar */}
           <ConversationBar

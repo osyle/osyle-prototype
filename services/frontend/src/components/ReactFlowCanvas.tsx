@@ -1,0 +1,341 @@
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  MiniMap,
+  useNodesState,
+  useEdgesState,
+  addEdge,
+  MarkerType,
+  Panel,
+} from '@xyflow/react'
+import type { Node, Edge, Connection, OnNodesChange } from '@xyflow/react'
+import React, { useCallback, useEffect, useMemo } from 'react'
+import '@xyflow/react/dist/style.css'
+import ScreenNode from './nodes/ScreenNode'
+import type { ScreenNodeData } from './nodes/ScreenNode'
+import ForwardEdge from './edges/ForwardEdge'
+import BackEdge from './edges/BackEdge'
+import ErrorEdge from './edges/ErrorEdge'
+import BranchEdge from './edges/BranchEdge'
+import SuccessEdge from './edges/SuccessEdge'
+import type { FlowGraph, Project } from '../types/home.types'
+import type { StyleOverride } from '../types/styleEditor.types'
+
+interface ReactFlowCanvasProps {
+  flowGraph: FlowGraph
+  selectedScreenId: string | null
+  onScreenSelect: (id: string | null) => void
+  screenCheckpoints: Record<string, string>
+  screenSizes: Map<string, { width: number; height: number }>
+  screenPositions: Map<string, { x: number; y: number }>
+  onScreenResize: (id: string, width: number, height: number) => void
+  onScreenMove: (id: string, x: number, y: number) => void
+  currentIteratingScreenId: string | null
+  deviceInfo: {
+    platform: 'phone' | 'web'
+    screen: { width: number; height: number }
+  }
+  project: Project
+}
+
+const nodeTypes = {
+  screen: ScreenNode,
+}
+
+const edgeTypes = {
+  forward: ForwardEdge,
+  back: BackEdge,
+  error: ErrorEdge,
+  branch: BranchEdge,
+  success: SuccessEdge,
+}
+
+export default function ReactFlowCanvas({
+  flowGraph,
+  selectedScreenId,
+  onScreenSelect,
+  screenCheckpoints,
+  screenSizes,
+  screenPositions,
+  onScreenResize,
+  onScreenMove,
+  currentIteratingScreenId,
+  deviceInfo,
+  project,
+}: ReactFlowCanvasProps) {
+  // Convert screens to React Flow nodes
+  const initialNodes: Node[] = useMemo(
+    () =>
+      flowGraph.screens.map(screen => {
+        const pos = screenPositions.get(screen.screen_id) || { x: 0, y: 0 }
+        const size = screenSizes.get(screen.screen_id) || {
+          width: deviceInfo.screen.width,
+          height: deviceInfo.screen.height,
+        }
+
+        // Add bezel size for display
+        const displayWidth =
+          deviceInfo.platform === 'phone' ? size.width + 24 : size.width
+        const displayHeight =
+          deviceInfo.platform === 'phone' ? size.height + 48 : size.height + 40
+
+        const nodeData: ScreenNodeData = {
+          screen,
+          checkpoint: screenCheckpoints[screen.screen_id],
+          isSelected: selectedScreenId === screen.screen_id,
+          isEntry: screen.screen_type === 'entry',
+          isIterating: currentIteratingScreenId === screen.screen_id,
+          isGenerating: screenCheckpoints[screen.screen_id] !== undefined,
+          deviceInfo,
+          project,
+        }
+
+        return {
+          id: screen.screen_id,
+          type: 'screen',
+          position: pos,
+          data: nodeData as Record<string, unknown>,
+          selected: selectedScreenId === screen.screen_id,
+          width: displayWidth,
+          height: displayHeight,
+          draggable: true,
+          selectable: true,
+        }
+      }),
+    [
+      flowGraph.screens,
+      screenPositions,
+      screenSizes,
+      selectedScreenId,
+      screenCheckpoints,
+      currentIteratingScreenId,
+      deviceInfo,
+      project,
+    ],
+  )
+
+  // Convert transitions to React Flow edges
+  const initialEdges: Edge[] = useMemo(
+    () =>
+      flowGraph.transitions.map((transition, index) => ({
+        id: transition.transition_id,
+        source: transition.from_screen_id,
+        target: transition.to_screen_id,
+        type: transition.flow_type,
+        label: transition.label,
+        labelBgStyle: { fill: 'rgba(0, 0, 0, 0.8)', fillOpacity: 0.9 },
+        labelStyle: { fill: 'white', fontSize: 12, fontWeight: 500 },
+        animated: transition.flow_type === 'forward',
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 20,
+          height: 20,
+        },
+        style: {
+          strokeWidth: 3.5,
+        },
+        data: { index },
+      })),
+    [flowGraph.transitions],
+  )
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+
+  // Update nodes when flowGraph or other props change
+  useEffect(() => {
+    setNodes(initialNodes)
+  }, [initialNodes, setNodes])
+
+  // Update edges when transitions change
+  useEffect(() => {
+    setEdges(initialEdges)
+  }, [initialEdges, setEdges])
+
+  // Handle node selection
+  const onNodeClick = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      onScreenSelect(node.id)
+    },
+    [onScreenSelect],
+  )
+
+  // Handle pane click (deselect)
+  const onPaneClick = useCallback(() => {
+    onScreenSelect(null)
+  }, [onScreenSelect])
+
+  // Handle node drag end
+  const handleNodesChange: OnNodesChange = useCallback(
+    changes => {
+      onNodesChange(changes)
+
+      // Update positions when drag ends
+      changes.forEach(change => {
+        if (
+          change.type === 'position' &&
+          change.position &&
+          change.dragging === false
+        ) {
+          onScreenMove(change.id, change.position.x, change.position.y)
+        }
+      })
+    },
+    [onNodesChange, onScreenMove],
+  )
+
+  // Handle node resize
+  useEffect(() => {
+    const handleResize = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        nodeId: string
+        width: number
+        height: number
+      }>
+      const { nodeId, width, height } = customEvent.detail
+
+      // Subtract bezel from display size to get actual screen size
+      const actualWidth = deviceInfo.platform === 'phone' ? width - 24 : width
+      const actualHeight =
+        deviceInfo.platform === 'phone' ? height - 48 : height - 40
+
+      onScreenResize(nodeId, actualWidth, actualHeight)
+    }
+
+    window.addEventListener('nodeResize', handleResize)
+    return () => {
+      window.removeEventListener('nodeResize', handleResize)
+    }
+  }, [onScreenResize, deviceInfo.platform])
+
+  const onConnect = useCallback(
+    (params: Connection) => setEdges(eds => addEdge(params, eds)),
+    [setEdges],
+  )
+
+  return (
+    <div style={{ width: '100%', height: '100%', backgroundColor: '#0F0F0F' }}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={handleNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onNodeClick={onNodeClick}
+        onPaneClick={onPaneClick}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        fitView
+        snapToGrid={true}
+        snapGrid={[10, 10]}
+        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+        minZoom={0.1}
+        maxZoom={4}
+        selectNodesOnDrag={false}
+        nodesDraggable={true} // Nodes are draggable
+        panOnDrag={[2]} // Right mouse button for panning (middle button removed)
+        panOnScroll={false} // Disable pan on scroll to allow element interactions
+        zoomOnScroll={true} // Enable zoom on scroll
+        deleteKeyCode={null} // Disable delete key
+        multiSelectionKeyCode="Meta" // Cmd/Ctrl for multi-select
+        style={{ backgroundColor: '#0F0F0F' }}
+      >
+        <Background
+          color="rgba(255, 255, 255, 0.06)"
+          gap={24}
+          size={1}
+          style={{ backgroundColor: '#0F0F0F' }}
+        />
+        <Controls
+          showInteractive={false}
+          style={{
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '8px',
+            backdropFilter: 'blur(10px)',
+          }}
+        />
+        <MiniMap
+          nodeColor={node => {
+            if (node.selected) return '#3B82F6'
+            const screen = flowGraph.screens.find(s => s.screen_id === node.id)
+            return screen?.screen_type === 'entry' ? '#10B981' : '#374151'
+          }}
+          style={{
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '8px',
+            backdropFilter: 'blur(10px)',
+          }}
+        />
+
+        {/* Keyboard hints */}
+        <Panel position="top-right" style={{ margin: '16px' }}>
+          <div
+            style={{
+              backgroundColor: 'rgba(0, 0, 0, 0.85)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              borderRadius: '8px',
+              padding: '10px 14px',
+              fontSize: '12px',
+              color: 'rgba(255, 255, 255, 0.8)',
+              fontFamily: 'system-ui, sans-serif',
+              minWidth: '200px',
+            }}
+          >
+            <div
+              style={{ fontWeight: 600, marginBottom: '8px', color: 'white' }}
+            >
+              Canvas Controls
+            </div>
+            <div
+              style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}
+            >
+              <div>
+                <kbd
+                  style={{
+                    background: 'rgba(255,255,255,0.15)',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontWeight: 500,
+                  }}
+                >
+                  Right Click + Drag
+                </kbd>{' '}
+                Pan
+              </div>
+              <div>
+                <kbd
+                  style={{
+                    background: 'rgba(255,255,255,0.15)',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontWeight: 500,
+                  }}
+                >
+                  Scroll
+                </kbd>{' '}
+                Zoom
+              </div>
+              <div>
+                <kbd
+                  style={{
+                    background: 'rgba(255,255,255,0.15)',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontWeight: 500,
+                  }}
+                >
+                  Click + Drag
+                </kbd>{' '}
+                Move Screen
+              </div>
+            </div>
+          </div>
+        </Panel>
+      </ReactFlow>
+    </div>
+  )
+}
