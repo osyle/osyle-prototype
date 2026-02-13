@@ -56,45 +56,47 @@ export const StyleEditorPanel: React.FC<StyleEditorPanelProps> = ({
       // Categorize the computed styles
       setExtractedStyles({
         layout: {
-          display: styles.display || '',
-          position: styles.position || '',
-          width: styles.width || '',
-          height: styles.height || '',
-          margin: styles.margin || '',
-          padding: styles.padding || '',
-          flexDirection: styles.flexDirection || styles['flex-direction'] || '',
+          display: styles['display'] || '',
+          position: styles['position'] || '',
+          width: styles['width'] || '',
+          height: styles['height'] || '',
+          margin: styles['margin'] || '',
+          padding: styles['padding'] || '',
+          flexDirection:
+            styles['flexDirection'] || styles['flex-direction'] || '',
           justifyContent:
-            styles.justifyContent || styles['justify-content'] || '',
-          alignItems: styles.alignItems || styles['align-items'] || '',
-          gap: styles.gap || '',
+            styles['justifyContent'] || styles['justify-content'] || '',
+          alignItems: styles['alignItems'] || styles['align-items'] || '',
+          gap: styles['gap'] || '',
         },
         typography: {
-          fontSize: styles.fontSize || styles['font-size'] || '',
-          fontWeight: styles.fontWeight || styles['font-weight'] || '',
-          fontFamily: styles.fontFamily || styles['font-family'] || '',
-          lineHeight: styles.lineHeight || styles['line-height'] || '',
-          letterSpacing: styles.letterSpacing || styles['letter-spacing'] || '',
-          color: styles.color || '',
-          textAlign: styles.textAlign || styles['text-align'] || '',
+          fontSize: styles['fontSize'] || styles['font-size'] || '',
+          fontWeight: styles['fontWeight'] || styles['font-weight'] || '',
+          fontFamily: styles['fontFamily'] || styles['font-family'] || '',
+          lineHeight: styles['lineHeight'] || styles['line-height'] || '',
+          letterSpacing:
+            styles['letterSpacing'] || styles['letter-spacing'] || '',
+          color: styles['color'] || '',
+          textAlign: styles['textAlign'] || styles['text-align'] || '',
           textDecoration:
-            styles.textDecoration || styles['text-decoration'] || '',
+            styles['textDecoration'] || styles['text-decoration'] || '',
         },
         background: {
           backgroundColor:
-            styles.backgroundColor || styles['background-color'] || '',
+            styles['backgroundColor'] || styles['background-color'] || '',
           backgroundImage:
-            styles.backgroundImage || styles['background-image'] || '',
+            styles['backgroundImage'] || styles['background-image'] || '',
         },
         border: {
-          borderWidth: styles.borderWidth || styles['border-width'] || '',
-          borderStyle: styles.borderStyle || styles['border-style'] || '',
-          borderColor: styles.borderColor || styles['border-color'] || '',
-          borderRadius: styles.borderRadius || styles['border-radius'] || '',
+          borderWidth: styles['borderWidth'] || styles['border-width'] || '',
+          borderStyle: styles['borderStyle'] || styles['border-style'] || '',
+          borderColor: styles['borderColor'] || styles['border-color'] || '',
+          borderRadius: styles['borderRadius'] || styles['border-radius'] || '',
         },
         effects: {
-          opacity: styles.opacity || '',
-          boxShadow: styles.boxShadow || styles['box-shadow'] || '',
-          transform: styles.transform || '',
+          opacity: styles['opacity'] || '',
+          boxShadow: styles['boxShadow'] || styles['box-shadow'] || '',
+          transform: styles['transform'] || '',
         },
       })
 

@@ -12,24 +12,26 @@ import {
 import type { Node, Edge, Connection, OnNodesChange } from '@xyflow/react'
 import React, { useCallback, useEffect, useMemo } from 'react'
 import '@xyflow/react/dist/style.css'
+import type { FlowGraph, Project } from '../types/home.types'
+import BackEdge from './edges/BackEdge'
+import BranchEdge from './edges/BranchEdge'
+import ErrorEdge from './edges/ErrorEdge'
+import ForwardEdge from './edges/ForwardEdge'
+import SuccessEdge from './edges/SuccessEdge'
 import ScreenNode from './nodes/ScreenNode'
 import type { ScreenNodeData } from './nodes/ScreenNode'
-import ForwardEdge from './edges/ForwardEdge'
-import BackEdge from './edges/BackEdge'
-import ErrorEdge from './edges/ErrorEdge'
-import BranchEdge from './edges/BranchEdge'
-import SuccessEdge from './edges/SuccessEdge'
-import type { FlowGraph, Project } from '../types/home.types'
-import type { StyleOverride } from '../types/styleEditor.types'
 
 interface ReactFlowCanvasProps {
   flowGraph: FlowGraph
   selectedScreenId: string | null
+  // eslint-disable-next-line no-unused-vars
   onScreenSelect: (id: string | null) => void
   screenCheckpoints: Record<string, string>
   screenSizes: Map<string, { width: number; height: number }>
   screenPositions: Map<string, { x: number; y: number }>
+  // eslint-disable-next-line no-unused-vars
   onScreenResize: (id: string, width: number, height: number) => void
+  // eslint-disable-next-line no-unused-vars
   onScreenMove: (id: string, x: number, y: number) => void
   currentIteratingScreenId: string | null
   deviceInfo: {

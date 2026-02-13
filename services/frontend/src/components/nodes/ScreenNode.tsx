@@ -1,6 +1,6 @@
 import { Handle, Position, NodeResizer } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
-import { useRef, useEffect, useMemo } from 'react'
+import { useRef, useEffect } from 'react'
 import { Agentator, useAgentatorGlobal } from '../../lib/Agentator'
 import type { FlowScreen, Project } from '../../types/home.types'
 import DeviceFrame from '../DeviceFrame'
