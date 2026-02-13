@@ -6,6 +6,7 @@ import type { FlowScreen, Project } from '../../types/home.types'
 import DeviceFrame from '../DeviceFrame'
 import SandpackRenderer from '../SandpackRenderer'
 import { StyleOverlayApplicator } from '../StyleOverlayApplicator'
+import { PlaceholderScreen } from '../PlaceholderScreen'
 
 export interface ScreenNodeData extends Record<string, unknown> {
   screen: FlowScreen
@@ -31,7 +32,6 @@ function ScreenNode({ data, selected }: NodeProps) {
   const typedData = data as unknown as ScreenNodeData
   const {
     screen,
-    checkpoint,
     isEntry,
     isIterating,
     isGenerating,
@@ -47,19 +47,44 @@ function ScreenNode({ data, selected }: NodeProps) {
     }
   }, [project?.project_id, screen.screen_id, loadStyleOverrides])
 
+  // Check if screen file exists
+  const projectFiles = flowGraph?.project?.files
+  const screenComponent = screen.component_path
+  const screenFileExists = screenComponent && projectFiles?.[screenComponent]
+
+  // Apply reorder mutations after DOM is rendered
+  useEffect(() => {
+    if (screenFileExists && contentRef.current) {
+      const timer = setTimeout(() => {
+        if (contentRef.current) {
+          applyReorderMutations(screen.screen_id, contentRef.current)
+        }
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [screenFileExists, screen.screen_id, applyReorderMutations])
+
+  // Get style overrides for this screen
+  const styleOverrides = getStyleOverrides(screen.screen_id)
+
+  // Calculate device display dimensions
+  const displayWidth =
+    deviceInfo.platform === 'phone'
+      ? deviceInfo.screen.width + 24
+      : deviceInfo.screen.width
+  const displayHeight =
+    deviceInfo.platform === 'phone'
+      ? deviceInfo.screen.height + 48
+      : deviceInfo.screen.height + 40
+
   // SAFETY: During generation, flowGraph.project might not exist yet
-  // Show loading state until project is ready
   if (!flowGraph?.project) {
     return (
       <div
         ref={nodeRef}
         style={{
-          width:
-            deviceInfo.screen.width +
-            (deviceInfo.platform === 'phone' ? 24 : 0),
-          height:
-            deviceInfo.screen.height +
-            (deviceInfo.platform === 'phone' ? 48 : 40),
+          width: displayWidth,
+          height: displayHeight,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -74,39 +99,83 @@ function ScreenNode({ data, selected }: NodeProps) {
     )
   }
 
-  // UNIFIED PROJECT ONLY: Extract this screen from the shared project
-  const projectFiles = flowGraph.project.files
-  const screenComponent = screen.component_path
+  // Show placeholder until screen file exists
+  if (!screenFileExists && isGenerating) {
+    return (
+      <div
+        ref={nodeRef}
+        style={{
+          width: displayWidth,
+          height: displayHeight,
+        }}
+      >
+        <DeviceFrame>
+          <PlaceholderScreen
+            screenName={screen.name}
+            description={screen.description}
+          />
+        </DeviceFrame>
+      </div>
+    )
+  }
 
-  // Create a wrapper App.tsx that renders just this screen for preview
-  const screenComponentName =
-    screenComponent?.split('/').pop()?.replace('.tsx', '') || 'Screen'
+  // Build files for Sandpack (projectFiles is guaranteed to exist here)
+
+  // Transform @/ imports to relative paths (Sandpack doesn't support tsconfig paths)
+  const transformImports = (code: string, currentFilePath: string): string => {
+    // Match: from "@/..." or from '@/...'
+    const transformed = code.replace(
+      /from\s+["']@\/([^"']+)["']/g,
+      (match, importPath) => {
+        const currentDir = currentFilePath.split('/').slice(0, -1).join('/')
+        const currentDepth = currentDir.split('/').filter(Boolean).length
+        const prefix = currentDepth > 0 ? '../'.repeat(currentDepth) : './'
+        const newPath = prefix + importPath
+
+        console.log(
+          `Transform: ${currentFilePath} | @/${importPath} -> ${newPath}`,
+        )
+
+        // Preserve quote style
+        const quote = match.includes('"') ? '"' : "'"
+        return `from ${quote}${newPath}${quote}`
+      },
+    )
+    return transformed
+  }
 
   const files: Record<string, string> = {
-    '/App.tsx': `import ${screenComponentName} from '${screenComponent?.replace('.tsx', '') || '/screens/Screen'}'
+    '/App.tsx': `import ${screenComponent?.split('/').pop()?.replace('.tsx', '') || 'Screen'} from '${screenComponent?.replace('.tsx', '') || '/screens/Screen'}'
 
 export default function App() {
-  // Mock onTransition for preview
   const handleTransition = (transitionId: string) => {
     console.log('Preview transition:', transitionId)
   }
   
-  return <${screenComponentName} onTransition={handleTransition} />
+  return <${screenComponent?.split('/').pop()?.replace('.tsx', '') || 'Screen'} onTransition={handleTransition} />
 }`,
-    // Include the screen component
-    ...(screenComponent
-      ? { [screenComponent]: projectFiles[screenComponent] || '' }
+    ...(screenComponent && projectFiles
+      ? {
+          [screenComponent]: transformImports(
+            projectFiles[screenComponent] || '',
+            screenComponent,
+          ),
+        }
       : {}),
-    // Include ALL shared files (components, utils, etc.)
-    ...Object.fromEntries(
-      Object.entries(projectFiles).filter(
-        ([path]) =>
-          path.startsWith('/components/') ||
-          path.startsWith('/lib/') ||
-          path === '/tsconfig.json' ||
-          path === '/package.json',
-      ),
-    ),
+    ...(projectFiles
+      ? Object.fromEntries(
+          Object.entries(projectFiles)
+            .filter(
+              ([path]) =>
+                path.startsWith('/components/') ||
+                path.startsWith('/lib/') ||
+                path === '/tsconfig.json' ||
+                path === '/package.json' ||
+                path === '/index.css',
+            )
+            .map(([path, content]) => [path, transformImports(content, path)]),
+        )
+      : {}),
   }
 
   const entry = '/App.tsx'
@@ -115,32 +184,6 @@ export default function App() {
   console.log(
     `ScreenNode ${screen.screen_id}: Unified project, extracted ${Object.keys(files).length} files`,
   )
-
-  // Get style overrides for this screen
-  const styleOverrides = getStyleOverrides(screen.screen_id)
-
-  // Apply reorder mutations after DOM is rendered
-  useEffect(() => {
-    if (uiCode && contentRef.current) {
-      // Small delay to ensure React has finished rendering
-      const timer = setTimeout(() => {
-        if (contentRef.current) {
-          applyReorderMutations(screen.screen_id, contentRef.current)
-        }
-      }, 100)
-      return () => clearTimeout(timer)
-    }
-  }, [uiCode, screen.screen_id, applyReorderMutations])
-
-  // Calculate device display dimensions (including bezel/chrome)
-  const displayWidth =
-    deviceInfo.platform === 'phone'
-      ? deviceInfo.screen.width + 24
-      : deviceInfo.screen.width
-  const displayHeight =
-    deviceInfo.platform === 'phone'
-      ? deviceInfo.screen.height + 48
-      : deviceInfo.screen.height + 40
 
   return (
     <div
@@ -253,7 +296,7 @@ export default function App() {
       <DeviceFrame>
         <div ref={contentRef} style={{ width: '100%', height: '100%' }}>
           <Agentator screenId={screen.screen_id} screenName={screen.name}>
-            {uiCode ? (
+            {screenFileExists ? (
               <>
                 <StyleOverlayApplicator
                   overrides={styleOverrides}
