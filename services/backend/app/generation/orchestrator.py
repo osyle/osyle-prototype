@@ -17,6 +17,12 @@ from app.generation.parametric import ParametricGenerator
 from app.generation.prompt_assembler import PromptAssembler
 from app.generation.validator import TasteValidator
 from app.generation.checkpoints import extract_at_checkpoint, count_checkpoints, _aggressive_clean_checkpoints
+from app.generation.multifile_parser import (
+    parse_llm_output,
+    add_shadcn_components_to_files,
+    ensure_default_dependencies,
+    normalize_file_paths
+)
 
 
 class GenerationOrchestrator:
@@ -159,11 +165,56 @@ class GenerationOrchestrator:
                             print(f"    ✓ Checkpoint {current_checkpoint_count} sent")
             
             # Stream complete - clean final code
-            print(f"\n    🏁 Stream complete. Cleaning final code...")
+            print(f"\n    🏁 Stream complete. Processing output...")
             
-            # Remove code fences and checkpoints
-            final_code = self._clean_code_fences(buffer)
-            final_code = _aggressive_clean_checkpoints(final_code)
+            # Parse LLM output to support both legacy (single file) and new (multi-file) formats
+            parsed_output = parse_llm_output(buffer)
+            
+            # Extract parsed data
+            files = parsed_output["files"]
+            entry = parsed_output.get("entry", "/App.tsx")
+            dependencies = parsed_output.get("dependencies", {})
+            output_format = parsed_output.get("format", "legacy")
+            
+            # Normalize file paths
+            files = normalize_file_paths(files)
+            
+            # Add shadcn/ui components if they're referenced in the code
+            # (Check if any file imports from '@/components/ui')
+            uses_shadcn = any('@/components/ui' in code or 'from "@/components/ui' in code 
+                             for code in files.values())
+            
+            if uses_shadcn:
+                print("    📦 Adding shadcn/ui components...")
+                files = add_shadcn_components_to_files(files)
+            
+            # Ensure default dependencies
+            dependencies = ensure_default_dependencies(dependencies)
+            
+            print(f"\n    📄 Output format: {output_format}")
+            print(f"    📁 Files: {len(files)}")
+            print(f"    📦 Dependencies: {len(dependencies)}")
+            for filepath in sorted(files.keys()):
+                print(f"       - {filepath} ({len(files[filepath])} chars)")
+            
+            # CRITICAL: Clean checkpoints from ALL files, not just entry
+            # Checkpoints are for progressive rendering during streaming,
+            # but must be removed from final output
+            print(f"    🧹 Cleaning checkpoints from {len(files)} files...")
+            cleaned_files = {}
+            for filepath, code in files.items():
+                before_len = len(code)
+                cleaned_code = _aggressive_clean_checkpoints(code)
+                after_len = len(cleaned_code)
+                if before_len != after_len:
+                    print(f"       - {filepath}: removed {before_len - after_len} chars")
+                cleaned_files[filepath] = cleaned_code
+            
+            files = cleaned_files
+            
+            # For backward compatibility: extract main file code
+            # This is the "/App.tsx" or entry point file
+            final_code = files.get(entry, list(files.values())[0] if files else "")
             
             # Validate taste for logging/metrics only (non-blocking)
             validation_result = None
@@ -207,7 +258,11 @@ class GenerationOrchestrator:
             print(f"    ✓ Final code sent to frontend (Fidelity: {fidelity_score:.1f}%)")
         
         return {
-            "code": final_code,
+            "code": final_code,  # Legacy field for backward compatibility
+            "files": files,  # NEW: Multi-file structure
+            "entry": entry,  # NEW: Entry point file
+            "dependencies": dependencies,  # NEW: npm dependencies
+            "output_format": output_format,  # NEW: "legacy" or "multifile"
             "validation": validation_result,
             "fidelity_score": fidelity_score,
             "metadata": {

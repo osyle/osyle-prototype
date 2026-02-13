@@ -18,6 +18,7 @@ from app.core.db import convert_decimals  # Import for Decimal conversion
 # Generation imports
 from app.generation.orchestrator import GenerationOrchestrator
 from app.generation.parametric import ParametricGenerator
+from app.generation.unified_flow import generate_unified_flow  # NEW: Unified flow generation
 
 # NEW DTM/DTR imports (S3-based system)
 from app.dtm import builder as dtm_builder
@@ -737,146 +738,47 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
         })
         
         # ============================================================================
-        # STEP 4: Generate All Screens in Parallel
+        # STEP 4: Generate Unified Flow (Single Project, Multiple Screens)
         # ============================================================================
         
         screens = flow_architecture.get("screens", [])
         transitions = flow_architecture.get("transitions", [])
+        entry_screen_id = flow_architecture.get("entry_screen_id")
         
-        orchestrator = GenerationOrchestrator(llm, storage)
+        print(f"\n🎨 Generating unified flow with {len(screens)} screens...")
         
-        print(f"\n🎨 Generating {len(screens)} screens in parallel...")
+        # Generate unified project
+        unified_result = await generate_unified_flow(
+            llm=llm,
+            screens=screens,
+            transitions=transitions,
+            entry_screen_id=entry_screen_id,
+            dtm=dtm if dtm else {},
+            device_info=device_info,
+            taste_source=taste_source,
+            websocket=websocket
+        )
         
-        # Build flow_graph structure
+        project = unified_result['project']
+        screen_metadata = unified_result['screens']
+        
+        print(f"\n✅ Unified flow complete!")
+        print(f"  Project files: {len(project['files'])}")
+        print(f"  Screens: {len(screen_metadata)}")
+        
+        # Build flow_graph structure for database/frontend
         flow_graph = {
             "flow_id": flow_architecture.get("flow_id", f"flow_{project_id[:8]}"),
             "flow_name": flow_architecture.get("flow_name"),
             "display_title": flow_architecture.get("display_title"),
             "display_description": flow_architecture.get("display_description"),
-            "entry_screen_id": flow_architecture.get("entry_screen_id"),
-            "screens": [],
+            "entry_screen_id": entry_screen_id,
+            "project": project,  # NEW: Unified project
+            "screens": screen_metadata,  # NEW: Screen metadata (paths, not full code)
             "transitions": transitions,
             "layout_positions": flow_architecture.get("layout_positions", {}),
             "layout_algorithm": flow_architecture.get("layout_algorithm", "hierarchical")
         }
-        
-        # Create generation tasks for all screens
-        async def generate_screen(idx: int, screen: Dict[str, Any]):
-            """Generate a single screen"""
-            screen_id = screen["screen_id"]
-            screen_name = screen["name"]
-            screen_task = screen.get("task_description", screen.get("description", ""))
-            
-            print(f"\n  [{idx+1}/{len(screens)}] Starting: {screen_name}")
-            
-            await send_progress(
-                websocket,
-                "generating_screen",
-                f"Generating {screen_name}...",
-                data={"screen_id": screen_id, "progress": idx + 1, "total": len(screens)}
-            )
-            
-            # Build flow context for this screen
-            outgoing_transitions = [
-                t for t in transitions if t.get("from_screen_id") == screen_id
-            ]
-            
-            flow_context = {
-                "flow_name": flow_architecture.get("flow_name"),
-                "screen_id": screen_id,
-                "screen_name": screen_name,
-                "position_in_flow": idx + 1,
-                "total_screens": len(screens),
-                "outgoing_transitions": outgoing_transitions
-            }
-            
-            try:
-                # Generate screen
-                result = await orchestrator.generate_ui(
-                    task_description=screen_task,
-                    taste_data=dtm if dtm else {},
-                    taste_source=taste_source,
-                    device_info=device_info,
-                    flow_context=flow_context,
-                    rendering_mode=rendering_mode,
-                    model=llm.config.default_model,
-                    validate_taste=bool(dtm),
-                    websocket=websocket,
-                    screen_id=screen_id,
-                    screen_name=screen_name
-                )
-                
-                ui_code = result["code"]
-                validation = result.get("validation")
-                metadata = result.get("metadata", {})
-                fidelity_score = result.get("fidelity_score")
-                
-                print(f"    ✓ {screen_name} generated")
-                if fidelity_score is not None:
-                    print(f"    Fidelity: {fidelity_score:.1f}%")
-                
-                return {
-                    "success": True,
-                    "screen_id": screen_id,
-                    "name": screen_name,
-                    "description": screen.get("description", ""),
-                    "ui_code": ui_code,
-                    "device_info": device_info,
-                    "task_description": screen_task,
-                    "metadata": {
-                        "taste_source": taste_source,
-                        "taste_fidelity_score": Decimal(str(fidelity_score)) if fidelity_score is not None else None,
-                        "validation_stats": validation.stats if validation else None,
-                        "model": metadata.get("model"),
-                        "prompt_length": metadata.get("prompt_length"),
-                    }
-                }
-                
-            except Exception as e:
-                print(f"    ✗ Error generating {screen_name}: {e}")
-                import traceback
-                traceback.print_exc()
-                
-                # Send error but return partial result
-                await websocket.send_json({
-                    "type": "screen_error",
-                    "screen_id": screen_id,
-                    "screen_name": screen_name,
-                    "error": str(e)
-                })
-                
-                return {
-                    "success": False,
-                    "screen_id": screen_id,
-                    "name": screen_name,
-                    "error": str(e)
-                }
-        
-        # Generate all screens in parallel
-        tasks = [generate_screen(idx, screen) for idx, screen in enumerate(screens)]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Process results and build flow_graph
-        for result in results:
-            if isinstance(result, Exception):
-                print(f"  ✗ Screen generation failed with exception: {result}")
-                continue
-            
-            if result.get("success"):
-                # Add successful screen to flow_graph
-                flow_graph["screens"].append({
-                    "screen_id": result["screen_id"],
-                    "name": result["name"],
-                    "description": result["description"],
-                    "ui_code": result["ui_code"],
-                    "device_info": result["device_info"],
-                    "task_description": result["task_description"],
-                    "metadata": result["metadata"]
-                })
-            else:
-                print(f"  ✗ Screen {result.get('name', 'unknown')} failed: {result.get('error')}")
-        
-        print(f"\n  ✓ All screens complete: {len(flow_graph['screens'])}/{len(screens)} successful")
         
         # ============================================================================
         # STEP 5: Version Management and Save Flow

@@ -50,16 +50,25 @@ export interface FlowTransition {
 export interface FlowScreen {
   screen_id: string
   name: string
-  description?: string // Optional - backend may not always provide this
-  task_description: string
-  platform: string // Accept any platform string from backend
-  dimensions: { width: number; height: number }
-  screen_type?: string // Accept any screen type from backend
+  description?: string
+  task_description?: string
+
+  // Unified project fields
+  component_path: string // Path to screen component (e.g., '/screens/LoginScreen.tsx')
+
+  // Device info (for canvas display)
+  platform?: string
+  dimensions?: { width: number; height: number }
+
+  // Additional metadata
+  screen_type?: string
   semantic_role?: string
-  ui_code?: string | null // Can be null initially
+
+  // UI state
   ui_loading?: boolean
   ui_error?: boolean
-  // Allow additional properties from backend (user_provided, reference_mode, etc.)
+
+  // Allow additional properties from backend
   [key: string]: unknown
 }
 
@@ -70,10 +79,18 @@ export interface FlowGraph {
   display_description?: string
   description?: string
   entry_screen_id: string
+
+  // Unified project (all screens share these files)
+  project: {
+    files: Record<string, string> // All project files
+    entry: string // Entry point ('/App.tsx')
+    dependencies: Record<string, string> // npm dependencies
+  }
+
   screens: FlowScreen[]
   transitions: FlowTransition[]
   layout_positions?: Record<string, Position>
-  layout_algorithm?: string // Accept any layout algorithm from backend
+  layout_algorithm?: string
   [key: string]: unknown // Allow additional properties from backend
 }
 

@@ -13,6 +13,7 @@ import type { Node, Edge, Connection, OnNodesChange } from '@xyflow/react'
 import React, { useCallback, useEffect, useMemo } from 'react'
 import '@xyflow/react/dist/style.css'
 import type { FlowGraph, Project } from '../types/home.types'
+
 import BackEdge from './edges/BackEdge'
 import BranchEdge from './edges/BranchEdge'
 import ErrorEdge from './edges/ErrorEdge'
@@ -91,6 +92,7 @@ export default function ReactFlowCanvas({
           isGenerating: screenCheckpoints[screen.screen_id] !== undefined,
           deviceInfo,
           project,
+          flowGraph, // NEW: Pass flowGraph for unified project access
         }
 
         return {
@@ -106,7 +108,7 @@ export default function ReactFlowCanvas({
         }
       }),
     [
-      flowGraph.screens,
+      flowGraph, // NEW: Include entire flowGraph for unified project
       screenPositions,
       screenSizes,
       selectedScreenId,

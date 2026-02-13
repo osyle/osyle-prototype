@@ -76,17 +76,34 @@ class PromptAssembler:
         
         sections = []
         
+        # Detect screen component mode from flow_context
+        is_screen_component = (
+            flow_context and 
+            flow_context.get('mode') == 'screen_component'
+        )
+        
         # 1. Core role and rules
         sections.append(self._load_template("core/role_and_rules.md"))
         
-        # 2. Design quality standards (ALWAYS included)
+        # 1.5 Screen component generation rules (if in screen component mode)
+        if is_screen_component:
+            sections.append(self._load_template("flow/screen_component_generation.md"))
+            print("    📄 Mode: Screen component generation (unified flow)")
+        
+        # 2. Base design system (MANDATORY FOUNDATION)
+        # This ensures all UIs use shadcn/ui, Tailwind semantic tokens, etc.
+        # The designer's taste (step 5) will override these defaults where they differ
+        sections.append(self._load_template("core/base_design_system.md"))
+        
+        # 3. Design quality standards (ALWAYS included)
         sections.append(self._load_template("core/design_quality.md"))
         
-        # 3. Responsive system (if enabled)
+        # 4. Responsive system (if enabled)
         if responsive:
             sections.append(self._load_template("core/responsive_system.md"))
         
-        # 4. Taste context (4-layer system)
+        # 5. Taste context (4-layer system)
+        # This OVERRIDES the base design system where the designer has preferences
         taste_context = self._format_taste_context(
             taste_data,
             taste_source,
@@ -94,7 +111,7 @@ class PromptAssembler:
         )
         sections.append(taste_context)
         
-        # 4. Task and constraints
+        # 6. Task and constraints
         task_section = self._format_task(
             task_description,
             device_info,
@@ -103,10 +120,10 @@ class PromptAssembler:
         )
         sections.append(task_section)
         
-        # 5. Output structure
+        # 7. Output structure
         sections.append(self._load_template("core/output_structure.md"))
         
-        # 6. Mode-specific additions (if needed)
+        # 8. Mode-specific additions (if needed)
         if mode == "parametric":
             # Add parametric-specific instructions
             pass

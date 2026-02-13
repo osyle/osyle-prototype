@@ -1,10 +1,10 @@
 import { Handle, Position, NodeResizer } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useMemo } from 'react'
 import { Agentator, useAgentatorGlobal } from '../../lib/Agentator'
 import type { FlowScreen, Project } from '../../types/home.types'
 import DeviceFrame from '../DeviceFrame'
-import DynamicReactRenderer from '../DynamicReactRenderer'
+import SandpackRenderer from '../SandpackRenderer'
 import { StyleOverlayApplicator } from '../StyleOverlayApplicator'
 
 export interface ScreenNodeData extends Record<string, unknown> {
@@ -19,6 +19,7 @@ export interface ScreenNodeData extends Record<string, unknown> {
     screen: { width: number; height: number }
   }
   project: Project
+  flowGraph?: import('../../types/home.types').FlowGraph // NEW: Access to full flow graph for unified project
 }
 
 function ScreenNode({ data, selected }: NodeProps) {
@@ -36,6 +37,7 @@ function ScreenNode({ data, selected }: NodeProps) {
     isGenerating,
     deviceInfo,
     project,
+    flowGraph,
   } = typedData
 
   // Load style overrides from database when component mounts
@@ -45,8 +47,74 @@ function ScreenNode({ data, selected }: NodeProps) {
     }
   }, [project?.project_id, screen.screen_id, loadStyleOverrides])
 
-  // Determine which UI code to use
-  const uiCode = checkpoint || screen.ui_code
+  // SAFETY: During generation, flowGraph.project might not exist yet
+  // Show loading state until project is ready
+  if (!flowGraph?.project) {
+    return (
+      <div
+        ref={nodeRef}
+        style={{
+          width:
+            deviceInfo.screen.width +
+            (deviceInfo.platform === 'phone' ? 24 : 0),
+          height:
+            deviceInfo.screen.height +
+            (deviceInfo.platform === 'phone' ? 48 : 40),
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#1a1a1a',
+          borderRadius: '16px',
+        }}
+      >
+        <div style={{ color: '#888', fontSize: '14px' }}>
+          {isGenerating ? 'Generating...' : 'Loading...'}
+        </div>
+      </div>
+    )
+  }
+
+  // UNIFIED PROJECT ONLY: Extract this screen from the shared project
+  const projectFiles = flowGraph.project.files
+  const screenComponent = screen.component_path
+
+  // Create a wrapper App.tsx that renders just this screen for preview
+  const screenComponentName =
+    screenComponent?.split('/').pop()?.replace('.tsx', '') || 'Screen'
+
+  const files: Record<string, string> = {
+    '/App.tsx': `import ${screenComponentName} from '${screenComponent?.replace('.tsx', '') || '/screens/Screen'}'
+
+export default function App() {
+  // Mock onTransition for preview
+  const handleTransition = (transitionId: string) => {
+    console.log('Preview transition:', transitionId)
+  }
+  
+  return <${screenComponentName} onTransition={handleTransition} />
+}`,
+    // Include the screen component
+    ...(screenComponent
+      ? { [screenComponent]: projectFiles[screenComponent] || '' }
+      : {}),
+    // Include ALL shared files (components, utils, etc.)
+    ...Object.fromEntries(
+      Object.entries(projectFiles).filter(
+        ([path]) =>
+          path.startsWith('/components/') ||
+          path.startsWith('/lib/') ||
+          path === '/tsconfig.json' ||
+          path === '/package.json',
+      ),
+    ),
+  }
+
+  const entry = '/App.tsx'
+  const dependencies = flowGraph.project.dependencies || {}
+
+  console.log(
+    `ScreenNode ${screen.screen_id}: Unified project, extracted ${Object.keys(files).length} files`,
+  )
 
   // Get style overrides for this screen
   const styleOverrides = getStyleOverrides(screen.screen_id)
@@ -191,12 +259,15 @@ function ScreenNode({ data, selected }: NodeProps) {
                   overrides={styleOverrides}
                   containerRef={contentRef}
                 >
-                  <DynamicReactRenderer
-                    jsxCode={uiCode}
+                  <SandpackRenderer
+                    files={files}
+                    entry={entry}
+                    dependencies={dependencies}
                     propsToInject={{
                       onNavigate: () => {},
                       formData: {},
                     }}
+                    onError={err => console.error('Sandpack error:', err)}
                   />
                 </StyleOverlayApplicator>
 

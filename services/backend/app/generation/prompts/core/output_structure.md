@@ -44,15 +44,16 @@ export default function App({ onTransition }) {
 Components must render in visual order: **top→bottom, left→right**.
 
 Example:
+
 ```jsx
 return (
   <div style={rootStyle}>
     {/* Top: Header */}
     <header>{/* ... */}</header>
-    
+
     {/* Middle: Main Content */}
     <main>{/* ... */}</main>
-    
+
     {/* Bottom: Footer/Navigation */}
     <nav>{/* ... */}</nav>
   </div>
@@ -85,6 +86,7 @@ After EVERY visual component or small group of related elements, insert a checkp
 **CRITICAL CHECKPOINT FORMAT - FOLLOW EXACTLY:**
 
 Every checkpoint MUST have BOTH parts:
+
 1. The comment block: `/*CHECKPOINT...*/`
 2. The delimiter: `//$CHECKPOINT`
 
@@ -125,12 +127,14 @@ export default function App({ onTransition }) {
 ```
 
 **Checkpoint Rules**:
+
 1. ALWAYS include BOTH parts: `/*CHECKPOINT...*/` AND `//$CHECKPOINT`
 2. Completion code MUST exactly close all open tags and braces
 3. Close ALL intermediate containers, not just root
 4. Place 10-25 checkpoints per screen for smooth rendering
 
 **What counts as a checkpoint-worthy element:**
+
 - Headers, subheaders
 - Paragraphs, text blocks
 - Input fields, textareas
@@ -142,6 +146,7 @@ export default function App({ onTransition }) {
 - Navigation items
 
 **Frequency Guidelines:**
+
 - Simple screen (login, single form): 10-15 checkpoints
 - Standard screen (dashboard, content page): 15-20 checkpoints
 - Complex screen (multi-section, rich content): 20-25+ checkpoints
@@ -191,21 +196,20 @@ If `flow_context` includes `outgoing_transitions`, implement navigation:
 export default function App({ onTransition }) {
   // For each transition, create UI element
   const handleNext = () => {
-    onTransition('transition_id_here');
+    onTransition("transition_id_here");
   };
 
   return (
     <div>
       {/* Content */}
-      <button onClick={handleNext}>
-        Continue →
-      </button>
+      <button onClick={handleNext}>Continue →</button>
     </div>
   );
 }
 ```
 
 **Transition Styling by Type:**
+
 - `forward`: Primary action (prominent CTA button)
 - `back`: Secondary action (subtle text link)
 - `error`: Warning state (red/alert styling)
@@ -216,23 +220,80 @@ export default function App({ onTransition }) {
 
 ## Final Output Format
 
+You have TWO output format options:
+
+### Option 1: Single-File Format (Simple UIs)
+
+**Use for:** Simple screens (login, single form, basic pages)
+
 Return **ONLY** the React component code:
 
-```jsx
+```tsx
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Mail } from "lucide-react";
+
 export default function App({ onTransition }) {
-  // Component implementation
+  const [email, setEmail] = useState("");
+
+  return (
+    <div style={{ width: "375px", height: "812px" }}>
+      {/* Component implementation */}
+    </div>
+  );
 }
 ```
 
+### Option 2: Multi-File Format (Complex UIs)
+
+**Use for:**
+
+- Screens with 3+ distinct components
+- Repeated components (ProductCard, UserItem, etc.)
+- Complex UIs (dashboards, feeds, multi-step forms)
+
+Return a JSON structure:
+
+```json
+{
+  "files": {
+    "/App.tsx": "import { ProductList } from './components/ProductList'\n\nexport default function App({ onTransition }) {\n  return (\n    <div style={{ width: '375px', height: '812px' }}>\n      <ProductList />\n    </div>\n  )\n}",
+    "/components/ProductList.tsx": "import { ProductCard } from './ProductCard'\nimport { useState } from 'react'\n\nexport function ProductList() {\n  const [products] = useState([...])\n  return <div>{products.map(p => <ProductCard key={p.id} product={p} />)}</div>\n}",
+    "/components/ProductCard.tsx": "import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'\nimport { Button } from '@/components/ui/button'\n\nexport function ProductCard({ product }) {\n  return <Card><CardHeader><CardTitle>{product.name}</CardTitle></CardHeader><CardContent>...</CardContent></Card>\n}"
+  },
+  "entry": "/App.tsx",
+  "dependencies": {
+    "lucide-react": "^0.263.1"
+  }
+}
+```
+
+**Multi-File Rules:**
+
+- Always include `/App.tsx` as the entry point
+- Use relative imports: `import { X } from './components/X'`
+- Use alias imports for ui: `import { Button } from '@/components/ui/button'`
+- Put components in `/components/` directory
+- Each component should be in its own file
+- Escape newlines in JSON strings: `\n`
+- Include `lucide-react` in dependencies if using icons
+
+---
+
+## Output Rules (Both Formats)
+
 **NO**:
-- ❌ Markdown code fences
-- ❌ Explanations
-- ❌ Preamble
+
+- ❌ Markdown code fences (no `jsx or `json)
+- ❌ Explanations before or after code
+- ❌ Preamble or postamble
 - ❌ Comments about what you're doing
-- ❌ Multiple component exports
+- ❌ Multiple component exports from App.tsx
 
 **YES**:
-- ✅ Pure React code
-- ✅ Inline comments for component boundaries
-- ✅ Checkpoint markers
-- ✅ Single default export named "App"
+
+- ✅ Pure code (single-file) OR pure JSON (multi-file)
+- ✅ Imports at the top of each file
+- ✅ Checkpoint markers (single-file only)
+- ✅ Component boundary comments
+- ✅ Single default export named "App" in entry file
