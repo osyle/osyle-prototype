@@ -1,13 +1,11 @@
 """
-Unified Flow Generator
+Unified Flow Generator - FIXED VERSION
 
 Generates multi-screen flows as a SINGLE PROJECT with:
-- Shared components (/components/ui/*)
+- Shared components (/components/ui/*)  ← FIXED: Now actually generated
 - Shared utilities (/lib/*)
 - Screen components (/screens/*)
 - Router (App.tsx)
-
-This replaces the old architecture where each screen was a separate project.
 """
 from typing import Dict, Any, List
 import asyncio
@@ -23,16 +21,36 @@ def generate_shared_components() -> Dict[str, str]:
     """
     Generate shared component files used by all screens
     
-    UPDATED: With CDN imports (esm.sh), we no longer generate shared component files.
-    Screens import shadcn/ui and other components directly from CDN.
-    
-    This function now returns an empty dict but is kept for backward compatibility.
+    FIXED: This now generates actual shadcn/ui component files
+    that screens can import from '@/components/ui/*'
     
     Returns:
-        Empty dict (components imported from CDN instead)
+        Dict of filepath -> code for shared components
     """
-    # No longer generate shared components - screens import from CDN
-    return {}
+    
+    files = {}
+    
+    # Add lib/utils.ts (required by all shadcn/ui components)
+    files['/lib/utils.ts'] = '''import { type ClassValue, clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+'''
+    
+    # Add core shadcn/ui components
+    # These are the components most commonly used by screens
+    files = add_shadcn_components_to_files(
+        files,
+        components=['button', 'card', 'input', 'label', 'checkbox', 'badge', 'separator']
+    )
+    
+    print(f"   ✓ Generated {len(files)} shared component files:")
+    for filepath in sorted(files.keys()):
+        print(f"      - {filepath}")
+    
+    return files
 
 
 def generate_router_code(
@@ -143,7 +161,7 @@ def assemble_unified_project(
     
     all_files = {}
     
-    # Add shared files
+    # Add shared files (shadcn/ui components, utils)
     all_files.update(shared_files)
     
     # Add screen files
@@ -199,6 +217,7 @@ async def generate_unified_flow(
         device_info: Device dimensions
         taste_source: Taste source mode
         websocket: Optional websocket for progress updates
+        responsive: Enable responsive design (default: True)
     
     Returns:
         {
@@ -220,7 +239,7 @@ async def generate_unified_flow(
     from app.generation.orchestrator import GenerationOrchestrator
     
     print("\n" + "="*80)
-    print("UNIFIED FLOW GENERATION")
+    print("UNIFIED FLOW GENERATION - FIXED VERSION")
     print("="*80)
     print(f"Screens: {len(screens)}")
     print(f"Entry: {entry_screen_id}")
@@ -268,6 +287,12 @@ async def generate_unified_flow(
             for trans in outgoing_transitions:
                 task_with_transitions += f"- {trans['transition_id']}: {trans.get('label', trans['trigger'])} → {trans['to_screen_id']}\n"
         
+        # CRITICAL: Add available components info to task
+        task_with_transitions += "\n\nAvailable UI components (import from @/components/ui):\n"
+        task_with_transitions += "- Button, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter\n"
+        task_with_transitions += "- Input, Label, Checkbox, Badge, Separator\n"
+        task_with_transitions += "\nIMPORTANT: Import these components, do NOT define them inline.\n"
+        
         # Generate screen component
         # Note: We use the SCREEN_COMPONENT mode, not the standalone mode
         result = await orchestrator.generate_ui(
@@ -276,7 +301,7 @@ async def generate_unified_flow(
             taste_source=taste_source,
             device_info=device_info,
             flow_context={
-                'mode': 'screen_component',  # NEW: Tells orchestrator to use screen component prompt
+                'mode': 'screen_component',  # Tells orchestrator to use screen component prompt
                 'screen_id': screen_id,
                 'screen_name': screen_name,
                 'component_name': component_name,
@@ -285,7 +310,7 @@ async def generate_unified_flow(
             rendering_mode='react',
             model='claude-sonnet-4.5',
             validate_taste=bool(dtm),
-            websocket=None,  # Don't send checkpoint updates for now (causes too many messages)
+            websocket=None,  # Don't send checkpoint updates (causes too many messages)
             screen_id=screen_id,
             screen_name=screen_name,
             responsive=responsive  # Pass responsive flag
@@ -322,14 +347,15 @@ async def generate_unified_flow(
             print(f"   ⚠️  WARNING: Screen {screen_name} doesn't have export statement")
             print(f"   First 300 chars: {screen_file[:300]}")
         
-        # POST-PROCESSING: Convert any URL imports to npm imports for Sandpack compatibility
-        # This is a safety measure in case the LLM still generates URL imports
-        import re
-        url_import_pattern = r'from ["\']https://esm\.sh/([^"\'@]+)(?:@[^"\']+)?["\']'
-        if re.search(url_import_pattern, screen_file):
-            print(f"   ⚠️  WARNING: Screen {screen_name} contains URL imports, converting to npm...")
-            screen_file = re.sub(url_import_pattern, r'from "\1"', screen_file)
-            print(f"   ✓ Converted URL imports to npm imports")
+        # VALIDATION: Check for inline component definitions (should not exist)
+        if 'const Button = ' in screen_file or 'const Card = ' in screen_file:
+            print(f"   ⚠️  WARNING: Screen {screen_name} defines components inline!")
+            print(f"   This causes code duplication. Components should be imported.")
+        
+        # VALIDATION: Check for proper imports
+        if '@/components/ui' not in screen_file:
+            print(f"   ⚠️  WARNING: Screen {screen_name} doesn't import from @/components/ui")
+            print(f"   Expected: import {{ Button }} from '@/components/ui/button'")
 
         print(f"   ✓ {screen_name} generated ({len(screen_file)} chars)")
         
@@ -403,6 +429,9 @@ async def generate_unified_flow(
     
     print(f"   ✓ Project assembled:")
     print(f"      Total files: {len(project['files'])}")
+    print(f"      - Shared components: {len(shared_files)}")
+    print(f"      - Screen files: {len(screen_files)}")
+    print(f"      - Router: 1")
     print(f"      Dependencies: {len(project['dependencies'])}")
     print(f"      Entry: {project['entry']}")
     

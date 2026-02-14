@@ -13,6 +13,10 @@ Output ONLY pure TypeScript code. Start immediately with imports. No markdown fe
 ```
 import { useState } from 'react'
 import { Mail, Lock } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 interface LoginScreenProps {
   onTransition: (transitionId: string) => void
@@ -29,6 +33,7 @@ export default function LoginScreen({ onTransition }: LoginScreenProps) {
 - ` ```typescript\n...` ```
 - ` ```tsx\n...` ```
 - Text before/after code
+- Defining components inline inside the function
 
 ---
 
@@ -53,127 +58,163 @@ export default function LoginScreen({ onTransition }: LoginScreenProps) {
 
 ---
 
-## Component Imports
+## Required Imports
 
-Import React hooks and Lucide icons using standard npm imports:
+### React Hooks
+
+Import React hooks at the top:
 
 ```typescript
-// React hooks
-import { useState, useEffect } from "react";
-
-// Lucide icons
-import { Mail, Lock, ArrowRight, User } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 ```
 
-**Define UI Components Inline:**
+### Lucide Icons
 
-Since each screen is a single file, define reusable UI components INSIDE your main function:
+Use Lucide React for all icons:
 
 ```typescript
+import {
+  Mail,
+  Lock,
+  User,
+  Settings,
+  ArrowRight,
+  ChevronDown,
+  Check,
+  X,
+  Menu,
+} from "lucide-react";
+```
+
+### UI Components - MANDATORY
+
+**CRITICAL:** Import UI components from the shared component library. DO NOT define them inline.
+
+```typescript
+// Mandatory imports from shared UI library
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+```
+
+**Available Components:**
+
+- Button - Primary actions, CTAs
+- Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter - Content containers
+- Input - Text inputs, email, password fields
+- Label - Form labels
+- Checkbox - Boolean inputs
+- Badge - Status indicators
+- Separator - Visual dividers
+
+**NEVER define these components inline.** Always import from `@/components/ui/*`.
+
+---
+
+## Component Usage Examples
+
+### Button
+
+```typescript
+import { Button } from '@/components/ui/button'
+import { Mail } from 'lucide-react'
+
+// Primary action
+<Button onClick={() => onTransition('trans_1')}>
+  <Mail className="mr-2 h-4 w-4" />
+  Continue
+</Button>
+
+// Secondary action
+<Button variant="outline" onClick={handleBack}>
+  Back
+</Button>
+
+// Destructive action
+<Button variant="destructive" onClick={handleDelete}>
+  Delete
+</Button>
+
+// Ghost variant
+<Button variant="ghost">
+  <Settings className="h-4 w-4" />
+</Button>
+```
+
+### Card
+
+```typescript
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+
+<Card className="w-full max-w-md">
+  <CardHeader>
+    <CardTitle>Welcome Back</CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-4">{/* Form fields */}</CardContent>
+</Card>;
+```
+
+### Form Inputs
+
+```typescript
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+<div className="space-y-2">
+  <Label htmlFor="email">Email</Label>
+  <Input
+    id="email"
+    type="email"
+    value={email}
+    onChange={(e) => setEmail(e.target.value)}
+    placeholder="you@example.com"
+  />
+</div>;
+```
+
+---
+
+## Screen Structure
+
+Every screen should follow this structure:
+
+```typescript
+import { useState } from "react";
+import { Mail, Lock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+interface LoginScreenProps {
+  onTransition: (transitionId: string) => void;
+}
+
 export default function LoginScreen({ onTransition }: LoginScreenProps) {
-  // Define Button component
-  const Button = ({
-    children,
-    onClick,
-    variant = "default",
-    className = "",
-  }: {
-    children: React.ReactNode;
-    onClick?: () => void;
-    variant?: "default" | "destructive" | "outline" | "ghost";
-    className?: string;
-  }) => {
-    const baseStyles =
-      "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none disabled:opacity-50 h-9 px-4 py-2";
-    const variants = {
-      default: "bg-primary text-primary-foreground shadow hover:bg-primary/90",
-      destructive:
-        "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
-      outline:
-        "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
-      ghost: "hover:bg-accent hover:text-accent-foreground",
-    };
-    return (
-      <button
-        className={`${baseStyles} ${variants[variant]} ${className}`}
-        onClick={onClick}
-      >
-        {children}
-      </button>
-    );
+  // 1. State hooks
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  // 2. Event handlers
+  const handleSubmit = () => {
+    // Validation
+    if (email && password) {
+      onTransition("trans_1");
+    }
   };
 
-  // Define Card components
-  const Card = ({
-    children,
-    className = "",
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) => (
-    <div
-      className={`rounded-xl border bg-card text-card-foreground shadow ${className}`}
-    >
-      {children}
-    </div>
-  );
-
-  const CardHeader = ({
-    children,
-    className = "",
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) => (
-    <div className={`flex flex-col space-y-1.5 p-6 ${className}`}>
-      {children}
-    </div>
-  );
-
-  const CardTitle = ({
-    children,
-    className = "",
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) => (
-    <h3 className={`font-semibold leading-none tracking-tight ${className}`}>
-      {children}
-    </h3>
-  );
-
-  const CardContent = ({
-    children,
-    className = "",
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) => <div className={`p-6 pt-0 ${className}`}>{children}</div>;
-
-  // Define Input component
-  const Input = ({
-    type = "text",
-    placeholder = "",
-    value = "",
-    onChange,
-    className = "",
-  }: {
-    type?: string;
-    placeholder?: string;
-    value?: string;
-    onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    className?: string;
-  }) => (
-    <input
-      type={type}
-      placeholder={placeholder}
-      value={value}
-      onChange={onChange}
-      className={`flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${className}`}
-    />
-  );
-
-  // Use in your screen...
+  // 3. Render
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="w-full max-w-md">
@@ -181,29 +222,35 @@ export default function LoginScreen({ onTransition }: LoginScreenProps) {
           <CardTitle>Welcome Back</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Input type="email" placeholder="you@example.com" />
-          <Button onClick={() => onTransition("trans_1")}>Sign In</Button>
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          <Button className="w-full" onClick={handleSubmit}>
+            <Mail className="mr-2 h-4 w-4" />
+            Sign In
+          </Button>
         </CardContent>
       </Card>
     </div>
   );
 }
 ```
-
-**Common Components to Define:**
-
-- Button (default, destructive, outline, ghost variants)
-- Card, CardHeader, CardTitle, CardContent, CardFooter
-- Input
-- Label
-- Checkbox
-- Select
-- Textarea
-- Badge
-- Separator
-- Skeleton (for loading states)
-
-Define only the components you need for your screen. Follow shadcn/ui design aesthetic.
 
 ---
 
@@ -225,6 +272,9 @@ Use Tailwind breakpoints to create layouts that adapt:
 
 // Responsive text sizes
 <h1 className="text-2xl md:text-4xl lg:text-6xl">Title</h1>
+
+// Responsive padding
+<div className="p-4 md:p-6 lg:p-8">
 ```
 
 Breakpoints: `sm:` (640px), `md:` (768px), `lg:` (1024px), `xl:` (1280px)
@@ -241,40 +291,98 @@ Outgoing transitions:
 - trans_2: "Forgot Password" → screen_3
 ```
 
-Implement them:
+Implement them using the `onTransition` prop:
 
 ```typescript
-<Button onClick={() => onTransition('trans_1')}>Sign In</Button>
-<a onClick={() => onTransition('trans_2')}>Forgot Password?</a>
+// Primary transition (button)
+<Button onClick={() => onTransition('trans_1')}>
+  Sign In
+</Button>
+
+// Secondary transition (link)
+<a
+  className="text-sm text-muted-foreground hover:text-foreground cursor-pointer"
+  onClick={() => onTransition('trans_2')}
+>
+  Forgot Password?
+</a>
 ```
 
 ---
 
 ## Layout Guidelines
 
-✅ **DO:** Use flexible responsive layouts
+### ✅ DO: Flexible, Responsive Layouts
 
 ```typescript
-<div className="min-h-screen">
+<div className="min-h-screen bg-background">
   <div className="max-w-4xl mx-auto p-4">
     {/* content adapts to screen size */}
   </div>
 </div>
 ```
 
-❌ **DON'T:** Hardcode fixed dimensions
+### ❌ DON'T: Fixed Pixel Dimensions
 
 ```typescript
+// ❌ WRONG
 <div style={{ width: '375px', height: '812px' }}>
+
+// ✅ CORRECT
+<div className="min-h-screen">
 ```
 
 ---
 
-## Complete Example
+## Styling Rules
+
+### Use Semantic Color Tokens
+
+```typescript
+// ✅ CORRECT - semantic tokens
+className = "bg-primary text-primary-foreground";
+className = "bg-secondary text-secondary-foreground";
+className = "bg-muted text-muted-foreground";
+className = "bg-accent text-accent-foreground";
+className = "bg-background text-foreground";
+className = "border-border";
+
+// ❌ WRONG - direct colors
+className = "bg-blue-500";
+className = "bg-gray-100";
+className = "text-zinc-900";
+```
+
+### NO Arbitrary Values
+
+```typescript
+// ❌ WRONG
+className = "h-[600px] w-[450px]";
+
+// ✅ CORRECT
+className = "h-screen w-full max-w-md";
+```
+
+---
+
+## Complete Working Example
 
 ```typescript
 import { useState } from "react";
-import { Mail, Lock } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 
 interface LoginScreenProps {
   onTransition: (transitionId: string) => void;
@@ -283,107 +391,133 @@ interface LoginScreenProps {
 export default function LoginScreen({ onTransition }: LoginScreenProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
-  // Define UI components inline
-  const Button = ({
-    children,
-    onClick,
-    className = "",
-  }: {
-    children: React.ReactNode;
-    onClick?: () => void;
-    className?: string;
-  }) => (
-    <button
-      className={`inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2 ${className}`}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
-
-  const Card = ({
-    children,
-    className = "",
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) => (
-    <div
-      className={`rounded-xl border bg-card text-card-foreground shadow ${className}`}
-    >
-      {children}
-    </div>
-  );
-
-  const CardHeader = ({ children }: { children: React.ReactNode }) => (
-    <div className="flex flex-col space-y-1.5 p-6">{children}</div>
-  );
-
-  const CardTitle = ({ children }: { children: React.ReactNode }) => (
-    <h3 className="font-semibold leading-none tracking-tight text-2xl">
-      {children}
-    </h3>
-  );
-
-  const CardContent = ({
-    children,
-    className = "",
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) => <div className={`p-6 pt-0 ${className}`}>{children}</div>;
-
-  const Input = ({
-    type = "text",
-    placeholder = "",
-    value,
-    onChange,
-  }: {
-    type?: string;
-    placeholder?: string;
-    value: string;
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  }) => (
-    <input
-      type={type}
-      placeholder={placeholder}
-      value={value}
-      onChange={onChange}
-      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-    />
-  );
+  const handleLogin = () => {
+    if (email && password) {
+      onTransition("trans_1");
+    }
+  };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background">
+    <div className="flex items-center justify-center min-h-screen bg-background p-4">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Welcome Back</CardTitle>
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
+          <CardDescription>
+            Enter your credentials to access your account
+          </CardDescription>
         </CardHeader>
+
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Email</label>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-            />
+            <Label htmlFor="email">Email</Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="pl-10"
+              />
+            </div>
           </div>
+
           <div className="space-y-2">
-            <label className="text-sm font-medium">Password</label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <Label htmlFor="password">Password</Label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="pl-10 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
           </div>
-          <Button className="w-full" onClick={() => onTransition("trans_1")}>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="remember"
+                checked={rememberMe}
+                onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+              />
+              <Label htmlFor="remember" className="text-sm cursor-pointer">
+                Remember me
+              </Label>
+            </div>
+            <a
+              onClick={() => onTransition("trans_2")}
+              className="text-sm text-primary hover:underline cursor-pointer"
+            >
+              Forgot password?
+            </a>
+          </div>
+
+          <Button className="w-full" onClick={handleLogin}>
             Sign In
           </Button>
+
+          <div className="relative">
+            <Separator />
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">
+              OR
+            </span>
+          </div>
+
+          <Button variant="outline" className="w-full">
+            Sign in with Google
+          </Button>
         </CardContent>
+
+        <CardFooter className="flex flex-col space-y-2">
+          <div className="text-sm text-muted-foreground text-center">
+            Don't have an account?{" "}
+            <a
+              onClick={() => onTransition("trans_3")}
+              className="text-primary hover:underline cursor-pointer font-medium"
+            >
+              Sign up
+            </a>
+          </div>
+        </CardFooter>
       </Card>
     </div>
   );
 }
 ```
+
+---
+
+## Key Takeaways
+
+1. **Always import UI components** from `@/components/ui/*`
+2. **Never define components inline** - this causes code duplication
+3. **Use semantic color tokens** (`bg-primary`, not `bg-blue-500`)
+4. **Create responsive layouts** with Tailwind breakpoints
+5. **Implement transitions** using the `onTransition` prop
+6. **Output pure TypeScript** - no markdown, no explanations
+
+Following these rules ensures:
+
+- ✅ Zero code duplication across screens
+- ✅ Consistent component behavior
+- ✅ High-quality, professional UIs
+- ✅ Smaller file sizes
+- ✅ Matches v0/Lovable architecture
