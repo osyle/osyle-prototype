@@ -49,112 +49,135 @@ import {
 } from "lucide-react";
 ```
 
-**Import Strategy:**
-
-Use standard npm imports for all external libraries. These are bundled by Sandpack automatically.
-
-**UI Components - Define Inline:**
-
-Since this is a single-file screen, define reusable components INSIDE your main function:
+**UI Components from Shared Library:**
 
 ```tsx
-export default function LoginScreen({ onTransition }) {
-  // Define UI components inline
-  const Button = ({
-    children,
-    onClick,
-    variant = "default",
-    className = "",
-  }) => {
-    const baseStyles =
-      "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none disabled:opacity-50";
-    const variants = {
-      default:
-        "bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2",
-      destructive:
-        "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 h-9 px-4 py-2",
-      outline:
-        "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2",
-      ghost: "hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2",
-    };
-    return (
-      <button
-        className={`${baseStyles} ${variants[variant]} ${className}`}
-        onClick={onClick}
-      >
-        {children}
-      </button>
-    );
-  };
+// Full shadcn/ui library available (50+ components)
+// Import what you need:
 
-  const Card = ({ children, className = "" }) => (
-    <div
-      className={`rounded-xl border bg-card text-card-foreground shadow ${className}`}
-    >
-      {children}
-    </div>
-  );
-
-  const CardHeader = ({ children, className = "" }) => (
-    <div className={`flex flex-col space-y-1.5 p-6 ${className}`}>
-      {children}
-    </div>
-  );
-
-  const CardTitle = ({ children, className = "" }) => (
-    <h3 className={`font-semibold leading-none tracking-tight ${className}`}>
-      {children}
-    </h3>
-  );
-
-  const CardContent = ({ children, className = "" }) => (
-    <div className={`p-6 pt-0 ${className}`}>{children}</div>
-  );
-
-  const Input = ({ className = "", ...props }) => (
-    <input
-      className={`flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
-      {...props}
-    />
-  );
-
-  // Use components in your screen...
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Welcome</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Input type="email" placeholder="Email" />
-        <Button onClick={() => onTransition("trans_1")}>Sign In</Button>
-      </CardContent>
-    </Card>
-  );
-}
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { Tooltip } from "@/components/ui/tooltip";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandItem,
+} from "@/components/ui/command";
+import { Calendar } from "@/components/ui/calendar";
+import { Carousel, CarouselItem } from "@/components/ui/carousel";
+// ... and 20+ more components
 ```
 
-**Common Component Patterns:**
+**CRITICAL: Always import UI components from `@/components/ui/*`. NEVER define them inline.**
 
-**Button**: Primary actions, variants (default, destructive, outline, ghost)
-**Card**: Content containers with header/title/content/footer sections
-**Input**: Form inputs with proper styling
-**Label**: Form labels
-**Checkbox**: Boolean inputs
-**Select**: Dropdown selections
-**Dialog**: Modal overlays
-**Tabs**: Tabbed interfaces
-**Badge**: Status indicators
-**Avatar**: User profile images
-**Separator**: Visual dividers
-**Skeleton**: Loading states
+**Available: Complete shadcn/ui library (50+ components)**
 
-Define these inline as needed for your screen. Use shadcn/ui design aesthetic but implement them as inline functions.
+- Core Input: Button, Input, Label, Textarea, Checkbox, RadioGroup, Select, Switch, Slider
+- Data Display: Card, Table, Avatar, Badge
+- Feedback: Alert, Progress, Skeleton, Toast
+- Layout: Separator, AspectRatio, ScrollArea
+- Navigation: Tabs, Breadcrumb, Pagination
+- Overlays: Dialog, Sheet, Popover, Tooltip
+- Interactive: Accordion, Collapsible, DropdownMenu, ContextMenu, Menubar, Command, HoverCard
+- Advanced: Toggle, ToggleGroup, Calendar, Carousel
 
-**Local Components (for multi-file projects):**
+**Example Usage:**
 
 ```tsx
-import { ProductCard } from "./components/ProductCard";
-import { Header } from "./components/Header";
+import { useState } from "react";
+import { Mail, Lock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+export default function LoginScreen({ onTransition }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Welcome Back</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          <Button className="w-full" onClick={() => onTransition("trans_1")}>
+            <Mail className="mr-2 h-4 w-4" />
+            Sign In
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 ```
 
 ### CRITICAL: NO MARKDOWN CODE BLOCKS
@@ -162,27 +185,6 @@ import { Header } from "./components/Header";
 Output pure React/TypeScript code only - no markdown fences (no `jsx, `javascript, `tsx, or `typescript), no explanations, no preamble.
 
 Just start directly with your imports and code.
-
-### CRITICAL: ALL HELPER COMPONENTS INSIDE Main Function
-
-Define helper components INSIDE the main function to prevent React warnings.
-
-```jsx
-// ✅ CORRECT
-export default function App({ onTransition }) {
-  const Card = ({ children }) => (
-    <div style={{ borderRadius: 12, padding: 24 }}>{children}</div>
-  );
-
-  return <Card>Content</Card>;
-}
-
-// ❌ WRONG - Component defined outside
-const Card = ({ children }) => <div>{children}</div>;
-export default function App({ onTransition }) {
-  return <Card>Content</Card>;
-}
-```
 
 ---
 

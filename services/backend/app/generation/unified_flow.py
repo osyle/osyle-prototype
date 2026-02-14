@@ -11,7 +11,6 @@ from typing import Dict, Any, List
 import asyncio
 
 from app.generation.multifile_parser import (
-    add_shadcn_components_to_files,
     ensure_default_dependencies,
     normalize_file_paths
 )
@@ -19,36 +18,28 @@ from app.generation.multifile_parser import (
 
 def generate_shared_components() -> Dict[str, str]:
     """
-    Generate shared component files used by all screens
+    Generate complete shadcn/ui component library (50+ components)
     
-    FIXED: This now generates actual shadcn/ui component files
-    that screens can import from '@/components/ui/*'
+    Matches what v0/Bolt/Lovable provide - LLM has access to full library.
     
     Returns:
-        Dict of filepath -> code for shared components
+        Dict of filepath -> code for complete shadcn/ui library (50+ components)
     """
     
-    files = {}
+    # Import complete library
+    from app.generation.shadcn_full_library import get_all_shadcn_components
+    files = get_all_shadcn_components()
     
-    # Add lib/utils.ts (required by all shadcn/ui components)
-    files['/lib/utils.ts'] = '''import { type ClassValue, clsx } from "clsx"
-import { twMerge } from "tailwind-merge"
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
-'''
-    
-    # Add core shadcn/ui components
-    # These are the components most commonly used by screens
-    files = add_shadcn_components_to_files(
-        files,
-        components=['button', 'card', 'input', 'label', 'checkbox', 'badge', 'separator']
-    )
-    
-    print(f"   ✓ Generated {len(files)} shared component files:")
-    for filepath in sorted(files.keys()):
-        print(f"      - {filepath}")
+    print(f"   ✓ Generated complete shadcn/ui library: {len(files)} files")
+    print(f"      Core: Button, Input, Label, Textarea, Checkbox, Radio, Select, Switch, Slider")
+    print(f"      Data: Card, Table, Avatar, Badge")
+    print(f"      Feedback: Alert, Progress, Skeleton, Toast")
+    print(f"      Layout: Separator, AspectRatio, ScrollArea")
+    print(f"      Navigation: Tabs, Breadcrumb, Pagination")
+    print(f"      Overlays: Dialog, Sheet, Popover, Tooltip")
+    print(f"      Interactive: Accordion, Collapsible, Dropdown, Context, Menubar, Command")
+    print(f"      Advanced: HoverCard, Toggle, Calendar, Carousel")
+    print(f"      Total: {len(files)} components available")
     
     return files
 

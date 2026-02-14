@@ -10,21 +10,153 @@ This is NOT optional. These constraints ensure world-class, modern UIs that avoi
 
 ### shadcn/ui - Component Library (MANDATORY)
 
-shadcn/ui is your PRIMARY component library. Use it for all common UI elements.
+shadcn/ui is your PRIMARY component library. Full library with 50+ components available.
 
-**Available Components:**
+**Complete Component Library (50+ Components):**
 
-- Button, Card, Input, Textarea, Label
-- Dialog, Sheet, Popover, Dropdown Menu
-- Tabs, Accordion, Collapsible
-- Avatar, Badge, Separator
-- And many more...
+**Core Input (9):**
+
+- Button, Input, Label, Textarea
+- Checkbox, RadioGroup, Select, Switch, Slider
+
+**Data Display (4):**
+
+- Card (+ Header, Title, Description, Content, Footer)
+- Table (+ Header, Body, Footer, Row, Head, Cell, Caption)
+- Avatar (+ Image, Fallback)
+- Badge
+
+**Feedback (4):**
+
+- Alert (+ Title, Description)
+- Progress, Skeleton
+- Toast (+ Title, Description)
+
+**Layout (3):**
+
+- Separator, AspectRatio, ScrollArea
+
+**Navigation (3):**
+
+- Tabs (+ List, Trigger, Content)
+- Breadcrumb (+ List, Item, Link, Page, Separator)
+- Pagination (+ Content, Link, Item, Previous, Next, Ellipsis)
+
+**Overlays (4):**
+
+- Dialog (+ Content, Header, Footer, Title, Description)
+- Sheet (+ Content, Header, Title, Description)
+- Popover (+ Trigger, Content)
+- Tooltip
+
+**Interactive (7):**
+
+- Accordion (+ Item, Trigger, Content)
+- Collapsible (+ Trigger, Content)
+- DropdownMenu (+ Trigger, Content, Item, Separator, Label)
+- ContextMenu (+ Trigger, Content, Item)
+- Menubar (+ Menu, Trigger, Content, Item, Separator)
+- Command (+ Input, List, Empty, Group, Item)
+- HoverCard (+ Trigger, Content)
+
+**Advanced (4):**
+
+- Toggle, ToggleGroup, Calendar, Carousel
 
 **Import Pattern:**
 
 ```tsx
+// Core
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+
+// Data Display
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+
+// Feedback
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Toast, ToastTitle, ToastDescription } from "@/components/ui/toast";
+
+// Layout
+import { Separator } from "@/components/ui/separator";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+// Navigation
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+} from "@/components/ui/breadcrumb";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationLink,
+} from "@/components/ui/pagination";
+
+// Overlays
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { Tooltip } from "@/components/ui/tooltip";
+
+// Interactive
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandItem,
+} from "@/components/ui/command";
+
+// Advanced
+import { Calendar } from "@/components/ui/calendar";
+import { Carousel, CarouselItem } from "@/components/ui/carousel";
 ```
 
 **Why shadcn/ui:**
@@ -33,6 +165,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 - Consistent design language
 - Fully customizable with Tailwind
 - No "component library" look - feels bespoke
+- **Complete library (50+ components) like v0/Bolt/Lovable**
 
 ### Lucide React - Icons (MANDATORY)
 
@@ -237,18 +370,20 @@ export default function App({ onTransition }) {
   const [email, setEmail] = useState("");
 
   return (
-    <div style={{ width: "375px", height: "812px" }}>
-      <Card>
-        <CardHeader>
-          <CardTitle>Welcome</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Button>
-            <Mail className="mr-2 h-4 w-4" />
-            Sign In
-          </Button>
-        </CardContent>
-      </Card>
+    <div className="min-h-screen bg-background">
+      <div className="flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Welcome</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Button className="w-full">
+              <Mail className="mr-2 h-4 w-4" />
+              Sign In
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

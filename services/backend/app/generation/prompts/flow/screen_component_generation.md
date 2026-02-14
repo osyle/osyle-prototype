@@ -90,9 +90,23 @@ import {
 
 **CRITICAL:** Import UI components from the shared component library. DO NOT define them inline.
 
+**Import UI components from the shared component library:**
+
+CRITICAL: The full shadcn/ui library (50+ components) is available. Import what you need.
+
 ```typescript
-// Mandatory imports from shared UI library
+// Core Input
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+
+// Data Display
 import {
   Card,
   CardHeader,
@@ -101,22 +115,68 @@ import {
   CardContent,
   CardFooter,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+
+// Feedback
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Toast } from "@/components/ui/toast";
+
+// Layout
 import { Separator } from "@/components/ui/separator";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+// Navigation
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { Pagination } from "@/components/ui/pagination";
+
+// Overlays
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { Tooltip } from "@/components/ui/tooltip";
+
+// Interactive
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { Command } from "@/components/ui/command";
+import { Calendar } from "@/components/ui/calendar";
 ```
 
-**Available Components:**
+**Available: 50+ components across all categories.**
 
-- Button - Primary actions, CTAs
-- Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter - Content containers
-- Input - Text inputs, email, password fields
-- Label - Form labels
-- Checkbox - Boolean inputs
-- Badge - Status indicators
-- Separator - Visual dividers
+See documentation for complete list. Use any component that fits your design needs.
 
 **NEVER define these components inline.** Always import from `@/components/ui/*`.
 
