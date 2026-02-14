@@ -35,18 +35,120 @@ You now have access to import statements! Use them to create modular, maintainab
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 ```
 
-**shadcn/ui Components:**
-
-```tsx
-import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-```
-
 **Lucide Icons:**
 
 ```tsx
-import { Mail, User, Settings } from "lucide-react";
+import {
+  Mail,
+  User,
+  Settings,
+  ArrowRight,
+  ChevronDown,
+  Check,
+  X,
+} from "lucide-react";
 ```
+
+**Import Strategy:**
+
+Use standard npm imports for all external libraries. These are bundled by Sandpack automatically.
+
+**UI Components - Define Inline:**
+
+Since this is a single-file screen, define reusable components INSIDE your main function:
+
+```tsx
+export default function LoginScreen({ onTransition }) {
+  // Define UI components inline
+  const Button = ({
+    children,
+    onClick,
+    variant = "default",
+    className = "",
+  }) => {
+    const baseStyles =
+      "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none disabled:opacity-50";
+    const variants = {
+      default:
+        "bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2",
+      destructive:
+        "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 h-9 px-4 py-2",
+      outline:
+        "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2",
+      ghost: "hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2",
+    };
+    return (
+      <button
+        className={`${baseStyles} ${variants[variant]} ${className}`}
+        onClick={onClick}
+      >
+        {children}
+      </button>
+    );
+  };
+
+  const Card = ({ children, className = "" }) => (
+    <div
+      className={`rounded-xl border bg-card text-card-foreground shadow ${className}`}
+    >
+      {children}
+    </div>
+  );
+
+  const CardHeader = ({ children, className = "" }) => (
+    <div className={`flex flex-col space-y-1.5 p-6 ${className}`}>
+      {children}
+    </div>
+  );
+
+  const CardTitle = ({ children, className = "" }) => (
+    <h3 className={`font-semibold leading-none tracking-tight ${className}`}>
+      {children}
+    </h3>
+  );
+
+  const CardContent = ({ children, className = "" }) => (
+    <div className={`p-6 pt-0 ${className}`}>{children}</div>
+  );
+
+  const Input = ({ className = "", ...props }) => (
+    <input
+      className={`flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      {...props}
+    />
+  );
+
+  // Use components in your screen...
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Welcome</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Input type="email" placeholder="Email" />
+        <Button onClick={() => onTransition("trans_1")}>Sign In</Button>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+**Common Component Patterns:**
+
+**Button**: Primary actions, variants (default, destructive, outline, ghost)
+**Card**: Content containers with header/title/content/footer sections
+**Input**: Form inputs with proper styling
+**Label**: Form labels
+**Checkbox**: Boolean inputs
+**Select**: Dropdown selections
+**Dialog**: Modal overlays
+**Tabs**: Tabbed interfaces
+**Badge**: Status indicators
+**Avatar**: User profile images
+**Separator**: Visual dividers
+**Skeleton**: Loading states
+
+Define these inline as needed for your screen. Use shadcn/ui design aesthetic but implement them as inline functions.
 
 **Local Components (for multi-file projects):**
 
@@ -55,29 +157,15 @@ import { ProductCard } from "./components/ProductCard";
 import { Header } from "./components/Header";
 ```
 
-### CRITICAL: FUNCTION NAME MUST BE "App"
-
-Always use `export default function App` - never use custom names.
-
-```jsx
-// ✅ CORRECT
-export default function App({ onTransition }) {
-  // ...
-}
-
-// ❌ WRONG
-export default function MyComponent({ onTransition }) {
-  // ...
-}
-```
-
 ### CRITICAL: NO MARKDOWN CODE BLOCKS
 
-Output pure React code only - no markdown fences (no `jsx, `javascript, `tsx, or `typescript), no explanations, no preamble.
+Output pure React/TypeScript code only - no markdown fences (no `jsx, `javascript, `tsx, or `typescript), no explanations, no preamble.
 
-### CRITICAL: ALL HELPER COMPONENTS INSIDE App
+Just start directly with your imports and code.
 
-Define helper components INSIDE the App function to prevent React warnings.
+### CRITICAL: ALL HELPER COMPONENTS INSIDE Main Function
+
+Define helper components INSIDE the main function to prevent React warnings.
 
 ```jsx
 // ✅ CORRECT
@@ -100,25 +188,22 @@ export default function App({ onTransition }) {
 
 ## TECHNICAL CONSTRAINTS
 
-### Device Dimensions
+### Layout Approach
 
-Root `<div>` MUST match exact device dimensions:
+Use responsive, flexible layouts that adapt to their container:
 
 ```jsx
 export default function App({ onTransition }) {
   return (
-    <div
-      style={{
-        width: `${device_width}px`,
-        height: `${device_height}px`,
-        // Root styling
-      }}
-    >
-      {/* Content */}
+    <div className="min-h-screen bg-background">
+      {/* Responsive content that adapts to screen size */}
+      <div className="max-w-4xl mx-auto p-4">{/* Content */}</div>
     </div>
   );
 }
 ```
+
+Use Tailwind's responsive utilities (`sm:`, `md:`, `lg:`, `xl:`) to adapt layouts at different breakpoints.
 
 ### Platform Optimization
 

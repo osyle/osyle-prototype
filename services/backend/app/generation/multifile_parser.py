@@ -18,7 +18,7 @@ def parse_llm_output(llm_response: str) -> Dict[str, Any]:
     
     Supports two formats:
     
-    Format 1 (Legacy): Single JSX code
+    Format 1 (Legacy): Single JSX/TSX code
     ```
     export default function App() { ... }
     ```
@@ -55,6 +55,36 @@ def parse_llm_output(llm_response: str) -> Dict[str, Any]:
     
     # Clean response
     cleaned = llm_response.strip()
+    
+    # CRITICAL: Check if LLM incorrectly wrapped code in JSON
+    # Pattern: json\n{"files": {"/App.tsx": "actual code"}}
+    # This is WRONG - we want just the code, not a JSON wrapper
+    if cleaned.startswith('json\n{') or cleaned.startswith('```json\n{'):
+        print("  ⚠️  LLM output JSON wrapper (extracting code)...")
+        try:
+            # Remove 'json\n' prefix or ```json\n prefix
+            json_str = cleaned.replace('json\n', '', 1).replace('```json\n', '', 1)
+            # Remove trailing ```
+            json_str = json_str.rstrip('`').strip()
+            
+            data = json.loads(json_str)
+            
+            # If it has "files" with a single "/App.tsx" entry, extract that code
+            if isinstance(data, dict) and "files" in data:
+                files = data["files"]
+                if isinstance(files, dict) and len(files) == 1:
+                    # Get the single file's code
+                    code = list(files.values())[0]
+                    print(f"  ✓ Extracted code from JSON wrapper ({len(code)} chars)")
+                    return {
+                        "files": {"/App.tsx": code},
+                        "entry": "/App.tsx",
+                        "dependencies": data.get("dependencies", {}),
+                        "format": "legacy"
+                    }
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            print(f"  ✗ Failed to parse JSON wrapper: {e}")
+            # Fall through to normal parsing
     
     # Try to detect and parse JSON format first
     json_result = _try_parse_json(cleaned)
@@ -187,199 +217,25 @@ def _clean_code_fences(code: str) -> str:
     return code.strip()
 
 
-def add_shadcn_components_to_files(
-    files: Dict[str, str],
-    components: list[str] = None
-) -> Dict[str, str]:
-    """
-    Add shadcn/ui component files to the files dict
-    
-    This ensures that when LLM generates code using shadcn/ui components,
-    the actual component files are included in the output.
-    
-    Args:
-        files: Existing files dict
-        components: List of component names to add (default: ['button', 'card'])
-    
-    Returns:
-        Updated files dict with component files added
-    """
-    
-    if components is None:
-        components = ['button', 'card']
-    
-    updated_files = files.copy()
-    
-    # Add lib/utils.ts (required by all shadcn/ui components)
-    if '/lib/utils.ts' not in updated_files:
-        updated_files['/lib/utils.ts'] = '''import { type ClassValue, clsx } from "clsx"
-import { twMerge } from "tailwind-merge"
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
-'''
-    
-    # Add button component
-    if 'button' in components and '/components/ui/button.tsx' not in updated_files:
-        updated_files['/components/ui/button.tsx'] = '''import * as React from "react"
-import { Slot } from "@radix-ui/react-slot"
-import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "@/lib/utils"
-
-const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground shadow hover:bg-primary/90",
-        destructive: "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
-        outline: "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
-      },
-      size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  }
-)
-
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
-  asChild?: boolean
-}
-
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button"
-    return (
-      <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref}
-        {...props}
-      />
-    )
-  }
-)
-Button.displayName = "Button"
-
-export { Button, buttonVariants }
-'''
-    
-    # Add card component
-    if 'card' in components and '/components/ui/card.tsx' not in updated_files:
-        updated_files['/components/ui/card.tsx'] = '''import * as React from "react"
-import { cn } from "@/lib/utils"
-
-const Card = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn(
-      "rounded-xl border bg-card text-card-foreground shadow",
-      className
-    )}
-    {...props}
-  />
-))
-Card.displayName = "Card"
-
-const CardHeader = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn("flex flex-col space-y-1.5 p-6", className)}
-    {...props}
-  />
-))
-CardHeader.displayName = "CardHeader"
-
-const CardTitle = React.forwardRef<
-  HTMLParagraphElement,
-  React.HTMLAttributes<HTMLHeadingElement>
->(({ className, ...props }, ref) => (
-  <h3
-    ref={ref}
-    className={cn("font-semibold leading-none tracking-tight", className)}
-    {...props}
-  />
-))
-CardTitle.displayName = "CardTitle"
-
-const CardDescription = React.forwardRef<
-  HTMLParagraphElement,
-  React.HTMLAttributes<HTMLParagraphElement>
->(({ className, ...props }, ref) => (
-  <p
-    ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
-    {...props}
-  />
-))
-CardDescription.displayName = "CardDescription"
-
-const CardContent = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
-))
-CardContent.displayName = "CardContent"
-
-const CardFooter = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn("flex items-center p-6 pt-0", className)}
-    {...props}
-  />
-))
-CardFooter.displayName = "CardFooter"
-
-export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
-'''
-    
-    return updated_files
-
-
 def ensure_default_dependencies(
     dependencies: Dict[str, str]
 ) -> Dict[str, str]:
     """
     Ensure default dependencies are included
     
-    Default dependencies for all projects:
-    - lucide-react: Icons
-    - clsx: Utility for className merging
-    - tailwind-merge: Tailwind class merging
-    - @radix-ui/*: Required by shadcn/ui components
-    """
+    For CDN-based imports (esm.sh), we don't need npm dependencies in Sandpack.
+    Just ensure lucide-react is available as it's commonly used.
     
+    Args:
+        dependencies: Existing dependencies dict
+    
+    Returns:
+        Updated dependencies dict with defaults
+    """
     defaults = {
         "lucide-react": "^0.263.1",
-        "clsx": "^2.1.1",
-        "tailwind-merge": "^2.5.5",
-        "@radix-ui/react-slot": "latest",
-        "class-variance-authority": "latest",
     }
     
-    # Merge with provided dependencies (provided take precedence)
     return {
         **defaults,
         **dependencies
@@ -392,9 +248,14 @@ def normalize_file_paths(files: Dict[str, str]) -> Dict[str, str]:
     
     - All paths start with /
     - No duplicate leading slashes
-    - Consistent use of .tsx vs .ts
-    """
+    - Consistent formatting
     
+    Args:
+        files: Dict of filepath -> code
+    
+    Returns:
+        Normalized files dict
+    """
     normalized = {}
     
     for filepath, code in files.items():
@@ -408,3 +269,24 @@ def normalize_file_paths(files: Dict[str, str]) -> Dict[str, str]:
         normalized[filepath] = code
     
     return normalized
+
+
+def add_shadcn_components_to_files(
+    files: Dict[str, str],
+    components: list[str] = None
+) -> Dict[str, str]:
+    """
+    Add shadcn/ui component files to the files dict
+    
+    DEPRECATED: With CDN imports, we no longer generate component files.
+    This function is kept for backward compatibility but returns files unchanged.
+    
+    Args:
+        files: Existing files dict
+        components: List of component names (ignored)
+    
+    Returns:
+        Files dict unchanged (components imported from CDN instead)
+    """
+    # No longer generate component files - screens import from CDN
+    return files.copy()

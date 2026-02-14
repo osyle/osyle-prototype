@@ -23,22 +23,16 @@ def generate_shared_components() -> Dict[str, str]:
     """
     Generate shared component files used by all screens
     
+    UPDATED: With CDN imports (esm.sh), we no longer generate shared component files.
+    Screens import shadcn/ui and other components directly from CDN.
+    
+    This function now returns an empty dict but is kept for backward compatibility.
+    
     Returns:
-        Dict of filepath -> code for shared components
+        Empty dict (components imported from CDN instead)
     """
-    
-    files = {}
-    
-    # Add shadcn/ui components
-    files = add_shadcn_components_to_files(
-        files,
-        components=['button', 'card', 'input', 'label', 'checkbox']
-    )
-    
-    # Add additional shared components if needed
-    # files['/components/shared/Header.tsx'] = ...
-    
-    return files
+    # No longer generate shared components - screens import from CDN
+    return {}
 
 
 def generate_router_code(
@@ -182,7 +176,8 @@ async def generate_unified_flow(
     dtm: Dict[str, Any],
     device_info: Dict[str, Any],
     taste_source: str,
-    websocket=None
+    websocket=None,
+    responsive: bool = True
 ) -> Dict[str, Any]:
     """
     Generate a unified multi-screen flow as a single project
@@ -290,9 +285,10 @@ async def generate_unified_flow(
             rendering_mode='react',
             model='claude-sonnet-4.5',
             validate_taste=bool(dtm),
-            websocket=None,  # Don't send individual screen updates
+            websocket=None,  # Don't send checkpoint updates for now (causes too many messages)
             screen_id=screen_id,
-            screen_name=screen_name
+            screen_name=screen_name,
+            responsive=responsive  # Pass responsive flag
         )
         
         # Extract the screen component code
@@ -305,7 +301,49 @@ async def generate_unified_flow(
             # Single file - use the code directly
             screen_file = result['code']
         
+        # VALIDATION: Ensure screen code is valid TypeScript, not JSON
+        if screen_file.strip().startswith('json\n{') or screen_file.strip().startswith('```json'):
+            print(f"   ✗ ERROR: Screen {screen_name} contains JSON instead of TypeScript!")
+            print(f"   First 200 chars: {screen_file[:200]}")
+            # Try to extract code from malformed JSON
+            try:
+                # Remove json\n or ```json\n prefix
+                json_str = screen_file.replace('json\n', '', 1).replace('```json\n', '', 1).strip('`')
+                import json
+                data = json.loads(json_str)
+                if "files" in data and "/App.tsx" in data["files"]:
+                    screen_file = data["files"]["/App.tsx"]
+                    print(f"   ✓ Recovered code from JSON wrapper ({len(screen_file)} chars)")
+            except Exception as e:
+                print(f"   ✗ Could not recover: {e}")
+        
+        # VALIDATION: Check if code looks like TypeScript
+        if not ('export default function' in screen_file or 'export function' in screen_file):
+            print(f"   ⚠️  WARNING: Screen {screen_name} doesn't have export statement")
+            print(f"   First 300 chars: {screen_file[:300]}")
+        
+        # POST-PROCESSING: Convert any URL imports to npm imports for Sandpack compatibility
+        # This is a safety measure in case the LLM still generates URL imports
+        import re
+        url_import_pattern = r'from ["\']https://esm\.sh/([^"\'@]+)(?:@[^"\']+)?["\']'
+        if re.search(url_import_pattern, screen_file):
+            print(f"   ⚠️  WARNING: Screen {screen_name} contains URL imports, converting to npm...")
+            screen_file = re.sub(url_import_pattern, r'from "\1"', screen_file)
+            print(f"   ✓ Converted URL imports to npm imports")
+
         print(f"   ✓ {screen_name} generated ({len(screen_file)} chars)")
+        
+        # Send screen_ready message to frontend for progressive rendering
+        if websocket:
+            await websocket.send_json({
+                'type': 'screen_ready',
+                'data': {
+                    'screen_id': screen_id,
+                    'ui_code': screen_file,
+                    'variation_space': result.get('variation_space')
+                }
+            })
+            print(f"   ✓ Sent screen_ready message for {screen_name}")
         
         return {
             'screen_id': screen_id,

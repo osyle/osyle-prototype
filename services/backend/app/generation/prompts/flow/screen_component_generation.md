@@ -1,180 +1,188 @@
 # SCREEN COMPONENT GENERATION
 
-You are generating a SCREEN COMPONENT in a multi-screen application.
+You are generating a **screen component** for a multi-screen application.
 
-This is NOT a standalone app. This is ONE screen in a larger flow that shares components with other screens.
+---
 
-## Critical Differences from Standalone Generation
+## OUTPUT FORMAT - CRITICAL
 
-### ❌ DO NOT Do This (Standalone Pattern):
+Output ONLY pure TypeScript code. Start immediately with imports. No markdown fences. No JSON wrapper. No explanatory text.
 
-```tsx
-export default function App({ onTransition }) {
-  // Everything inline, no shared components
-  return (
-    <div>
-      {/* Inline button component */}
-      <button>Click me</button>
-    </div>
-  );
+**CORRECT output starts like this:**
+
+```
+import { useState } from 'react'
+import { Mail, Lock } from 'lucide-react'
+
+interface LoginScreenProps {
+  onTransition: (transitionId: string) => void
+}
+
+export default function LoginScreen({ onTransition }: LoginScreenProps) {
+  ...
 }
 ```
 
-### ✅ DO This (Screen Component Pattern):
+**WRONG outputs (DO NOT do this):**
 
-```tsx
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+- `json\n{"files": {...}}`
+- ` ```typescript\n...` ```
+- ` ```tsx\n...` ```
+- Text before/after code
 
-export default function LoginScreen({ onTransition }) {
-  // Uses shared components
-  return (
-    <Card>
-      <Button onClick={() => onTransition("trans_1")}>Sign In</Button>
-    </Card>
-  );
-}
-```
+---
 
-## Available Shared Components
+## Component Naming
 
-The following components are ALREADY AVAILABLE in the project. You MUST use them instead of creating your own:
+Your component name must match the screen name + "Screen" suffix:
 
-**UI Components (from shadcn/ui):**
+- Screen: "Login" → Component: `LoginScreen`
+- Screen: "Dashboard" → Component: `DashboardScreen`
+- Screen: "Recipe Details" → Component: `RecipeDetailsScreen`
 
-- `Button` from '@/components/ui/button'
-- `Card`, `CardHeader`, `CardTitle`, `CardContent` from '@/components/ui/card'
-- `Input` from '@/components/ui/input'
-- `Label` from '@/components/ui/label'
-- `Checkbox` from '@/components/ui/checkbox'
-
-**Icons (from Lucide React):**
-
-- All Lucide icons: `import { Mail, User, Lock } from 'lucide-react'`
-
-**Utilities:**
-
-- `cn` from '@/lib/utils' (for className merging)
-
-## Screen Component Naming
-
-Your screen component MUST be named according to this pattern:
-
-- Screen ID: `screen_1` → Component name: `LoginScreen` (if name is "Login")
-- Screen ID: `screen_2` → Component name: `DashboardScreen` (if name is "Dashboard")
-
-Export as DEFAULT:
-
-```tsx
-export default function LoginScreen({ onTransition }) {
-  // ...
-}
-```
-
-## Props Interface
-
-Every screen receives:
-
-```tsx
-interface ScreenProps {
+```typescript
+// Example:
+interface LoginScreenProps {
   onTransition: (transitionId: string) => void;
 }
+
+export default function LoginScreen({ onTransition }: LoginScreenProps) {
+  return <div>...</div>;
+}
 ```
 
-Use `onTransition` to navigate to other screens via transition IDs.
+---
 
-## Transitions
+## Component Imports
 
-You will be provided with the outgoing transitions from this screen. For example:
+Import React hooks and Lucide icons using standard npm imports:
 
-```
-Outgoing transitions:
-- trans_1: "Sign In" → screen_2 (trigger: submit)
-- trans_2: "Forgot Password" → screen_3 (trigger: link)
-```
+```typescript
+// React hooks
+import { useState, useEffect } from "react";
 
-Implement these as:
-
-```tsx
-<Button onClick={() => onTransition('trans_1')}>
-  Sign In
-</Button>
-
-<a onClick={() => onTransition('trans_2')}>
-  Forgot Password?
-</a>
+// Lucide icons
+import { Mail, Lock, ArrowRight, User } from "lucide-react";
 ```
 
-## File Organization
+**Define UI Components Inline:**
 
-You are generating ONLY this screen component file. Do NOT generate:
+Since each screen is a single file, define reusable UI components INSIDE your main function:
 
-- ❌ Shared UI components (already exist)
-- ❌ Utils (already exist)
-- ❌ Other screens (generated separately)
+```typescript
+export default function LoginScreen({ onTransition }: LoginScreenProps) {
+  // Define Button component
+  const Button = ({
+    children,
+    onClick,
+    variant = "default",
+    className = "",
+  }: {
+    children: React.ReactNode;
+    onClick?: () => void;
+    variant?: "default" | "destructive" | "outline" | "ghost";
+    className?: string;
+  }) => {
+    const baseStyles =
+      "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none disabled:opacity-50 h-9 px-4 py-2";
+    const variants = {
+      default: "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+      destructive:
+        "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+      outline:
+        "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
+      ghost: "hover:bg-accent hover:text-accent-foreground",
+    };
+    return (
+      <button
+        className={`${baseStyles} ${variants[variant]} ${className}`}
+        onClick={onClick}
+      >
+        {children}
+      </button>
+    );
+  };
 
-You CAN generate:
-
-- ✅ Screen-specific helper components (if complex)
-- ✅ Screen-specific constants
-- ✅ Screen-specific hooks
-
-If you need screen-specific helpers, define them in the same file:
-
-```tsx
-import { Button } from "@/components/ui/button";
-
-// Screen-specific helper
-function FormField({ label, children }) {
-  return (
-    <div>
-      <label>{label}</label>
+  // Define Card components
+  const Card = ({
+    children,
+    className = "",
+  }: {
+    children: React.ReactNode;
+    className?: string;
+  }) => (
+    <div
+      className={`rounded-xl border bg-card text-card-foreground shadow ${className}`}
+    >
       {children}
     </div>
   );
-}
 
-// Main screen component
-export default function LoginScreen({ onTransition }) {
-  return (
-    <div>
-      <FormField label="Email">
-        <input />
-      </FormField>
+  const CardHeader = ({
+    children,
+    className = "",
+  }: {
+    children: React.ReactNode;
+    className?: string;
+  }) => (
+    <div className={`flex flex-col space-y-1.5 p-6 ${className}`}>
+      {children}
     </div>
   );
-}
-```
 
-## Output Format
+  const CardTitle = ({
+    children,
+    className = "",
+  }: {
+    children: React.ReactNode;
+    className?: string;
+  }) => (
+    <h3 className={`font-semibold leading-none tracking-tight ${className}`}>
+      {children}
+    </h3>
+  );
 
-Output ONLY the screen component code:
+  const CardContent = ({
+    children,
+    className = "",
+  }: {
+    children: React.ReactNode;
+    className?: string;
+  }) => <div className={`p-6 pt-0 ${className}`}>{children}</div>;
 
-```tsx
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Mail, Lock } from "lucide-react";
+  // Define Input component
+  const Input = ({
+    type = "text",
+    placeholder = "",
+    value = "",
+    onChange,
+    className = "",
+  }: {
+    type?: string;
+    placeholder?: string;
+    value?: string;
+    onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    className?: string;
+  }) => (
+    <input
+      type={type}
+      placeholder={placeholder}
+      value={value}
+      onChange={onChange}
+      className={`flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${className}`}
+    />
+  );
 
-export default function LoginScreen({ onTransition }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  const handleSubmit = () => {
-    if (email && password) {
-      onTransition("trans_1");
-    }
-  };
-
+  // Use in your screen...
   return (
-    <div className="flex items-center justify-center min-h-screen">
-      <Card>
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Welcome Back</CardTitle>
         </CardHeader>
-        <CardContent>
-          {/* Form fields */}
-          <Button onClick={handleSubmit}>Sign In</Button>
+        <CardContent className="space-y-4">
+          <Input type="email" placeholder="you@example.com" />
+          <Button onClick={() => onTransition("trans_1")}>Sign In</Button>
         </CardContent>
       </Card>
     </div>
@@ -182,29 +190,200 @@ export default function LoginScreen({ onTransition }) {
 }
 ```
 
-## Device Dimensions
+**Common Components to Define:**
 
-Unlike standalone screens, you do NOT need to hardcode device dimensions in the root div. The router will handle that.
+- Button (default, destructive, outline, ghost variants)
+- Card, CardHeader, CardTitle, CardContent, CardFooter
+- Input
+- Label
+- Checkbox
+- Select
+- Textarea
+- Badge
+- Separator
+- Skeleton (for loading states)
 
-**❌ DO NOT DO THIS:**
+Define only the components you need for your screen. Follow shadcn/ui design aesthetic.
 
-```tsx
+---
+
+## Responsive Design
+
+Use Tailwind breakpoints to create layouts that adapt:
+
+```typescript
+// Stack on mobile, row on desktop
+<div className="flex flex-col md:flex-row gap-4">
+  <div className="w-full md:w-1/2">Left</div>
+  <div className="w-full md:w-1/2">Right</div>
+</div>
+
+// Responsive grid
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {/* items */}
+</div>
+
+// Responsive text sizes
+<h1 className="text-2xl md:text-4xl lg:text-6xl">Title</h1>
+```
+
+Breakpoints: `sm:` (640px), `md:` (768px), `lg:` (1024px), `xl:` (1280px)
+
+---
+
+## Transitions
+
+You'll receive transition info in the task description:
+
+```
+Outgoing transitions:
+- trans_1: "Sign In" → screen_2
+- trans_2: "Forgot Password" → screen_3
+```
+
+Implement them:
+
+```typescript
+<Button onClick={() => onTransition('trans_1')}>Sign In</Button>
+<a onClick={() => onTransition('trans_2')}>Forgot Password?</a>
+```
+
+---
+
+## Layout Guidelines
+
+✅ **DO:** Use flexible responsive layouts
+
+```typescript
+<div className="min-h-screen">
+  <div className="max-w-4xl mx-auto p-4">
+    {/* content adapts to screen size */}
+  </div>
+</div>
+```
+
+❌ **DON'T:** Hardcode fixed dimensions
+
+```typescript
 <div style={{ width: '375px', height: '812px' }}>
 ```
 
-**✅ DO THIS:**
+---
 
-```tsx
-<div className="min-h-screen"> {/* Or flex items-center justify-center min-h-screen */}
+## Complete Example
+
+```typescript
+import { useState } from "react";
+import { Mail, Lock } from "lucide-react";
+
+interface LoginScreenProps {
+  onTransition: (transitionId: string) => void;
+}
+
+export default function LoginScreen({ onTransition }: LoginScreenProps) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  // Define UI components inline
+  const Button = ({
+    children,
+    onClick,
+    className = "",
+  }: {
+    children: React.ReactNode;
+    onClick?: () => void;
+    className?: string;
+  }) => (
+    <button
+      className={`inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2 ${className}`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+
+  const Card = ({
+    children,
+    className = "",
+  }: {
+    children: React.ReactNode;
+    className?: string;
+  }) => (
+    <div
+      className={`rounded-xl border bg-card text-card-foreground shadow ${className}`}
+    >
+      {children}
+    </div>
+  );
+
+  const CardHeader = ({ children }: { children: React.ReactNode }) => (
+    <div className="flex flex-col space-y-1.5 p-6">{children}</div>
+  );
+
+  const CardTitle = ({ children }: { children: React.ReactNode }) => (
+    <h3 className="font-semibold leading-none tracking-tight text-2xl">
+      {children}
+    </h3>
+  );
+
+  const CardContent = ({
+    children,
+    className = "",
+  }: {
+    children: React.ReactNode;
+    className?: string;
+  }) => <div className={`p-6 pt-0 ${className}`}>{children}</div>;
+
+  const Input = ({
+    type = "text",
+    placeholder = "",
+    value,
+    onChange,
+  }: {
+    type?: string;
+    placeholder?: string;
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  }) => (
+    <input
+      type={type}
+      placeholder={placeholder}
+      value={value}
+      onChange={onChange}
+      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    />
+  );
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Welcome Back</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Email</label>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Password</label>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          <Button className="w-full" onClick={() => onTransition("trans_1")}>
+            Sign In
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 ```
-
-The screen will be rendered inside a container with proper dimensions.
-
-## Remember
-
-- You are ONE screen in a MULTI-SCREEN app
-- ALWAYS use shared components from '@/components/ui/\*'
-- Export as default with proper naming (ScreenName + "Screen")
-- Use onTransition for navigation
-- Don't hardcode device dimensions
-- Focus on screen logic, not infrastructure
