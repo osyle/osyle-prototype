@@ -1,6 +1,6 @@
 import type { FlowGraph } from '../types/home.types'
 import type { ParameterValues } from '../types/parametric.types'
-import SandpackRenderer from './SandpackRenderer'
+import MultiFileReactRenderer from './MultiFileReactRenderer'
 
 interface PrototypeRunnerProps {
   flow: FlowGraph
@@ -8,7 +8,7 @@ interface PrototypeRunnerProps {
     platform: 'web' | 'phone'
     screen: { width: number; height: number }
   }
-  parametricValues?: ParameterValues // NEW: Accept parametric state from Concept tab
+  parametricValues?: ParameterValues
 }
 
 export default function PrototypeRunner({
@@ -16,7 +16,6 @@ export default function PrototypeRunner({
   deviceInfo,
   parametricValues = {},
 }: PrototypeRunnerProps) {
-  // UNIFIED PROJECT ONLY: Run the full app with router
   const projectFiles = flow.project.files
   const projectEntry = flow.project.entry
   const projectDependencies = flow.project.dependencies
@@ -25,7 +24,6 @@ export default function PrototypeRunner({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Prototype Controls Bar */}
       <div className="flex items-center justify-between px-4 py-3 bg-white border-b">
         <div className="text-sm font-medium text-gray-700">
           Multi-Screen App
@@ -35,7 +33,6 @@ export default function PrototypeRunner({
         </div>
       </div>
 
-      {/* Prototype Viewport */}
       <div className="flex-1 flex items-center justify-center bg-gray-100 overflow-auto">
         <div
           className="relative bg-white shadow-xl"
@@ -46,11 +43,10 @@ export default function PrototypeRunner({
             maxHeight: '100%',
           }}
         >
-          <SandpackRenderer
+          <MultiFileReactRenderer
             files={projectFiles}
             entry={projectEntry}
             dependencies={projectDependencies}
-            onError={err => console.error('Sandpack error:', err)}
           />
         </div>
       </div>

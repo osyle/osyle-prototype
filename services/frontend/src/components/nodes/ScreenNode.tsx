@@ -1,10 +1,10 @@
 import { Handle, Position, NodeResizer } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
-import { useRef, useEffect, useMemo } from 'react'
+import { useRef, useEffect } from 'react'
 import { Agentator, useAgentatorGlobal } from '../../lib/Agentator'
 import type { FlowScreen, Project } from '../../types/home.types'
 import DeviceFrame from '../DeviceFrame'
-import SandpackRenderer from '../SandpackRenderer'
+import MultiFileReactRenderer from '../MultiFileReactRenderer'
 import { StyleOverlayApplicator } from '../StyleOverlayApplicator'
 
 export interface ScreenNodeData extends Record<string, unknown> {
@@ -19,19 +19,18 @@ export interface ScreenNodeData extends Record<string, unknown> {
     screen: { width: number; height: number }
   }
   project: Project
-  flowGraph?: import('../../types/home.types').FlowGraph // NEW: Access to full flow graph for unified project
+  flowGraph?: import('../../types/home.types').FlowGraph
 }
 
 function ScreenNode({ data, selected }: NodeProps) {
   const nodeRef = useRef<HTMLDivElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null) // Ref for actual screen content
+  const contentRef = useRef<HTMLDivElement>(null)
   const { getStyleOverrides, loadStyleOverrides, applyReorderMutations } =
     useAgentatorGlobal()
 
   const typedData = data as unknown as ScreenNodeData
   const {
     screen,
-    checkpoint,
     isEntry,
     isIterating,
     isGenerating,
@@ -40,15 +39,12 @@ function ScreenNode({ data, selected }: NodeProps) {
     flowGraph,
   } = typedData
 
-  // Load style overrides from database when component mounts
   useEffect(() => {
     if (project?.project_id && screen.screen_id) {
       loadStyleOverrides(project.project_id, screen.screen_id)
     }
   }, [project?.project_id, screen.screen_id, loadStyleOverrides])
 
-  // SAFETY: During generation, flowGraph.project might not exist yet
-  // Show loading state until project is ready
   if (!flowGraph?.project) {
     return (
       <div
@@ -74,11 +70,9 @@ function ScreenNode({ data, selected }: NodeProps) {
     )
   }
 
-  // UNIFIED PROJECT ONLY: Extract this screen from the shared project
   const projectFiles = flowGraph.project.files
   const screenComponent = screen.component_path
 
-  // Create a wrapper App.tsx that renders just this screen for preview
   const screenComponentName =
     screenComponent?.split('/').pop()?.replace('.tsx', '') || 'Screen'
 
@@ -86,18 +80,15 @@ function ScreenNode({ data, selected }: NodeProps) {
     '/App.tsx': `import ${screenComponentName} from '${screenComponent?.replace('.tsx', '') || '/screens/Screen'}'
 
 export default function App() {
-  // Mock onTransition for preview
   const handleTransition = (transitionId: string) => {
     console.log('Preview transition:', transitionId)
   }
   
   return <${screenComponentName} onTransition={handleTransition} />
 }`,
-    // Include the screen component
     ...(screenComponent
       ? { [screenComponent]: projectFiles[screenComponent] || '' }
       : {}),
-    // Include ALL shared files (components, utils, etc.)
     ...Object.fromEntries(
       Object.entries(projectFiles).filter(
         ([path]) =>
@@ -113,16 +104,13 @@ export default function App() {
   const dependencies = flowGraph.project.dependencies || {}
 
   console.log(
-    `ScreenNode ${screen.screen_id}: Unified project, extracted ${Object.keys(files).length} files`,
+    `ScreenNode ${screen.screen_id}: Extracted ${Object.keys(files).length} files`,
   )
 
-  // Get style overrides for this screen
   const styleOverrides = getStyleOverrides(screen.screen_id)
 
-  // Apply reorder mutations after DOM is rendered
   useEffect(() => {
-    if (uiCode && contentRef.current) {
-      // Small delay to ensure React has finished rendering
+    if (files && contentRef.current) {
       const timer = setTimeout(() => {
         if (contentRef.current) {
           applyReorderMutations(screen.screen_id, contentRef.current)
@@ -130,9 +118,8 @@ export default function App() {
       }, 100)
       return () => clearTimeout(timer)
     }
-  }, [uiCode, screen.screen_id, applyReorderMutations])
+  }, [files, screen.screen_id, applyReorderMutations])
 
-  // Calculate device display dimensions (including bezel/chrome)
   const displayWidth =
     deviceInfo.platform === 'phone'
       ? deviceInfo.screen.width + 24
@@ -152,7 +139,6 @@ export default function App() {
         height: displayHeight,
       }}
     >
-      {/* Invisible handles for edge connections */}
       <Handle
         type="source"
         position={Position.Right}
@@ -174,7 +160,6 @@ export default function App() {
         style={{ opacity: 0, pointerEvents: 'none' }}
       />
 
-      {/* Node resizer - only show when selected */}
       {selected && (
         <NodeResizer
           minWidth={320 + (deviceInfo.platform === 'phone' ? 24 : 0)}
@@ -193,7 +178,6 @@ export default function App() {
         />
       )}
 
-      {/* Selection highlight */}
       {selected && (
         <div
           style={{
@@ -209,7 +193,6 @@ export default function App() {
         />
       )}
 
-      {/* START badge for entry screen */}
       {isEntry && (
         <div
           style={{
@@ -233,7 +216,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Screen name label */}
       <div
         style={{
           position: 'absolute',
@@ -249,75 +231,61 @@ export default function App() {
         {screen.name}
       </div>
 
-      {/* Device frame with screen content */}
       <DeviceFrame>
         <div ref={contentRef} style={{ width: '100%', height: '100%' }}>
           <Agentator screenId={screen.screen_id} screenName={screen.name}>
-            {uiCode ? (
-              <>
-                <StyleOverlayApplicator
-                  overrides={styleOverrides}
-                  containerRef={contentRef}
+            <>
+              <StyleOverlayApplicator
+                overrides={styleOverrides}
+                containerRef={contentRef}
+              >
+                <MultiFileReactRenderer
+                  files={files}
+                  entry={entry}
+                  dependencies={dependencies}
+                />
+              </StyleOverlayApplicator>
+
+              {isIterating && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '8px',
+                    left: '8px',
+                    background: 'rgba(249, 115, 22, 0.9)',
+                    color: 'white',
+                    padding: '4px 12px',
+                    borderRadius: '12px',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    zIndex: 100,
+                    pointerEvents: 'none',
+                  }}
                 >
-                  <SandpackRenderer
-                    files={files}
-                    entry={entry}
-                    dependencies={dependencies}
-                    propsToInject={{
-                      onNavigate: () => {},
-                      formData: {},
-                    }}
-                    onError={err => console.error('Sandpack error:', err)}
-                  />
-                </StyleOverlayApplicator>
+                  🔄 Iterating...
+                </div>
+              )}
 
-                {/* Iteration indicator */}
-                {isIterating && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '8px',
-                      left: '8px',
-                      background: 'rgba(249, 115, 22, 0.9)',
-                      color: 'white',
-                      padding: '4px 12px',
-                      borderRadius: '12px',
-                      fontSize: '11px',
-                      fontWeight: '600',
-                      zIndex: 100,
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    🔄 Iterating...
-                  </div>
-                )}
-
-                {/* Generation indicator */}
-                {isGenerating && !isIterating && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '8px',
-                      left: '8px',
-                      background: 'rgba(59, 130, 246, 0.9)',
-                      color: 'white',
-                      padding: '4px 12px',
-                      borderRadius: '12px',
-                      fontSize: '11px',
-                      fontWeight: '600',
-                      zIndex: 100,
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    ⏳ Generating...
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-gray-400">Loading...</div>
-              </div>
-            )}
+              {isGenerating && !isIterating && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '8px',
+                    left: '8px',
+                    background: 'rgba(59, 130, 246, 0.9)',
+                    color: 'white',
+                    padding: '4px 12px',
+                    borderRadius: '12px',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    zIndex: 100,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  ⏳ Generating...
+                </div>
+              )}
+            </>
           </Agentator>
         </div>
       </DeviceFrame>
