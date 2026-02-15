@@ -204,8 +204,9 @@ export default function VersionHistory({
       {/* Info text */}
       <p className="text-xs mt-3" style={{ color: '#929397' }}>
         Click <Eye size={12} className="inline" /> to preview versions.
-        Reverting creates a new version as a copy. Deleting removes the version
-        permanently.
+        Reverting creates a new version as a copy.
+        <br />
+        Deleting removes the version permanently.
       </p>
     </div>
   )
