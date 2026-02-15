@@ -63,12 +63,19 @@ function ScreenNode({ data, selected }: NodeProps) {
 
   // Compute files using useMemo to avoid recreating on every render
   const files = useMemo(() => {
+    // Don't render if project doesn't exist
     if (!flowGraph?.project) return null
+
+    // Don't render if screen is still loading
+    if (screen.ui_loading) return null
 
     const projectFiles = flowGraph.project.files
     const screenComponent = screen.component_path
     const screenComponentName =
       screenComponent?.split('/').pop()?.replace('.tsx', '') || 'Screen'
+
+    // Don't render if the screen component file doesn't exist yet
+    if (screenComponent && !projectFiles[screenComponent]) return null
 
     return {
       '/App.tsx': `import ${screenComponentName} from '${screenComponent?.replace('.tsx', '') || '/screens/Screen'}'
@@ -93,7 +100,7 @@ export default function App() {
         ),
       ),
     }
-  }, [flowGraph, screen.component_path])
+  }, [flowGraph, screen.component_path, screen.ui_loading])
 
   const styleOverrides = getStyleOverrides(screen.screen_id)
 
@@ -116,8 +123,8 @@ export default function App() {
     }
   }, [files, screen.screen_id, applyReorderMutations])
 
-  // Early return if project not loaded
-  if (!flowGraph?.project) {
+  // Early return if project not loaded or screen is loading
+  if (!flowGraph?.project || screen.ui_loading) {
     return (
       <div
         ref={nodeRef}
@@ -127,16 +134,173 @@ export default function App() {
           height:
             actualScreenSize.height +
             (deviceInfo.platform === 'phone' ? 48 : 40),
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#1a1a1a',
-          borderRadius: '16px',
+          position: 'relative',
         }}
       >
-        <div style={{ color: '#888', fontSize: '14px' }}>
-          {isGenerating ? 'Generating...' : 'Loading...'}
-        </div>
+        <DeviceFrame screenSize={actualScreenSize}>
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              background:
+                'linear-gradient(to bottom, #0a0a0a 0%, #000000 100%)',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Animated background gradient */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '-50%',
+                left: '-50%',
+                width: '200%',
+                height: '200%',
+                background:
+                  'radial-gradient(circle at center, rgba(99, 102, 241, 0.1) 0%, transparent 70%)',
+                animation: 'pulse 3s ease-in-out infinite',
+              }}
+            />
+
+            {/* Content skeleton */}
+            <div
+              style={{
+                padding: '24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+                position: 'relative',
+                zIndex: 1,
+              }}
+            >
+              {/* Header skeleton */}
+              <div
+                style={{
+                  height: '32px',
+                  background:
+                    'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
+                  borderRadius: '8px',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 2s infinite',
+                  width: '60%',
+                }}
+              />
+
+              {/* Card skeletons */}
+              {[1, 2, 3].map(i => (
+                <div
+                  key={i}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    animationDelay: `${i * 0.2}s`,
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '20px',
+                      background:
+                        'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
+                      borderRadius: '6px',
+                      backgroundSize: '200% 100%',
+                      animation: 'shimmer 2s infinite',
+                      marginBottom: '12px',
+                      width: '80%',
+                      animationDelay: `${i * 0.15}s`,
+                    }}
+                  />
+                  <div
+                    style={{
+                      height: '16px',
+                      background:
+                        'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
+                      borderRadius: '6px',
+                      backgroundSize: '200% 100%',
+                      animation: 'shimmer 2s infinite',
+                      width: '95%',
+                      animationDelay: `${i * 0.15 + 0.1}s`,
+                    }}
+                  />
+                </div>
+              ))}
+
+              {/* Loading indicator */}
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '24px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  background: 'rgba(99, 102, 241, 0.1)',
+                  border: '1px solid rgba(99, 102, 241, 0.2)',
+                  borderRadius: '20px',
+                }}
+              >
+                {/* Spinning dots */}
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {[0, 1, 2].map(i => (
+                    <div
+                      key={i}
+                      style={{
+                        width: '6px',
+                        height: '6px',
+                        borderRadius: '50%',
+                        background: 'rgba(99, 102, 241, 0.8)',
+                        animation: 'bounce 1.4s infinite ease-in-out both',
+                        animationDelay: `${i * 0.16}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+                <span
+                  style={{
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                  }}
+                >
+                  {isGenerating || screen.ui_loading
+                    ? 'Generating...'
+                    : 'Loading...'}
+                </span>
+              </div>
+            </div>
+
+            {/* Keyframe animations */}
+            <style>
+              {`
+                @keyframes shimmer {
+                  0% { background-position: -200% 0; }
+                  100% { background-position: 200% 0; }
+                }
+                @keyframes pulse {
+                  0%, 100% { 
+                    opacity: 0.3;
+                    transform: translate(-50%, -50%) scale(1);
+                  }
+                  50% { 
+                    opacity: 0.5;
+                    transform: translate(-50%, -50%) scale(1.1);
+                  }
+                }
+                @keyframes bounce {
+                  0%, 80%, 100% {
+                    transform: scale(0);
+                  }
+                  40% {
+                    transform: scale(1);
+                  }
+                }
+              `}
+            </style>
+          </div>
+        </DeviceFrame>
       </div>
     )
   }
