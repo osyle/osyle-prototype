@@ -765,7 +765,12 @@ export default function Home() {
       setIsRebuildingDtm(true)
       setDtmTrainingError(null)
 
-      // Open DTM training modal
+      // Count resources in selected taste
+      const selectedTaste = tastes.find(t => t.taste_id === selectedTasteId)
+      const resourceCount = selectedTaste?.resources.length || 0
+
+      // Open DTM training modal with resource count
+      setDtmResourceCount(resourceCount)
       setDtmTrainingState('training')
       setIsDtmTrainingModalOpen(true)
 
@@ -2154,7 +2159,8 @@ export default function Home() {
 
   const tabs = [
     { id: 'left' as const, icon: <Sprout size={18} /> },
-    { id: 'middle' as const, icon: <Layers size={18} /> },
+    // Temporarily block styles tab on Home screen
+    // { id: 'middle' as const, icon: <Layers size={18} /> },
     { id: 'right' as const, icon: <Eye size={18} /> },
   ]
 

@@ -116,6 +116,7 @@ export function StyleOverlayApplicator({
   // Apply overrides whenever they change or DOM updates
   useEffect(() => {
     if (!containerRef.current) {
+      console.log('⚠️ No containerRef.current')
       return
     }
 
@@ -139,8 +140,11 @@ export function StyleOverlayApplicator({
       )
 
       if (element) {
+        console.log('✅ Found element, applying styles:', override.styles)
         applyOverride(element, override.styles)
         newAppliedElements.add(element)
+      } else {
+        console.log('❌ Element not found!')
       }
     })
 

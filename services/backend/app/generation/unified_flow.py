@@ -1,19 +1,17 @@
 """
-Unified Flow Generator
+Unified Flow Generator - FIXED VERSION
 
 Generates multi-screen flows as a SINGLE PROJECT with:
-- Shared components (/components/ui/*)
+- Shared components (/components/ui/*)  ← FIXED: Now actually generated
 - Shared utilities (/lib/*)
 - Screen components (/screens/*)
 - Router (App.tsx)
-
-This replaces the old architecture where each screen was a separate project.
 """
 from typing import Dict, Any, List
 import asyncio
+import re
 
 from app.generation.multifile_parser import (
-    add_shadcn_components_to_files,
     ensure_default_dependencies,
     normalize_file_paths
 )
@@ -21,22 +19,28 @@ from app.generation.multifile_parser import (
 
 def generate_shared_components() -> Dict[str, str]:
     """
-    Generate shared component files used by all screens
+    Generate complete shadcn/ui component library (50+ components)
+    
+    Matches what v0/Bolt/Lovable provide - LLM has access to full library.
     
     Returns:
-        Dict of filepath -> code for shared components
+        Dict of filepath -> code for complete shadcn/ui library (50+ components)
     """
     
-    files = {}
+    # Import complete library
+    from app.generation.shadcn_full_library import get_all_shadcn_components
+    files = get_all_shadcn_components()
     
-    # Add shadcn/ui components
-    files = add_shadcn_components_to_files(
-        files,
-        components=['button', 'card', 'input', 'label', 'checkbox']
-    )
-    
-    # Add additional shared components if needed
-    # files['/components/shared/Header.tsx'] = ...
+    print(f"   ✓ Generated complete shadcn/ui library: {len(files)} files")
+    print(f"      Core: Button, Input, Label, Textarea, Checkbox, Radio, Select, Switch, Slider")
+    print(f"      Data: Card, Table, Avatar, Badge")
+    print(f"      Feedback: Alert, Progress, Skeleton, Toast")
+    print(f"      Layout: Separator, AspectRatio, ScrollArea")
+    print(f"      Navigation: Tabs, Breadcrumb, Pagination")
+    print(f"      Overlays: Dialog, Sheet, Popover, Tooltip")
+    print(f"      Interactive: Accordion, Collapsible, Dropdown, Context, Menubar, Command")
+    print(f"      Advanced: HoverCard, Toggle, Calendar, Carousel")
+    print(f"      Total: {len(files)} components available")
     
     return files
 
@@ -63,9 +67,10 @@ def generate_router_code(
     
     for screen in screens:
         screen_id = screen['screen_id']
-        # Convert "Login" to "LoginScreen", and handle hyphens/special chars
+        # Convert "Login" to "LoginScreen", and handle special chars
         # "Step-by-Step Cooking" -> "StepByStepCookingScreen"
-        component_name = screen['name'].replace(' ', '').replace('-', '') + 'Screen'
+        # "Cart & Checkout" -> "CartCheckoutScreen"
+        component_name = re.sub(r'[^a-zA-Z0-9]', '', screen['name']) + 'Screen'
         imports.append(f"import {component_name} from './screens/{component_name}'")
     
     # Build transition map
@@ -82,7 +87,7 @@ def generate_router_code(
     for screen in screens:
         screen_id = screen['screen_id']
         # Same component name sanitization
-        component_name = screen['name'].replace(' ', '').replace('-', '') + 'Screen'
+        component_name = re.sub(r'[^a-zA-Z0-9]', '', screen['name']) + 'Screen'
         # Use explicit string concatenation to avoid f-string brace escaping issues
         case_code = f"    case '{screen_id}':\n"
         case_code += f"      return <{component_name} onTransition=" + "{handleTransition} />"
@@ -90,7 +95,7 @@ def generate_router_code(
     
     # Default case (entry screen)
     entry_screen = next(s for s in screens if s['screen_id'] == entry_screen_id)
-    entry_component_name = entry_screen['name'].replace(' ', '').replace('-', '') + 'Screen'
+    entry_component_name = re.sub(r'[^a-zA-Z0-9]', '', entry_screen['name']) + 'Screen'
     
     default_code = "    default:\n"
     default_code += f"      return <{entry_component_name} onTransition=" + "{handleTransition} />"
@@ -149,7 +154,7 @@ def assemble_unified_project(
     
     all_files = {}
     
-    # Add shared files
+    # Add shared files (shadcn/ui components, utils)
     all_files.update(shared_files)
     
     # Add screen files
@@ -182,7 +187,8 @@ async def generate_unified_flow(
     dtm: Dict[str, Any],
     device_info: Dict[str, Any],
     taste_source: str,
-    websocket=None
+    websocket=None,
+    responsive: bool = True
 ) -> Dict[str, Any]:
     """
     Generate a unified multi-screen flow as a single project
@@ -204,6 +210,7 @@ async def generate_unified_flow(
         device_info: Device dimensions
         taste_source: Taste source mode
         websocket: Optional websocket for progress updates
+        responsive: Enable responsive design (default: True)
     
     Returns:
         {
@@ -225,7 +232,7 @@ async def generate_unified_flow(
     from app.generation.orchestrator import GenerationOrchestrator
     
     print("\n" + "="*80)
-    print("UNIFIED FLOW GENERATION")
+    print("UNIFIED FLOW GENERATION - FIXED VERSION")
     print("="*80)
     print(f"Screens: {len(screens)}")
     print(f"Entry: {entry_screen_id}")
@@ -245,9 +252,10 @@ async def generate_unified_flow(
         """Generate a single screen component"""
         screen_id = screen['screen_id']
         screen_name = screen['name']
-        # Remove hyphens and spaces to create valid JavaScript identifier
+        # Remove all special chars to create valid JavaScript identifier
         # "Step-by-Step Cooking" -> "StepByStepCookingScreen"
-        component_name = screen_name.replace(' ', '').replace('-', '') + 'Screen'
+        # "Cart & Checkout" -> "CartCheckoutScreen"
+        component_name = re.sub(r'[^a-zA-Z0-9]', '', screen_name) + 'Screen'
         component_path = f'/screens/{component_name}.tsx'
         
         print(f"\n  [{idx+1}/{len(screens)}] {screen_name} → {component_path}")
@@ -273,6 +281,22 @@ async def generate_unified_flow(
             for trans in outgoing_transitions:
                 task_with_transitions += f"- {trans['transition_id']}: {trans.get('label', trans['trigger'])} → {trans['to_screen_id']}\n"
         
+        # CRITICAL: Add available components info to task
+        task_with_transitions += "\n\n=== COMPONENT IMPORTS - CRITICAL ===\n"
+        task_with_transitions += "ONLY import from:\n"
+        task_with_transitions += "1. @/components/ui/* (shadcn/ui components)\n"
+        task_with_transitions += "2. lucide-react (icons)\n"
+        task_with_transitions += "3. react (hooks)\n\n"
+        task_with_transitions += "Available shadcn/ui components:\n"
+        task_with_transitions += "- Button, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter\n"
+        task_with_transitions += "- Input, Label, Checkbox, Badge, Separator, Dialog, Sheet, Tabs\n"
+        task_with_transitions += "- And 40+ more (see prompt for full list)\n\n"
+        task_with_transitions += "NEVER:\n"
+        task_with_transitions += "- Import from relative paths: ./components/*, ../components/*\n"
+        task_with_transitions += "- Import from URLs: https://..., esm.sh, CDN links\n"
+        task_with_transitions += "- Create separate helper component files\n"
+        task_with_transitions += "- If you need custom components, define them INLINE in the same file\n"
+        
         # Generate screen component
         # Note: We use the SCREEN_COMPONENT mode, not the standalone mode
         result = await orchestrator.generate_ui(
@@ -281,7 +305,7 @@ async def generate_unified_flow(
             taste_source=taste_source,
             device_info=device_info,
             flow_context={
-                'mode': 'screen_component',  # NEW: Tells orchestrator to use screen component prompt
+                'mode': 'screen_component',  # Tells orchestrator to use screen component prompt
                 'screen_id': screen_id,
                 'screen_name': screen_name,
                 'component_name': component_name,
@@ -290,9 +314,10 @@ async def generate_unified_flow(
             rendering_mode='react',
             model='claude-sonnet-4.5',
             validate_taste=bool(dtm),
-            websocket=None,  # Don't send individual screen updates
+            websocket=None,  # Don't send checkpoint updates (causes too many messages)
             screen_id=screen_id,
-            screen_name=screen_name
+            screen_name=screen_name,
+            responsive=responsive  # Pass responsive flag
         )
         
         # Extract the screen component code
@@ -305,7 +330,66 @@ async def generate_unified_flow(
             # Single file - use the code directly
             screen_file = result['code']
         
+        # VALIDATION: Ensure screen code is valid TypeScript, not JSON
+        if screen_file.strip().startswith('json\n{') or screen_file.strip().startswith('```json'):
+            print(f"   ✗ ERROR: Screen {screen_name} contains JSON instead of TypeScript!")
+            print(f"   First 200 chars: {screen_file[:200]}")
+            # Try to extract code from malformed JSON
+            try:
+                # Remove json\n or ```json\n prefix
+                json_str = screen_file.replace('json\n', '', 1).replace('```json\n', '', 1).strip('`')
+                import json
+                data = json.loads(json_str)
+                if "files" in data and "/App.tsx" in data["files"]:
+                    screen_file = data["files"]["/App.tsx"]
+                    print(f"   ✓ Recovered code from JSON wrapper ({len(screen_file)} chars)")
+            except Exception as e:
+                print(f"   ✗ Could not recover: {e}")
+        
+        # VALIDATION: Check if code looks like TypeScript
+        if not ('export default function' in screen_file or 'export function' in screen_file):
+            print(f"   ⚠️  WARNING: Screen {screen_name} doesn't have export statement")
+            print(f"   First 300 chars: {screen_file[:300]}")
+        
+        # VALIDATION: Check for inline component definitions (should not exist)
+        if 'const Button = ' in screen_file or 'const Card = ' in screen_file:
+            print(f"   ⚠️  WARNING: Screen {screen_name} defines components inline!")
+            print(f"   This causes code duplication. Components should be imported.")
+        
+        # VALIDATION: Check for relative imports (should not exist)
+        relative_imports = re.findall(r"from ['\"]\.+/", screen_file)
+        if relative_imports:
+            print(f"   ⚠️  WARNING: Screen {screen_name} has RELATIVE IMPORTS!")
+            print(f"   Found: {relative_imports}")
+            print(f"   This will cause 'Module not found' errors.")
+            print(f"   ONLY import from @/components/ui/*, lucide-react, or react")
+        
+        # VALIDATION: Check for URL imports (should not exist)
+        url_imports = re.findall(r"from ['\"]https?://", screen_file)
+        if url_imports:
+            print(f"   ⚠️  WARNING: Screen {screen_name} has URL IMPORTS!")
+            print(f"   Found: {url_imports}")
+            print(f"   This will cause 'Module not found' errors.")
+            print(f"   Use package names: lucide-react, react, @/components/ui/*")
+        
+        # VALIDATION: Check for proper imports
+        if '@/components/ui' not in screen_file:
+            print(f"   ⚠️  WARNING: Screen {screen_name} doesn't import from @/components/ui")
+            print(f"   Expected: import {{ Button }} from '@/components/ui/button'")
+
         print(f"   ✓ {screen_name} generated ({len(screen_file)} chars)")
+        
+        # Send screen_ready message to frontend for progressive rendering
+        if websocket:
+            await websocket.send_json({
+                'type': 'screen_ready',
+                'data': {
+                    'screen_id': screen_id,
+                    'ui_code': screen_file,
+                    'variation_space': result.get('variation_space')
+                }
+            })
+            print(f"   ✓ Sent screen_ready message for {screen_name}")
         
         return {
             'screen_id': screen_id,
@@ -365,6 +449,9 @@ async def generate_unified_flow(
     
     print(f"   ✓ Project assembled:")
     print(f"      Total files: {len(project['files'])}")
+    print(f"      - Shared components: {len(shared_files)}")
+    print(f"      - Screen files: {len(screen_files)}")
+    print(f"      - Router: 1")
     print(f"      Dependencies: {len(project['dependencies'])}")
     print(f"      Entry: {project['entry']}")
     

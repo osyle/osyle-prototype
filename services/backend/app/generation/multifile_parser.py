@@ -1,67 +1,92 @@
 """
-Multi-File Output Parser
+Multi-file Parser for LLM Output
 
-Handles conversion between LLM output formats:
-1. Legacy: Single JSX string
-2. New: Multi-file JSON structure
+Parses LLM responses that can be either:
+1. Single-file format (legacy): Just the React code
+2. Multi-file format (new): JSON with files dict
 
-Ensures backward compatibility while enabling new capabilities.
+Also provides utilities for adding shadcn/ui components to projects.
 """
+
 import json
 import re
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, List
 
 
 def parse_llm_output(llm_response: str) -> Dict[str, Any]:
     """
-    Parse LLM output into multi-file structure
+    Parse LLM output that could be single-file or multi-file format
     
     Supports two formats:
     
-    Format 1 (Legacy): Single JSX code
+    Format 1 (Legacy): Single JSX/TSX code
     ```
     export default function App() { ... }
     ```
-    Returns: {
-        "files": {"/App.tsx": "..."},
-        "entry": "/App.tsx",
-        "dependencies": {}
-    }
     
-    Format 2 (New): JSON with file structure
+    Format 2 (Multi-file): JSON structure
     ```
     {
       "files": {
         "/App.tsx": "...",
-        "/components/Button.tsx": "..."
+        "/components/ProductCard.tsx": "..."
       },
       "entry": "/App.tsx",
-      "dependencies": {"lucide-react": "^0.263.1"}
+      "dependencies": {...}
     }
     ```
-    Returns: The parsed JSON structure
-    
-    Args:
-        llm_response: Raw LLM output (may include markdown, JSON, or plain code)
     
     Returns:
         {
-            "files": Dict[str, str],  # filepath -> code
-            "entry": str,              # entry point filepath
-            "dependencies": Dict[str, str],  # package -> version
-            "format": str              # "legacy" or "multifile"
+            "files": {"/App.tsx": "code"},
+            "entry": "/App.tsx",
+            "dependencies": {},
+            "format": "legacy" | "multifile"
         }
     """
     
     # Clean response
     cleaned = llm_response.strip()
     
+    # CRITICAL: Check if LLM incorrectly wrapped code in JSON
+    # Pattern: json\n{"files": {"/App.tsx": "actual code"}}
+    # This is WRONG - we want just the code, not a JSON wrapper
+    if cleaned.startswith('json\n{') or cleaned.startswith('```json\n{'):
+        print("  ⚠️  LLM output JSON wrapper (extracting code)...")
+        try:
+            # Remove 'json\n' prefix or ```json\n prefix
+            json_str = cleaned.replace('json\n', '', 1).replace('```json\n', '', 1)
+            # Remove trailing ```
+            json_str = json_str.rstrip('`').strip()
+            
+            data = json.loads(json_str)
+            
+            # If it has "files" with a single "/App.tsx" entry, extract that code
+            if isinstance(data, dict) and "files" in data:
+                files = data["files"]
+                if isinstance(files, dict) and len(files) == 1:
+                    # Get the single file's code
+                    code = list(files.values())[0]
+                    print(f"  ✓ Extracted code from JSON wrapper ({len(code)} chars)")
+                    return {
+                        "files": {"/App.tsx": code},
+                        "entry": "/App.tsx",
+                        "dependencies": data.get("dependencies", {}),
+                        "format": "legacy"
+                    }
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            print(f"  ✗ Failed to parse JSON wrapper: {e}")
+            # Fall through to normal parsing
+    
     # Try to detect and parse JSON format first
     json_result = _try_parse_json(cleaned)
     if json_result:
         return json_result
     
-    # Fallback: treat as legacy single-file format
+    # Fall back to single-file format
+    print("  📄 Detected single-file format")
+    
+    # Clean code fences
     code = _clean_code_fences(cleaned)
     
     return {
@@ -72,141 +97,109 @@ def parse_llm_output(llm_response: str) -> Dict[str, Any]:
     }
 
 
-def _try_parse_json(response: str) -> Optional[Dict[str, Any]]:
+def _try_parse_json(response: str) -> Dict[str, Any] | None:
     """
-    Try to parse response as JSON multi-file structure
+    Try to parse response as JSON multi-file format
     
-    Looks for JSON objects that match the multi-file schema:
-    {
-      "files": {...},
-      "entry": "...",
-      "dependencies": {...}
-    }
+    Returns None if not valid JSON format
     """
     
-    # Look for JSON code blocks first
-    json_block_pattern = r'```json\s*\n(.*?)\n```'
-    matches = re.findall(json_block_pattern, response, re.DOTALL)
+    # Look for JSON pattern
+    # It might be wrapped in code fences or not
+    json_match = re.search(r'```json\s*\n(.*?)\n```', response, re.DOTALL)
+    if json_match:
+        json_str = json_match.group(1)
+    else:
+        # Try parsing entire response as JSON
+        json_str = response.strip()
     
-    if matches:
-        # Try to parse the first JSON block
-        try:
-            data = json.loads(matches[0])
-            if _validate_multifile_structure(data):
-                return {
-                    **data,
-                    "format": "multifile"
-                }
-        except json.JSONDecodeError:
-            pass
-    
-    # Try to parse entire response as JSON
     try:
-        data = json.loads(response)
-        if _validate_multifile_structure(data):
-            return {
-                **data,
-                "format": "multifile"
-            }
+        data = json.loads(json_str)
+        
+        # Validate structure
+        if not isinstance(data, dict):
+            return None
+        
+        if "files" not in data:
+            return None
+        
+        if not isinstance(data["files"], dict):
+            return None
+        
+        # Valid multi-file format!
+        print("  📁 Detected multi-file format")
+        
+        return {
+            "files": data["files"],
+            "entry": data.get("entry", "/App.tsx"),
+            "dependencies": data.get("dependencies", {}),
+            "format": "multifile"
+        }
+        
     except json.JSONDecodeError:
-        pass
-    
-    # Look for JSON-like structure without code blocks
-    # Pattern: starts with { and ends with }
-    if response.strip().startswith('{') and response.strip().endswith('}'):
-        try:
-            data = json.loads(response)
-            if _validate_multifile_structure(data):
-                return {
-                    **data,
-                    "format": "multifile"
-                }
-        except json.JSONDecodeError:
-            pass
-    
-    return None
-
-
-def _validate_multifile_structure(data: Any) -> bool:
-    """
-    Validate that data matches multi-file schema
-    
-    Required:
-    - "files" key with dict value
-    
-    Optional:
-    - "entry" key with string value
-    - "dependencies" key with dict value
-    """
-    
-    if not isinstance(data, dict):
-        return False
-    
-    # Must have "files" key
-    if "files" not in data:
-        return False
-    
-    # "files" must be a dict
-    if not isinstance(data["files"], dict):
-        return False
-    
-    # "files" must not be empty
-    if len(data["files"]) == 0:
-        return False
-    
-    # If "entry" exists, must be string
-    if "entry" in data and not isinstance(data["entry"], str):
-        return False
-    
-    # If "dependencies" exists, must be dict
-    if "dependencies" in data and not isinstance(data["dependencies"], dict):
-        return False
-    
-    return True
+        return None
 
 
 def _clean_code_fences(code: str) -> str:
-    """
-    Remove markdown code fences from code
+    """Remove markdown code fences from code"""
     
-    Handles:
-    - ```jsx ... ```
-    - ```typescript ... ```
-    - ```tsx ... ```
-    - ``` ... ```
-    """
+    # Remove opening fence (with optional language)
+    code = re.sub(r'^```(?:typescript|tsx|jsx|javascript|js|react)?\s*\n', '', code, flags=re.MULTILINE)
     
-    # Remove fences
-    code = re.sub(r'```(?:typescript|tsx|jsx|javascript|js|react)?\n', '', code)
+    # Remove closing fence
     code = re.sub(r'\n```\s*$', '', code)
-    code = re.sub(r'^```\s*', '', code)
-    
-    # Remove standalone language identifiers
-    code = re.sub(r'^(typescript|javascript|jsx|tsx|ts|js|react)\s*$', '', code, flags=re.MULTILINE)
     
     return code.strip()
 
 
+def ensure_default_dependencies(
+    dependencies: Dict[str, str]
+) -> Dict[str, str]:
+    """
+    Ensure default dependencies are included
+    
+    For Sandpack bundling, we need to specify npm package versions.
+    
+    Args:
+        dependencies: Existing dependencies dict
+    
+    Returns:
+        Updated dependencies dict with defaults
+    """
+    
+    defaults = {
+        'lucide-react': '^0.263.1',
+        'clsx': '^2.0.0',
+        'tailwind-merge': '^2.0.0',
+        'class-variance-authority': '^0.7.0'
+    }
+    
+    # Merge with existing, preferring existing versions
+    result = {**defaults, **dependencies}
+    
+    return result
+
+
 def add_shadcn_components_to_files(
     files: Dict[str, str],
-    components: list[str] = None
+    components: List[str] = None
 ) -> Dict[str, str]:
     """
     Add shadcn/ui component files to the files dict
     
-    This ensures that when LLM generates code using shadcn/ui components,
+    This ensures that when screens import from '@/components/ui/button',
     the actual component files are included in the output.
     
     Args:
         files: Existing files dict
-        components: List of component names to add (default: ['button', 'card'])
+        components: List of component names to add (default: ['button', 'card', 'input'])
     
     Returns:
         Updated files dict with component files added
     """
     
     if components is None:
-        components = ['button', 'card']
+        components = ['button', 'card', 'input', 'label']
     
     updated_files = files.copy()
     
@@ -223,7 +216,6 @@ export function cn(...inputs: ClassValue[]) {
     # Add button component
     if 'button' in components and '/components/ui/button.tsx' not in updated_files:
         updated_files['/components/ui/button.tsx'] = '''import * as React from "react"
-import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
@@ -260,10 +252,9 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button"
+  ({ className, variant, size, ...props }, ref) => {
     return (
-      <Comp
+      <button
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         {...props}
@@ -355,35 +346,173 @@ CardFooter.displayName = "CardFooter"
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
 '''
     
+    # Add input component
+    if 'input' in components and '/components/ui/input.tsx' not in updated_files:
+        updated_files['/components/ui/input.tsx'] = '''import * as React from "react"
+import { cn } from "@/lib/utils"
+
+export interface InputProps
+  extends React.InputHTMLAttributes<HTMLInputElement> {}
+
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, ...props }, ref) => {
+    return (
+      <input
+        type={type}
+        className={cn(
+          "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+          className
+        )}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
+)
+Input.displayName = "Input"
+
+export { Input }
+'''
+    
+    # Add label component
+    if 'label' in components and '/components/ui/label.tsx' not in updated_files:
+        updated_files['/components/ui/label.tsx'] = '''import * as React from "react"
+import { cn } from "@/lib/utils"
+
+export interface LabelProps
+  extends React.LabelHTMLAttributes<HTMLLabelElement> {}
+
+const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
+  ({ className, ...props }, ref) => (
+    <label
+      ref={ref}
+      className={cn(
+        "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
+        className
+      )}
+      {...props}
+    />
+  )
+)
+Label.displayName = "Label"
+
+export { Label }
+'''
+    
+    # Add checkbox component
+    if 'checkbox' in components and '/components/ui/checkbox.tsx' not in updated_files:
+        updated_files['/components/ui/checkbox.tsx'] = '''import * as React from "react"
+import { cn } from "@/lib/utils"
+import { Check } from "lucide-react"
+
+export interface CheckboxProps
+  extends React.InputHTMLAttributes<HTMLInputElement> {
+  onCheckedChange?: (checked: boolean) => void
+}
+
+const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
+  ({ className, onCheckedChange, ...props }, ref) => {
+    return (
+      <div className="relative inline-flex items-center">
+        <input
+          type="checkbox"
+          className="peer sr-only"
+          ref={ref}
+          onChange={(e) => onCheckedChange?.(e.target.checked)}
+          {...props}
+        />
+        <div
+          className={cn(
+            "h-4 w-4 shrink-0 rounded-sm border border-primary shadow focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 peer-checked:bg-primary peer-checked:text-primary-foreground",
+            className
+          )}
+        >
+          {props.checked && (
+            <Check className="h-3.5 w-3.5" strokeWidth={3} />
+          )}
+        </div>
+      </div>
+    )
+  }
+)
+Checkbox.displayName = "Checkbox"
+
+export { Checkbox }
+'''
+    
+    # Add badge component
+    if 'badge' in components and '/components/ui/badge.tsx' not in updated_files:
+        updated_files['/components/ui/badge.tsx'] = '''import * as React from "react"
+import { cva, type VariantProps } from "class-variance-authority"
+import { cn } from "@/lib/utils"
+
+const badgeVariants = cva(
+  "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  {
+    variants: {
+      variant: {
+        default:
+          "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
+        secondary:
+          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        destructive:
+          "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
+        outline: "text-foreground",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  }
+)
+
+export interface BadgeProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof badgeVariants> {}
+
+function Badge({ className, variant, ...props }: BadgeProps) {
+  return (
+    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+  )
+}
+
+export { Badge, badgeVariants }
+'''
+    
+    # Add separator component
+    if 'separator' in components and '/components/ui/separator.tsx' not in updated_files:
+        updated_files['/components/ui/separator.tsx'] = '''import * as React from "react"
+import { cn } from "@/lib/utils"
+
+export interface SeparatorProps extends React.HTMLAttributes<HTMLDivElement> {
+  orientation?: "horizontal" | "vertical"
+  decorative?: boolean
+}
+
+const Separator = React.forwardRef<HTMLDivElement, SeparatorProps>(
+  (
+    { className, orientation = "horizontal", decorative = true, ...props },
+    ref
+  ) => (
+    <div
+      ref={ref}
+      role={decorative ? "none" : "separator"}
+      aria-orientation={orientation}
+      className={cn(
+        "shrink-0 bg-border",
+        orientation === "horizontal" ? "h-[1px] w-full" : "h-full w-[1px]",
+        className
+      )}
+      {...props}
+    />
+  )
+)
+Separator.displayName = "Separator"
+
+export { Separator }
+'''
+    
     return updated_files
-
-
-def ensure_default_dependencies(
-    dependencies: Dict[str, str]
-) -> Dict[str, str]:
-    """
-    Ensure default dependencies are included
-    
-    Default dependencies for all projects:
-    - lucide-react: Icons
-    - clsx: Utility for className merging
-    - tailwind-merge: Tailwind class merging
-    - @radix-ui/*: Required by shadcn/ui components
-    """
-    
-    defaults = {
-        "lucide-react": "^0.263.1",
-        "clsx": "^2.1.1",
-        "tailwind-merge": "^2.5.5",
-        "@radix-ui/react-slot": "latest",
-        "class-variance-authority": "latest",
-    }
-    
-    # Merge with provided dependencies (provided take precedence)
-    return {
-        **defaults,
-        **dependencies
-    }
 
 
 def normalize_file_paths(files: Dict[str, str]) -> Dict[str, str]:
@@ -391,20 +520,23 @@ def normalize_file_paths(files: Dict[str, str]) -> Dict[str, str]:
     Normalize file paths to ensure consistency
     
     - All paths start with /
-    - No duplicate leading slashes
-    - Consistent use of .tsx vs .ts
+    - Convert Windows backslashes to forward slashes
+    - Remove duplicate slashes
     """
     
     normalized = {}
     
-    for filepath, code in files.items():
+    for path, code in files.items():
         # Ensure leading slash
-        if not filepath.startswith('/'):
-            filepath = '/' + filepath
+        if not path.startswith('/'):
+            path = '/' + path
+        
+        # Convert backslashes
+        path = path.replace('\\', '/')
         
         # Remove duplicate slashes
-        filepath = re.sub(r'/+', '/', filepath)
+        path = re.sub(r'/+', '/', path)
         
-        normalized[filepath] = code
+        normalized[path] = code
     
     return normalized

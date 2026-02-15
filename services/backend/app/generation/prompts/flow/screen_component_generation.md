@@ -1,180 +1,371 @@
 # SCREEN COMPONENT GENERATION
 
-You are generating a SCREEN COMPONENT in a multi-screen application.
+You are generating a **screen component** for a multi-screen application.
 
-This is NOT a standalone app. This is ONE screen in a larger flow that shares components with other screens.
+---
 
-## Critical Differences from Standalone Generation
+## OUTPUT FORMAT - CRITICAL
 
-### ❌ DO NOT Do This (Standalone Pattern):
+Output ONLY pure TypeScript code. Start immediately with imports. No markdown fences. No JSON wrapper. No explanatory text.
 
-```tsx
-export default function App({ onTransition }) {
-  // Everything inline, no shared components
+**CORRECT output starts like this:**
+
+```
+import { useState } from 'react'
+import { Mail, Lock } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+
+interface LoginScreenProps {
+  onTransition: (transitionId: string) => void
+}
+
+export default function LoginScreen({ onTransition }: LoginScreenProps) {
+  ...
+}
+```
+
+**WRONG outputs (DO NOT do this):**
+
+- `json\n{"files": {...}}`
+- ` ```typescript\n...` ```
+- ` ```tsx\n...` ```
+- Text before/after code
+- Defining components inline inside the function
+- **Importing from relative paths like `./components/*` or `../utils/*`**
+
+**❌ WRONG:**
+
+```typescript
+import { SomeComponent } from "./components/SomeComponent";
+import { Icon } from "https://esm.sh/lucide-react";
+```
+
+**✅ CORRECT:**
+
+```typescript
+import { ArrowLeft, Heart } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+
+export default function MyScreen({ onTransition }) {
+  const products = [
+    /* data */
+  ];
+
   return (
-    <div>
-      {/* Inline button component */}
-      <button>Click me</button>
+    <div className="grid grid-cols-2 gap-4">
+      {products.map((product) => (
+        <Card key={product.id}>
+          <CardContent className="p-4">
+            <h3>{product.name}</h3>
+            <Badge>{product.category}</Badge>
+            <Button onClick={() => onTransition("t1")}>View</Button>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }
 ```
 
-### ✅ DO This (Screen Component Pattern):
+---
 
-```tsx
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+## Component Naming
 
-export default function LoginScreen({ onTransition }) {
-  // Uses shared components
-  return (
-    <Card>
-      <Button onClick={() => onTransition("trans_1")}>Sign In</Button>
-    </Card>
-  );
-}
-```
+Your component name must match the screen name + "Screen" suffix:
 
-## Available Shared Components
+- Screen: "Login" → Component: `LoginScreen`
+- Screen: "Dashboard" → Component: `DashboardScreen`
+- Screen: "Recipe Details" → Component: `RecipeDetailsScreen`
 
-The following components are ALREADY AVAILABLE in the project. You MUST use them instead of creating your own:
-
-**UI Components (from shadcn/ui):**
-
-- `Button` from '@/components/ui/button'
-- `Card`, `CardHeader`, `CardTitle`, `CardContent` from '@/components/ui/card'
-- `Input` from '@/components/ui/input'
-- `Label` from '@/components/ui/label'
-- `Checkbox` from '@/components/ui/checkbox'
-
-**Icons (from Lucide React):**
-
-- All Lucide icons: `import { Mail, User, Lock } from 'lucide-react'`
-
-**Utilities:**
-
-- `cn` from '@/lib/utils' (for className merging)
-
-## Screen Component Naming
-
-Your screen component MUST be named according to this pattern:
-
-- Screen ID: `screen_1` → Component name: `LoginScreen` (if name is "Login")
-- Screen ID: `screen_2` → Component name: `DashboardScreen` (if name is "Dashboard")
-
-Export as DEFAULT:
-
-```tsx
-export default function LoginScreen({ onTransition }) {
-  // ...
-}
-```
-
-## Props Interface
-
-Every screen receives:
-
-```tsx
-interface ScreenProps {
+```typescript
+// Example:
+interface LoginScreenProps {
   onTransition: (transitionId: string) => void;
 }
+
+export default function LoginScreen({ onTransition }: LoginScreenProps) {
+  return <div>...</div>;
+}
 ```
 
-Use `onTransition` to navigate to other screens via transition IDs.
+---
 
-## Transitions
+## Required Imports
 
-You will be provided with the outgoing transitions from this screen. For example:
+### React Hooks
 
+Import React hooks at the top:
+
+```typescript
+import { useState, useEffect, useCallback, useMemo } from "react";
 ```
-Outgoing transitions:
-- trans_1: "Sign In" → screen_2 (trigger: submit)
-- trans_2: "Forgot Password" → screen_3 (trigger: link)
+
+### Lucide Icons
+
+**CRITICAL:** Import from the npm package `lucide-react` - NEVER from URLs.
+
+```typescript
+// ✅ CORRECT
+import {
+  Mail,
+  Lock,
+  User,
+  Settings,
+  ArrowRight,
+  ChevronDown,
+  Check,
+  X,
+  Menu,
+} from "lucide-react";
+
+// ❌ WRONG - NEVER use URL imports
+// import { Mail } from "https://esm.sh/lucide-react@0.263.1"
+// import { Lock } from "http://cdn.example.com/lucide-react"
 ```
 
-Implement these as:
+### UI Components - MANDATORY
 
-```tsx
+**CRITICAL:** Import UI components from the shared component library. DO NOT define them inline.
+
+**ONLY ALLOWED IMPORTS:**
+
+1. `@/components/ui/*` (shadcn/ui components - see list below)
+2. `lucide-react` (icons)
+3. `react` (hooks)
+
+**NEVER:**
+
+- ❌ Import from relative paths: `./components/*`, `../components/*`
+- ❌ Create separate helper component files
+- ❌ Import custom components from anywhere except `@/components/ui/*`
+- ❌ Import from URLs: `https://...`, `http://...`, `esm.sh`, CDN links
+
+**If you need custom logic:**
+
+- ✅ Define helper functions inside the screen component
+- ✅ Define inline components inside the screen function
+- ✅ Keep everything in ONE file
+
+**Import UI components from the shared component library:**
+
+CRITICAL: The full shadcn/ui library (50+ components) is available. Import what you need.
+
+```typescript
+// Core Input
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+
+// Data Display
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+
+// Feedback
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Toast } from "@/components/ui/toast";
+
+// Layout
+import { Separator } from "@/components/ui/separator";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+// Navigation
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { Pagination } from "@/components/ui/pagination";
+
+// Overlays
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { Tooltip } from "@/components/ui/tooltip";
+
+// Interactive
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { Command } from "@/components/ui/command";
+import { Calendar } from "@/components/ui/calendar";
+```
+
+**Available: 50+ components across all categories.**
+
+See documentation for complete list. Use any component that fits your design needs.
+
+**NEVER define these components inline.** Always import from `@/components/ui/*`.
+
+---
+
+## Component Usage Examples
+
+### Button
+
+```typescript
+import { Button } from '@/components/ui/button'
+import { Mail } from 'lucide-react'
+
+// Primary action
 <Button onClick={() => onTransition('trans_1')}>
-  Sign In
+  <Mail className="mr-2 h-4 w-4" />
+  Continue
 </Button>
 
-<a onClick={() => onTransition('trans_2')}>
-  Forgot Password?
-</a>
+// Secondary action
+<Button variant="outline" onClick={handleBack}>
+  Back
+</Button>
+
+// Destructive action
+<Button variant="destructive" onClick={handleDelete}>
+  Delete
+</Button>
+
+// Ghost variant
+<Button variant="ghost">
+  <Settings className="h-4 w-4" />
+</Button>
 ```
 
-## File Organization
+### Card
 
-You are generating ONLY this screen component file. Do NOT generate:
+```typescript
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
-- ❌ Shared UI components (already exist)
-- ❌ Utils (already exist)
-- ❌ Other screens (generated separately)
-
-You CAN generate:
-
-- ✅ Screen-specific helper components (if complex)
-- ✅ Screen-specific constants
-- ✅ Screen-specific hooks
-
-If you need screen-specific helpers, define them in the same file:
-
-```tsx
-import { Button } from "@/components/ui/button";
-
-// Screen-specific helper
-function FormField({ label, children }) {
-  return (
-    <div>
-      <label>{label}</label>
-      {children}
-    </div>
-  );
-}
-
-// Main screen component
-export default function LoginScreen({ onTransition }) {
-  return (
-    <div>
-      <FormField label="Email">
-        <input />
-      </FormField>
-    </div>
-  );
-}
+<Card className="w-full max-w-md">
+  <CardHeader>
+    <CardTitle>Welcome Back</CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-4">{/* Form fields */}</CardContent>
+</Card>;
 ```
 
-## Output Format
+### Form Inputs
 
-Output ONLY the screen component code:
+```typescript
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
-```tsx
+<div className="space-y-2">
+  <Label htmlFor="email">Email</Label>
+  <Input
+    id="email"
+    type="email"
+    value={email}
+    onChange={(e) => setEmail(e.target.value)}
+    placeholder="you@example.com"
+  />
+</div>;
+```
+
+---
+
+## Screen Structure
+
+Every screen should follow this structure:
+
+```typescript
 import { useState } from "react";
+import { Mail, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Mail, Lock } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
-export default function LoginScreen({ onTransition }) {
+interface LoginScreenProps {
+  onTransition: (transitionId: string) => void;
+}
+
+export default function LoginScreen({ onTransition }: LoginScreenProps) {
+  // 1. State hooks
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  // 2. Event handlers
   const handleSubmit = () => {
+    // Validation
     if (email && password) {
       onTransition("trans_1");
     }
   };
 
+  // 3. Render
   return (
-    <div className="flex items-center justify-center min-h-screen">
-      <Card>
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Welcome Back</CardTitle>
         </CardHeader>
-        <CardContent>
-          {/* Form fields */}
-          <Button onClick={handleSubmit}>Sign In</Button>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          <Button className="w-full" onClick={handleSubmit}>
+            <Mail className="mr-2 h-4 w-4" />
+            Sign In
+          </Button>
         </CardContent>
       </Card>
     </div>
@@ -182,29 +373,275 @@ export default function LoginScreen({ onTransition }) {
 }
 ```
 
-## Device Dimensions
+---
 
-Unlike standalone screens, you do NOT need to hardcode device dimensions in the root div. The router will handle that.
+## Responsive Design
 
-**❌ DO NOT DO THIS:**
+Use Tailwind breakpoints to create layouts that adapt:
 
-```tsx
+```typescript
+// Stack on mobile, row on desktop
+<div className="flex flex-col md:flex-row gap-4">
+  <div className="w-full md:w-1/2">Left</div>
+  <div className="w-full md:w-1/2">Right</div>
+</div>
+
+// Responsive grid
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {/* items */}
+</div>
+
+// Responsive text sizes
+<h1 className="text-2xl md:text-4xl lg:text-6xl">Title</h1>
+
+// Responsive padding
+<div className="p-4 md:p-6 lg:p-8">
+```
+
+Breakpoints: `sm:` (640px), `md:` (768px), `lg:` (1024px), `xl:` (1280px)
+
+---
+
+## Transitions
+
+You'll receive transition info in the task description:
+
+```
+Outgoing transitions:
+- trans_1: "Sign In" → screen_2
+- trans_2: "Forgot Password" → screen_3
+```
+
+Implement them using the `onTransition` prop:
+
+```typescript
+// Primary transition (button)
+<Button onClick={() => onTransition('trans_1')}>
+  Sign In
+</Button>
+
+// Secondary transition (link)
+<a
+  className="text-sm text-muted-foreground hover:text-foreground cursor-pointer"
+  onClick={() => onTransition('trans_2')}
+>
+  Forgot Password?
+</a>
+```
+
+---
+
+## Layout Guidelines
+
+### ✅ DO: Flexible, Responsive Layouts
+
+```typescript
+<div className="min-h-screen bg-background">
+  <div className="max-w-4xl mx-auto p-4">
+    {/* content adapts to screen size */}
+  </div>
+</div>
+```
+
+### ❌ DON'T: Fixed Pixel Dimensions
+
+```typescript
+// ❌ WRONG
 <div style={{ width: '375px', height: '812px' }}>
+
+// ✅ CORRECT
+<div className="min-h-screen">
 ```
 
-**✅ DO THIS:**
+---
 
-```tsx
-<div className="min-h-screen"> {/* Or flex items-center justify-center min-h-screen */}
+## Styling Rules
+
+### Use Semantic Color Tokens
+
+```typescript
+// ✅ CORRECT - semantic tokens
+className = "bg-primary text-primary-foreground";
+className = "bg-secondary text-secondary-foreground";
+className = "bg-muted text-muted-foreground";
+className = "bg-accent text-accent-foreground";
+className = "bg-background text-foreground";
+className = "border-border";
+
+// ❌ WRONG - direct colors
+className = "bg-blue-500";
+className = "bg-gray-100";
+className = "text-zinc-900";
 ```
 
-The screen will be rendered inside a container with proper dimensions.
+### NO Arbitrary Values
 
-## Remember
+```typescript
+// ❌ WRONG
+className = "h-[600px] w-[450px]";
 
-- You are ONE screen in a MULTI-SCREEN app
-- ALWAYS use shared components from '@/components/ui/\*'
-- Export as default with proper naming (ScreenName + "Screen")
-- Use onTransition for navigation
-- Don't hardcode device dimensions
-- Focus on screen logic, not infrastructure
+// ✅ CORRECT
+className = "h-screen w-full max-w-md";
+```
+
+---
+
+## Complete Working Example
+
+```typescript
+import { useState } from "react";
+import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
+
+interface LoginScreenProps {
+  onTransition: (transitionId: string) => void;
+}
+
+export default function LoginScreen({ onTransition }: LoginScreenProps) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+
+  const handleLogin = () => {
+    if (email && password) {
+      onTransition("trans_1");
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-background p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
+          <CardDescription>
+            Enter your credentials to access your account
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="pl-10 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="remember"
+                checked={rememberMe}
+                onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+              />
+              <Label htmlFor="remember" className="text-sm cursor-pointer">
+                Remember me
+              </Label>
+            </div>
+            <a
+              onClick={() => onTransition("trans_2")}
+              className="text-sm text-primary hover:underline cursor-pointer"
+            >
+              Forgot password?
+            </a>
+          </div>
+
+          <Button className="w-full" onClick={handleLogin}>
+            Sign In
+          </Button>
+
+          <div className="relative">
+            <Separator />
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">
+              OR
+            </span>
+          </div>
+
+          <Button variant="outline" className="w-full">
+            Sign in with Google
+          </Button>
+        </CardContent>
+
+        <CardFooter className="flex flex-col space-y-2">
+          <div className="text-sm text-muted-foreground text-center">
+            Don't have an account?{" "}
+            <a
+              onClick={() => onTransition("trans_3")}
+              className="text-primary hover:underline cursor-pointer font-medium"
+            >
+              Sign up
+            </a>
+          </div>
+        </CardFooter>
+      </Card>
+    </div>
+  );
+}
+```
+
+---
+
+## Key Takeaways
+
+1. **Always import UI components** from `@/components/ui/*`
+2. **Never define components inline** - this causes code duplication
+3. **NEVER import from relative paths** - no `./components/*` imports
+4. **Keep everything in ONE file** - define helper components inline if needed
+5. **Use semantic color tokens** (`bg-primary`, not `bg-blue-500`)
+6. **Create responsive layouts** with Tailwind breakpoints
+7. **Implement transitions** using the `onTransition` prop
+8. **Output pure TypeScript** - no markdown, no explanations
+
+Following these rules ensures:
+
+- ✅ Zero code duplication across screens
+- ✅ Consistent component behavior
+- ✅ High-quality, professional UIs
+- ✅ Smaller file sizes
+- ✅ Matches v0/Lovable architecture
+- ✅ Single-file screen components (no scattered files)

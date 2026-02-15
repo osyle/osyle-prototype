@@ -959,12 +959,32 @@ export default function RightPanel({
                     inspectedElement={inspectedElement?.element || null}
                     screenId={selectedScreen?.screen_id || ''}
                     onStyleChange={(path, index, property, value) => {
-                      if (!selectedScreen?.screen_id) return
+                      // Get screen_id from inspectedElement's screenName
+                      const screenId =
+                        selectedScreen?.screen_id ||
+                        flowGraph?.screens.find(
+                          s => s.name === inspectedElement?.screenName,
+                        )?.screen_id
+
+                      console.log('🎨 RightPanel.onStyleChange called:', {
+                        path,
+                        index,
+                        property,
+                        value,
+                        screenId,
+                        selectedScreenId: selectedScreen?.screen_id,
+                        inspectedScreenName: inspectedElement?.screenName,
+                      })
+
+                      if (!screenId) {
+                        console.error('❌ No screenId found!')
+                        return
+                      }
 
                       // Get existing override for this element
-                      const existingOverrides = getStyleOverrides(
-                        selectedScreen.screen_id,
-                      )
+                      const existingOverrides = getStyleOverrides(screenId)
+                      console.log('📋 Existing overrides:', existingOverrides)
+
                       const existing = existingOverrides.find(
                         o => o.elementPath === path && o.elementIndex === index,
                       )
@@ -980,10 +1000,21 @@ export default function RightPanel({
                         timestamp: Date.now(),
                       }
 
-                      addStyleOverride(selectedScreen.screen_id, override)
+                      console.log('✅ Calling addStyleOverride with:', override)
+                      addStyleOverride(screenId, override)
+
+                      // Verify it was added
+                      const updated = getStyleOverrides(screenId)
+                      console.log('✅ After add, overrides:', updated)
                     }}
                     onReset={async () => {
-                      if (!selectedScreen?.screen_id) return
+                      const screenId =
+                        selectedScreen?.screen_id ||
+                        flowGraph?.screens.find(
+                          s => s.name === inspectedElement?.screenName,
+                        )?.screen_id
+
+                      if (!screenId) return
 
                       // Only discard unsaved local changes (reload from database)
                       if (
@@ -1000,14 +1031,11 @@ export default function RightPanel({
                         if (currentProject) {
                           const project = JSON.parse(currentProject)
                           // Reload saved mutations from database
-                          await loadStyleOverrides(
-                            project.project_id,
-                            selectedScreen.screen_id,
-                          )
+                          await loadStyleOverrides(project.project_id, screenId)
                           console.log('🔄 Reverted to last saved version')
                         } else {
                           // If no project, just clear local state
-                          clearStyleOverrides(selectedScreen.screen_id)
+                          clearStyleOverrides(screenId)
                         }
                       } catch (error) {
                         console.error('Failed to reload saved version:', error)
@@ -1015,17 +1043,20 @@ export default function RightPanel({
                       }
                     }}
                     onSave={async () => {
-                      if (!selectedScreen?.screen_id) return
+                      const screenId =
+                        selectedScreen?.screen_id ||
+                        flowGraph?.screens.find(
+                          s => s.name === inspectedElement?.screenName,
+                        )?.screen_id
+
+                      if (!screenId) return
 
                       try {
                         const currentProject =
                           localStorage.getItem('current_project')
                         if (currentProject) {
                           const project = JSON.parse(currentProject)
-                          await saveStyleOverrides(
-                            project.project_id,
-                            selectedScreen.screen_id,
-                          )
+                          await saveStyleOverrides(project.project_id, screenId)
                           console.log('✅ Changes saved successfully!')
                         } else {
                           console.warn(
@@ -1040,22 +1071,33 @@ export default function RightPanel({
                         alert('Failed to save changes. Please try again.')
                       }
                     }}
-                    hasUnsavedChanges={
-                      selectedScreen?.screen_id
-                        ? hasUnsavedChanges(selectedScreen.screen_id)
-                        : false
-                    }
-                    currentOverrides={
-                      inspectedElement && selectedScreen?.screen_id
-                        ? getStyleOverrides(selectedScreen.screen_id).find(
-                            o =>
-                              o.elementPath ===
-                                inspectedElement.element.elementPath &&
-                              o.elementIndex ===
-                                inspectedElement.element.elementIndex,
-                          ) || null
-                        : null
-                    }
+                    hasUnsavedChanges={(() => {
+                      const screenId =
+                        selectedScreen?.screen_id ||
+                        flowGraph?.screens.find(
+                          s => s.name === inspectedElement?.screenName,
+                        )?.screen_id
+                      return screenId ? hasUnsavedChanges(screenId) : false
+                    })()}
+                    currentOverrides={(() => {
+                      if (!inspectedElement) return null
+                      const screenId =
+                        selectedScreen?.screen_id ||
+                        flowGraph?.screens.find(
+                          s => s.name === inspectedElement.screenName,
+                        )?.screen_id
+                      if (!screenId) return null
+
+                      return (
+                        getStyleOverrides(screenId).find(
+                          o =>
+                            o.elementPath ===
+                              inspectedElement.element.elementPath &&
+                            o.elementIndex ===
+                              inspectedElement.element.elementIndex,
+                        ) || null
+                      )
+                    })()}
                   />
                 </div>
               )}

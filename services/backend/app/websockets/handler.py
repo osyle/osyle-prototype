@@ -311,31 +311,18 @@ async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: 
             # Don't fail the whole process if DB update fails
         
         # ====================================================================
-        # TRIGGER DTM BUILD (Pass 7) if taste has 2+ resources
+        # INVALIDATE GLOBAL DTM (will be rebuilt on next use in Stage 3)
         # ====================================================================
-        print(f"\n{'='*70}")
-        print(f"Checking if DTM build needed for taste {taste_id}...")
-        print(f"{'='*70}\n")
+        print(f"🔄 Invalidating global DTM for taste {taste_id}...")
+        try:
+            from app.dtm import storage as dtm_storage
+            dtm_storage.invalidate_global_dtm(taste_id)
+            print(f"✅ Global DTM invalidated")
+        except Exception as e:
+            print(f"⚠️  Warning: Failed to invalidate DTM: {e}")
+            # Don't fail the whole process if DTM invalidation fails
         
-        # Create LLM service for DTM synthesis
-        llm = get_llm_service()
-        
-        dtm_result = await build_dtm_for_taste(
-            taste_id=taste_id,
-            llm=llm,
-            websocket=websocket
-        )
-        
-        if dtm_result.get("status") == "success":
-            print(f"✅ DTM built successfully!")
-            print(f"   Resource count: {dtm_result.get('total_resources')}")
-            print(f"   Confidence: {dtm_result.get('confidence')}")
-        elif dtm_result.get("status") == "skipped":
-            print(f"ℹ️  DTM build skipped: {dtm_result.get('reason')}")
-        else:
-            print(f"⚠️  DTM build failed: {dtm_result.get('error')}")
-        
-        # Send completion AFTER DTM (or skip it - DTM sends its own messages)
+        # Send completion
         await send_complete(websocket, {
             "status": "success",
             "resource_id": resource_id,
@@ -726,6 +713,8 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
                         "dimensions": device_info.get("screen", {"width": 1280, "height": 720}),
                         "screen_type": s.get("screen_type"),
                         "semantic_role": s.get("semantic_role"),
+                        # CRITICAL: Calculate component_path upfront so frontend knows where to look
+                        "component_path": f"/screens/{s['name'].replace(' ', '').replace('-', '')}Screen.tsx",
                         "ui_loading": True,  # CRITICAL: Tells FE to show loading spinner
                         "ui_code": None
                     }
@@ -756,7 +745,8 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
             dtm=dtm if dtm else {},
             device_info=device_info,
             taste_source=taste_source,
-            websocket=websocket
+            websocket=websocket,
+            responsive=project.get('responsive', True)  # Default to responsive
         )
         
         project = unified_result['project']
@@ -930,11 +920,24 @@ async def generate_flow_architecture_default(
     
     prompt_parts.append("""# Flow Architecture Generation
 
-You are a UX flow architect creating a multi-screen application flow.
+You are a UX architect designing the optimal screen structure for an application.
 
-## Task
+## Task Analysis
 
-Design the screen-by-screen flow for this application based on the task description.
+First, analyze the task complexity to determine the appropriate number of screens:
+
+**Single-Screen Tasks** (create 1 screen):
+- Simple displays or widgets (e.g., "recipe card", "weather widget", "profile page")
+- Single forms (e.g., "contact form", "login form")
+- Standalone tools (e.g., "calculator", "timer")
+- Single-purpose pages (e.g., "about page", "terms of service")
+
+**Multi-Screen Tasks** (create 2-{max_screens} screens):
+- Flows with multiple steps (e.g., "onboarding flow", "checkout process")
+- Apps with navigation (e.g., "recipe app with browsing", "dashboard with settings")
+- Complex processes (e.g., "booking system", "multi-step form")
+
+**IMPORTANT**: Design the appropriate number of screens based on genuine task complexity. Don't default to multiple screens - if the task is simple, use 1 screen.
 
 ## Output Format
 
@@ -971,12 +974,13 @@ Return ONLY a valid JSON object (no markdown code fences, no explanations):
 
 ## Guidelines
 
-1. **Logical flow**: Create screens in logical progression
-2. **Screen limit**: Stay within max_screens limit
-3. **Entry point**: First screen should be entry_screen_id
-4. **Clear transitions**: Every screen should have clear navigation paths
-5. **Detailed tasks**: task_description should be specific and actionable (what components, what data, what interactions)
-6. **Complete flows**: Include success, error, and navigation paths
+1. **Analyze complexity first**: Determine if task needs 1 screen or multiple
+2. **Logical flow**: Create screens in logical progression
+3. **Screen limit**: Stay within max_screens limit
+4. **Entry point**: First screen should be entry_screen_id
+5. **Clear transitions**: Every screen should have clear navigation paths
+6. **Detailed tasks**: task_description should be specific and actionable (what components, what data, what interactions)
+7. **Complete flows**: For multi-screen, include success, error, and navigation paths
 
 """)
     

@@ -35,90 +35,177 @@ You now have access to import statements! Use them to create modular, maintainab
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 ```
 
-**shadcn/ui Components:**
-
-```tsx
-import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-```
-
 **Lucide Icons:**
 
 ```tsx
-import { Mail, User, Settings } from "lucide-react";
+import {
+  Mail,
+  User,
+  Settings,
+  ArrowRight,
+  ChevronDown,
+  Check,
+  X,
+} from "lucide-react";
 ```
 
-**Local Components (for multi-file projects):**
+**UI Components from Shared Library:**
 
 ```tsx
-import { ProductCard } from "./components/ProductCard";
-import { Header } from "./components/Header";
+// Full shadcn/ui library available (50+ components)
+// Import what you need:
+
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { Tooltip } from "@/components/ui/tooltip";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandItem,
+} from "@/components/ui/command";
+import { Calendar } from "@/components/ui/calendar";
+import { Carousel, CarouselItem } from "@/components/ui/carousel";
+// ... and 20+ more components
 ```
 
-### CRITICAL: FUNCTION NAME MUST BE "App"
+**CRITICAL: Always import UI components from `@/components/ui/*`. NEVER define them inline.**
 
-Always use `export default function App` - never use custom names.
+**Available: Complete shadcn/ui library (50+ components)**
 
-```jsx
-// ✅ CORRECT
-export default function App({ onTransition }) {
-  // ...
-}
+- Core Input: Button, Input, Label, Textarea, Checkbox, RadioGroup, Select, Switch, Slider
+- Data Display: Card, Table, Avatar, Badge
+- Feedback: Alert, Progress, Skeleton, Toast
+- Layout: Separator, AspectRatio, ScrollArea
+- Navigation: Tabs, Breadcrumb, Pagination
+- Overlays: Dialog, Sheet, Popover, Tooltip
+- Interactive: Accordion, Collapsible, DropdownMenu, ContextMenu, Menubar, Command, HoverCard
+- Advanced: Toggle, ToggleGroup, Calendar, Carousel
 
-// ❌ WRONG
-export default function MyComponent({ onTransition }) {
-  // ...
+**Example Usage:**
+
+```tsx
+import { useState } from "react";
+import { Mail, Lock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+export default function LoginScreen({ onTransition }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Welcome Back</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          <Button className="w-full" onClick={() => onTransition("trans_1")}>
+            <Mail className="mr-2 h-4 w-4" />
+            Sign In
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 ```
 
 ### CRITICAL: NO MARKDOWN CODE BLOCKS
 
-Output pure React code only - no markdown fences (no `jsx, `javascript, `tsx, or `typescript), no explanations, no preamble.
+Output pure React/TypeScript code only - no markdown fences (no `jsx, `javascript, `tsx, or `typescript), no explanations, no preamble.
 
-### CRITICAL: ALL HELPER COMPONENTS INSIDE App
-
-Define helper components INSIDE the App function to prevent React warnings.
-
-```jsx
-// ✅ CORRECT
-export default function App({ onTransition }) {
-  const Card = ({ children }) => (
-    <div style={{ borderRadius: 12, padding: 24 }}>{children}</div>
-  );
-
-  return <Card>Content</Card>;
-}
-
-// ❌ WRONG - Component defined outside
-const Card = ({ children }) => <div>{children}</div>;
-export default function App({ onTransition }) {
-  return <Card>Content</Card>;
-}
-```
+Just start directly with your imports and code.
 
 ---
 
 ## TECHNICAL CONSTRAINTS
 
-### Device Dimensions
+### Layout Approach
 
-Root `<div>` MUST match exact device dimensions:
+Use responsive, flexible layouts that adapt to their container:
 
 ```jsx
 export default function App({ onTransition }) {
   return (
-    <div
-      style={{
-        width: `${device_width}px`,
-        height: `${device_height}px`,
-        // Root styling
-      }}
-    >
-      {/* Content */}
+    <div className="min-h-screen bg-background">
+      {/* Responsive content that adapts to screen size */}
+      <div className="max-w-4xl mx-auto p-4">{/* Content */}</div>
     </div>
   );
 }
 ```
+
+Use Tailwind's responsive utilities (`sm:`, `md:`, `lg:`, `xl:`) to adapt layouts at different breakpoints.
 
 ### Platform Optimization
 

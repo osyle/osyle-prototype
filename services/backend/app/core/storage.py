@@ -840,14 +840,14 @@ def get_dtm_subset_index_key(owner_id: str, taste_id: str) -> str:
 def save_flow_version(user_id: str, project_id: str, flow_graph: dict, version: int):
     """
     Save flow graph to S3 with version number
-    Stored at: user-{user_id}/project-{project_id}/flow/v{version}.json
+    Stored at: projects/{user_id}/{project_id}/flow_v{version}.json
     """
     from app.core.db import convert_decimals
     
     # Convert Decimals back to regular numbers for JSON serialization
     flow_graph_json = convert_decimals(flow_graph)
     
-    key = f"user-{user_id}/project-{project_id}/flow/v{version}.json"
+    key = f"projects/{user_id}/{project_id}/flow_v{version}.json"
     
     try:
         s3_client.put_object(

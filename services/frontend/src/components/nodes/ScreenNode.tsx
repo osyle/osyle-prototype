@@ -1,11 +1,17 @@
-import { Handle, Position, NodeResizer } from '@xyflow/react'
+import { Handle, Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import { useRef, useEffect, useMemo } from 'react'
 import { Agentator, useAgentatorGlobal } from '../../lib/Agentator'
 import type { FlowScreen, Project } from '../../types/home.types'
 import DeviceFrame from '../DeviceFrame'
-import SandpackRenderer from '../SandpackRenderer'
+import MultiFileReactRenderer from '../MultiFileReactRenderer'
 import { StyleOverlayApplicator } from '../StyleOverlayApplicator'
+
+declare global {
+  interface Window {
+    __annotationModeActive?: boolean
+  }
+}
 
 export interface ScreenNodeData extends Record<string, unknown> {
   screen: FlowScreen
@@ -19,46 +25,107 @@ export interface ScreenNodeData extends Record<string, unknown> {
     screen: { width: number; height: number }
   }
   project: Project
-  flowGraph?: import('../../types/home.types').FlowGraph // NEW: Access to full flow graph for unified project
+  flowGraph?: import('../../types/home.types').FlowGraph
+  actualScreenSize: { width: number; height: number }
 }
 
 function ScreenNode({ data, selected }: NodeProps) {
   const nodeRef = useRef<HTMLDivElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null) // Ref for actual screen content
-  const { getStyleOverrides, loadStyleOverrides, applyReorderMutations } =
-    useAgentatorGlobal()
+  const contentRef = useRef<HTMLDivElement>(null)
+  const {
+    getStyleOverrides,
+    loadStyleOverrides,
+    applyReorderMutations,
+    isActive,
+    mode,
+  } = useAgentatorGlobal()
 
   const typedData = data as unknown as ScreenNodeData
   const {
     screen,
-    checkpoint,
     isEntry,
     isIterating,
     isGenerating,
     deviceInfo,
     project,
     flowGraph,
+    actualScreenSize,
   } = typedData
 
-  // Load style overrides from database when component mounts
+  // Calculate if annotation mode is active
+  const isAnnotationModeActive =
+    isActive && (mode === 'annotate' || mode === 'inspect' || mode === 'drag')
+
+  // Set global flag for ReactFlowCanvas to check
+  useEffect(() => {
+    window.__annotationModeActive = isAnnotationModeActive
+  }, [isAnnotationModeActive])
+
+  // Compute files using useMemo to avoid recreating on every render
+  const files = useMemo(() => {
+    if (!flowGraph?.project) return null
+
+    const projectFiles = flowGraph.project.files
+    const screenComponent = screen.component_path
+    const screenComponentName =
+      screenComponent?.split('/').pop()?.replace('.tsx', '') || 'Screen'
+
+    return {
+      '/App.tsx': `import ${screenComponentName} from '${screenComponent?.replace('.tsx', '') || '/screens/Screen'}'
+
+export default function App() {
+  const handleTransition = (transitionId: string) => {
+    console.log('Preview transition:', transitionId)
+  }
+  
+  return <${screenComponentName} onTransition={handleTransition} />
+}`,
+      ...(screenComponent
+        ? { [screenComponent]: projectFiles[screenComponent] || '' }
+        : {}),
+      ...Object.fromEntries(
+        Object.entries(projectFiles).filter(
+          ([path]) =>
+            path.startsWith('/components/') ||
+            path.startsWith('/lib/') ||
+            path === '/tsconfig.json' ||
+            path === '/package.json',
+        ),
+      ),
+    }
+  }, [flowGraph, screen.component_path])
+
+  const styleOverrides = getStyleOverrides(screen.screen_id)
+
+  // Load style overrides effect
   useEffect(() => {
     if (project?.project_id && screen.screen_id) {
       loadStyleOverrides(project.project_id, screen.screen_id)
     }
   }, [project?.project_id, screen.screen_id, loadStyleOverrides])
 
-  // SAFETY: During generation, flowGraph.project might not exist yet
-  // Show loading state until project is ready
+  // Apply reorder mutations effect
+  useEffect(() => {
+    if (files && contentRef.current) {
+      const timer = setTimeout(() => {
+        if (contentRef.current) {
+          applyReorderMutations(screen.screen_id, contentRef.current)
+        }
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [files, screen.screen_id, applyReorderMutations])
+
+  // Early return if project not loaded
   if (!flowGraph?.project) {
     return (
       <div
         ref={nodeRef}
         style={{
           width:
-            deviceInfo.screen.width +
-            (deviceInfo.platform === 'phone' ? 24 : 0),
+            actualScreenSize.width + (deviceInfo.platform === 'phone' ? 24 : 0),
           height:
-            deviceInfo.screen.height +
+            actualScreenSize.height +
             (deviceInfo.platform === 'phone' ? 48 : 40),
           display: 'flex',
           alignItems: 'center',
@@ -74,73 +141,17 @@ function ScreenNode({ data, selected }: NodeProps) {
     )
   }
 
-  // UNIFIED PROJECT ONLY: Extract this screen from the shared project
-  const projectFiles = flowGraph.project.files
-  const screenComponent = screen.component_path
-
-  // Create a wrapper App.tsx that renders just this screen for preview
-  const screenComponentName =
-    screenComponent?.split('/').pop()?.replace('.tsx', '') || 'Screen'
-
-  const files: Record<string, string> = {
-    '/App.tsx': `import ${screenComponentName} from '${screenComponent?.replace('.tsx', '') || '/screens/Screen'}'
-
-export default function App() {
-  // Mock onTransition for preview
-  const handleTransition = (transitionId: string) => {
-    console.log('Preview transition:', transitionId)
-  }
-  
-  return <${screenComponentName} onTransition={handleTransition} />
-}`,
-    // Include the screen component
-    ...(screenComponent
-      ? { [screenComponent]: projectFiles[screenComponent] || '' }
-      : {}),
-    // Include ALL shared files (components, utils, etc.)
-    ...Object.fromEntries(
-      Object.entries(projectFiles).filter(
-        ([path]) =>
-          path.startsWith('/components/') ||
-          path.startsWith('/lib/') ||
-          path === '/tsconfig.json' ||
-          path === '/package.json',
-      ),
-    ),
-  }
-
   const entry = '/App.tsx'
   const dependencies = flowGraph.project.dependencies || {}
 
-  console.log(
-    `ScreenNode ${screen.screen_id}: Unified project, extracted ${Object.keys(files).length} files`,
-  )
-
-  // Get style overrides for this screen
-  const styleOverrides = getStyleOverrides(screen.screen_id)
-
-  // Apply reorder mutations after DOM is rendered
-  useEffect(() => {
-    if (uiCode && contentRef.current) {
-      // Small delay to ensure React has finished rendering
-      const timer = setTimeout(() => {
-        if (contentRef.current) {
-          applyReorderMutations(screen.screen_id, contentRef.current)
-        }
-      }, 100)
-      return () => clearTimeout(timer)
-    }
-  }, [uiCode, screen.screen_id, applyReorderMutations])
-
-  // Calculate device display dimensions (including bezel/chrome)
   const displayWidth =
     deviceInfo.platform === 'phone'
-      ? deviceInfo.screen.width + 24
-      : deviceInfo.screen.width
+      ? actualScreenSize.width + 24
+      : actualScreenSize.width
   const displayHeight =
     deviceInfo.platform === 'phone'
-      ? deviceInfo.screen.height + 48
-      : deviceInfo.screen.height + 40
+      ? actualScreenSize.height + 48
+      : actualScreenSize.height + 40
 
   return (
     <div
@@ -152,7 +163,6 @@ export default function App() {
         height: displayHeight,
       }}
     >
-      {/* Invisible handles for edge connections */}
       <Handle
         type="source"
         position={Position.Right}
@@ -174,26 +184,6 @@ export default function App() {
         style={{ opacity: 0, pointerEvents: 'none' }}
       />
 
-      {/* Node resizer - only show when selected */}
-      {selected && (
-        <NodeResizer
-          minWidth={320 + (deviceInfo.platform === 'phone' ? 24 : 0)}
-          minHeight={568 + (deviceInfo.platform === 'phone' ? 48 : 40)}
-          handleStyle={{
-            width: 12,
-            height: 12,
-            borderRadius: 4,
-            backgroundColor: 'rgba(59, 130, 246, 0.9)',
-            border: '2px solid white',
-          }}
-          lineStyle={{
-            border: '3px solid rgba(59, 130, 246, 0.7)',
-            borderRadius: 6,
-          }}
-        />
-      )}
-
-      {/* Selection highlight */}
       {selected && (
         <div
           style={{
@@ -209,7 +199,261 @@ export default function App() {
         />
       )}
 
-      {/* START badge for entry screen */}
+      {selected && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '-110px', // More gap from device frame
+            left: '0',
+            right: '0',
+            backgroundColor: 'rgba(0, 0, 0, 0.95)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(59, 130, 246, 0.4)',
+            borderRadius: '8px',
+            padding: '14px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            pointerEvents: 'auto',
+            zIndex: 100000,
+            minWidth: '320px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
+          }}
+          onPointerDown={e => {
+            e.stopPropagation()
+          }}
+          onClick={e => {
+            e.stopPropagation()
+          }}
+        >
+          {/* Header with Reset */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '4px',
+            }}
+          >
+            <span
+              style={{
+                fontSize: '12px',
+                fontWeight: 600,
+                color: 'rgba(255, 255, 255, 0.9)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}
+            >
+              Screen Size
+            </span>
+            <button
+              onClick={e => {
+                e.stopPropagation()
+                window.dispatchEvent(
+                  new CustomEvent('screenResize', {
+                    detail: {
+                      screenId: screen.screen_id,
+                      width: deviceInfo.screen.width,
+                      height: deviceInfo.screen.height,
+                    },
+                  }),
+                )
+              }}
+              onPointerDown={e => e.stopPropagation()}
+              style={{
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                color: 'rgba(255, 255, 255, 0.8)',
+                padding: '4px 10px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
+              }}
+            >
+              Reset
+            </button>
+          </div>
+
+          {/* Width Slider */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <label
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  color: 'rgba(255, 255, 255, 0.7)',
+                }}
+              >
+                Width
+              </label>
+              <span
+                style={{
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#3B82F6',
+                  fontFamily: 'monospace',
+                }}
+              >
+                {actualScreenSize.width}px
+              </span>
+            </div>
+            <input
+              type="range"
+              min="280"
+              max="2560"
+              step="10"
+              value={actualScreenSize.width}
+              onChange={e => {
+                e.stopPropagation()
+                const newWidth = parseInt(e.target.value)
+                window.dispatchEvent(
+                  new CustomEvent('screenResize', {
+                    detail: {
+                      screenId: screen.screen_id,
+                      width: newWidth,
+                      height: actualScreenSize.height,
+                    },
+                  }),
+                )
+              }}
+              onPointerDown={e => {
+                e.stopPropagation()
+              }}
+              onPointerUp={e => {
+                e.stopPropagation()
+              }}
+              onClick={e => {
+                e.stopPropagation()
+              }}
+              style={{
+                width: '100%',
+                height: '8px',
+                borderRadius: '4px',
+                background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${((actualScreenSize.width - 280) / (2560 - 280)) * 100}%, rgba(255, 255, 255, 0.15) ${((actualScreenSize.width - 280) / (2560 - 280)) * 100}%, rgba(255, 255, 255, 0.15) 100%)`,
+                outline: 'none',
+                cursor: 'pointer',
+                appearance: 'none',
+                WebkitAppearance: 'none',
+              }}
+            />
+          </div>
+
+          {/* Height Slider */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <label
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  color: 'rgba(255, 255, 255, 0.7)',
+                }}
+              >
+                Height
+              </label>
+              <span
+                style={{
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#3B82F6',
+                  fontFamily: 'monospace',
+                }}
+              >
+                {actualScreenSize.height}px
+              </span>
+            </div>
+            <input
+              type="range"
+              min="400"
+              max="1600"
+              step="10"
+              value={actualScreenSize.height}
+              onChange={e => {
+                e.stopPropagation()
+                const newHeight = parseInt(e.target.value)
+                window.dispatchEvent(
+                  new CustomEvent('screenResize', {
+                    detail: {
+                      screenId: screen.screen_id,
+                      width: actualScreenSize.width,
+                      height: newHeight,
+                    },
+                  }),
+                )
+              }}
+              onPointerDown={e => {
+                e.stopPropagation()
+              }}
+              onPointerUp={e => {
+                e.stopPropagation()
+              }}
+              onClick={e => {
+                e.stopPropagation()
+              }}
+              style={{
+                width: '100%',
+                height: '8px',
+                borderRadius: '4px',
+                background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${((actualScreenSize.height - 400) / (1600 - 400)) * 100}%, rgba(255, 255, 255, 0.15) ${((actualScreenSize.height - 400) / (1600 - 400)) * 100}%, rgba(255, 255, 255, 0.15) 100%)`,
+                outline: 'none',
+                cursor: 'pointer',
+                appearance: 'none',
+                WebkitAppearance: 'none',
+              }}
+            />
+          </div>
+
+          <style>
+            {`
+              input[type="range"]::-webkit-slider-thumb {
+                appearance: none;
+                width: 18px;
+                height: 18px;
+                border-radius: 50%;
+                background: #3B82F6;
+                cursor: pointer;
+                border: 3px solid white;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+              }
+              input[type="range"]::-moz-range-thumb {
+                width: 18px;
+                height: 18px;
+                border-radius: 50%;
+                background: #3B82F6;
+                cursor: pointer;
+                border: 3px solid white;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+              }
+              input[type="range"]::-webkit-slider-thumb:hover {
+                transform: scale(1.1);
+              }
+              input[type="range"]::-moz-range-thumb:hover {
+                transform: scale(1.1);
+              }
+            `}
+          </style>
+        </div>
+      )}
+
       {isEntry && (
         <div
           style={{
@@ -233,7 +477,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Screen name label */}
       <div
         style={{
           position: 'absolute',
@@ -249,29 +492,66 @@ export default function App() {
         {screen.name}
       </div>
 
-      {/* Device frame with screen content */}
-      <DeviceFrame>
-        <div ref={contentRef} style={{ width: '100%', height: '100%' }}>
-          <Agentator screenId={screen.screen_id} screenName={screen.name}>
-            {uiCode ? (
+      <DeviceFrame screenSize={actualScreenSize}>
+        <div
+          ref={contentRef}
+          onMouseDown={e => {
+            // Prevent drag when selected or annotation mode - but only from this div, not sliders above
+            if (selected || isAnnotationModeActive) {
+              e.stopPropagation()
+            }
+          }}
+          style={{
+            width: '100%',
+            height: '100%',
+            position: 'relative',
+            cursor: selected || isAnnotationModeActive ? 'default' : 'grab',
+          }}
+        >
+          {/* 
+            Overlay logic:
+            - Show overlay when: NOT selected AND NOT in annotation mode
+            - Hide overlay when: selected OR annotation mode active
+          */}
+          {!selected && !isAnnotationModeActive && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 1000,
+                cursor: 'grab',
+                pointerEvents: 'auto',
+                backgroundColor: 'transparent',
+              }}
+            />
+          )}
+
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'auto', // Always enabled for content and annotations
+            }}
+          >
+            <Agentator screenId={screen.screen_id} screenName={screen.name}>
               <>
                 <StyleOverlayApplicator
                   overrides={styleOverrides}
                   containerRef={contentRef}
                 >
-                  <SandpackRenderer
-                    files={files}
-                    entry={entry}
-                    dependencies={dependencies}
-                    propsToInject={{
-                      onNavigate: () => {},
-                      formData: {},
-                    }}
-                    onError={err => console.error('Sandpack error:', err)}
-                  />
+                  {files && (
+                    <MultiFileReactRenderer
+                      files={files}
+                      entry={entry}
+                      dependencies={dependencies}
+                      isConceptMode={true}
+                    />
+                  )}
                 </StyleOverlayApplicator>
 
-                {/* Iteration indicator */}
                 {isIterating && (
                   <div
                     style={{
@@ -292,7 +572,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Generation indicator */}
                 {isGenerating && !isIterating && (
                   <div
                     style={{
@@ -313,12 +592,8 @@ export default function App() {
                   </div>
                 )}
               </>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-gray-400">Loading...</div>
-              </div>
-            )}
-          </Agentator>
+            </Agentator>
+          </div>
         </div>
       </DeviceFrame>
     </div>

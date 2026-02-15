@@ -23,7 +23,7 @@ export default function ConfigurationMenu() {
     device_info,
     setDeviceInfo,
     rendering_mode,
-    setRenderingMode,
+    //setRenderingMode,
     responsive_mode,
     setResponsiveMode,
   } = useDeviceContext()
@@ -537,6 +537,8 @@ export default function ConfigurationMenu() {
                     className="p-3 pt-0 space-y-4 border-t"
                     style={{ borderColor: 'rgba(255,255,255,0.1)' }}
                   >
+                    {/* Temporarily Disable Rendering Mode */}
+                    {/*
                     <div className="mt-3">
                       <div className="text-xs text-gray-400 mb-2">
                         Generation Mode
@@ -563,7 +565,7 @@ export default function ConfigurationMenu() {
                         </div>
                       </div>
 
-                      {/* Mode Description */}
+                      /* Mode Description *
                       <div
                         className="mt-3 p-3 rounded-lg"
                         style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
@@ -595,6 +597,7 @@ export default function ConfigurationMenu() {
                         </div>
                       </div>
                     </div>
+                    */}
 
                     {/* Responsive Mode Toggle */}
                     <div>

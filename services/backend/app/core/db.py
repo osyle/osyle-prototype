@@ -334,9 +334,30 @@ def update_resource(
 
 
 def delete_resource(resource_id: str) -> bool:
-    """Delete a resource"""
+    """Delete a resource and invalidate related DTMs"""
     try:
+        # Get resource to find taste_id before deleting
+        resource = get_resource(resource_id)
+        if not resource:
+            return False
+        
+        taste_id = resource.get("taste_id")
+        
+        # Delete from database
         resources_table.delete_item(Key={"resource_id": resource_id})
+        
+        # Invalidate DTMs if taste_id exists
+        if taste_id:
+            try:
+                from app.dtm import storage as dtm_storage
+                # Delete global DTM (will be rebuilt on next use)
+                dtm_storage.invalidate_global_dtm(taste_id)
+                # Delete subset DTMs containing this resource
+                dtm_storage.delete_subsets_containing_resource(taste_id, resource_id)
+            except Exception as e:
+                print(f"⚠️  Warning: Failed to invalidate DTMs: {e}")
+                # Don't fail the deletion if DTM cleanup fails
+        
         return True
     except ClientError:
         return False

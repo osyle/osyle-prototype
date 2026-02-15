@@ -219,7 +219,7 @@ export const CodeAnnotator: React.FC<CodeAnnotatorProps> = ({
           style={{
             position: 'absolute',
             top: `${20 + (selectedLines.start - 1) * lineHeight}px`, // 20px for padding offset
-            left: '60px', // Position just after line numbers (typically ~3em = ~48px)
+            right: '20px', // Align right edge with code viewer's right edge
             zIndex: 10000, // FIXED: Above interactive overlay (9999)
             pointerEvents: 'auto', // FIXED: Enable clicks
           }}

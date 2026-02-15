@@ -310,32 +310,123 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
 
         // PHASE 2 FIX: Extract computed styles for StyleEditor
         const computed = window.getComputedStyle(target)
+
         const computedStyles: Record<string, string> = {
           // Layout
           display: computed.display,
           position: computed.position,
           width: computed.width,
           height: computed.height,
-          margin: computed.margin,
-          padding: computed.padding,
+          minWidth: computed.minWidth,
+          maxWidth: computed.maxWidth,
+          minHeight: computed.minHeight,
+          maxHeight: computed.maxHeight,
+          overflow: computed.overflow,
+          overflowX: computed.overflowX,
+          overflowY: computed.overflowY,
+          zIndex: computed.zIndex,
+
+          // Flexbox
+          flexDirection: computed.flexDirection,
+          justifyContent: computed.justifyContent,
+          alignItems: computed.alignItems,
+          alignContent: computed.alignContent,
+          flexWrap: computed.flexWrap,
+          flexGrow: computed.flexGrow,
+          flexShrink: computed.flexShrink,
+          flexBasis: computed.flexBasis,
           gap: computed.gap,
+          rowGap: computed.rowGap,
+          columnGap: computed.columnGap,
+
+          // Grid
+          gridTemplateColumns: computed.gridTemplateColumns,
+          gridTemplateRows: computed.gridTemplateRows,
+          gridColumn: computed.gridColumn,
+          gridRow: computed.gridRow,
+          gridAutoFlow: computed.gridAutoFlow,
+
+          // Spacing
+          padding: computed.padding,
+          paddingTop: computed.paddingTop,
+          paddingRight: computed.paddingRight,
+          paddingBottom: computed.paddingBottom,
+          paddingLeft: computed.paddingLeft,
+          margin: computed.margin,
+          marginTop: computed.marginTop,
+          marginRight: computed.marginRight,
+          marginBottom: computed.marginBottom,
+          marginLeft: computed.marginLeft,
+
+          // Position
+          top: computed.top,
+          right: computed.right,
+          bottom: computed.bottom,
+          left: computed.left,
+
           // Typography
           fontSize: computed.fontSize,
           fontWeight: computed.fontWeight,
           fontFamily: computed.fontFamily,
           lineHeight: computed.lineHeight,
+          letterSpacing: computed.letterSpacing,
           color: computed.color,
           textAlign: computed.textAlign,
+          textTransform: computed.textTransform,
+          textDecoration: computed.textDecoration,
+          whiteSpace: computed.whiteSpace,
+          wordBreak: computed.wordBreak,
+
           // Background
+          background: computed.background,
           backgroundColor: computed.backgroundColor,
+          backgroundImage: computed.backgroundImage,
+          backgroundSize: computed.backgroundSize,
+          backgroundPosition: computed.backgroundPosition,
+          backgroundRepeat: computed.backgroundRepeat,
+          backgroundAttachment: computed.backgroundAttachment,
+
           // Border
+          border: computed.border,
           borderWidth: computed.borderWidth,
+          borderStyle: computed.borderStyle,
           borderColor: computed.borderColor,
           borderRadius: computed.borderRadius,
-          borderStyle: computed.borderStyle,
+          borderTop: computed.borderTop,
+          borderRight: computed.borderRight,
+          borderBottom: computed.borderBottom,
+          borderLeft: computed.borderLeft,
+          borderTopLeftRadius: computed.borderTopLeftRadius,
+          borderTopRightRadius: computed.borderTopRightRadius,
+          borderBottomRightRadius: computed.borderBottomRightRadius,
+          borderBottomLeftRadius: computed.borderBottomLeftRadius,
+
           // Effects
           opacity: computed.opacity,
           boxShadow: computed.boxShadow,
+          textShadow: computed.textShadow,
+          filter: computed.filter,
+          backdropFilter: computed.backdropFilter,
+
+          // Transform
+          transform: computed.transform,
+          transformOrigin: computed.transformOrigin,
+          rotate: computed.rotate,
+          scale: computed.scale,
+          translate: computed.translate,
+
+          // Animation
+          transition: computed.transition,
+          transitionDuration: computed.transitionDuration,
+          transitionTimingFunction: computed.transitionTimingFunction,
+          transitionDelay: computed.transitionDelay,
+          animation: computed.animation,
+
+          // Interaction
+          cursor: computed.cursor,
+          pointerEvents: computed.pointerEvents,
+          userSelect: computed.userSelect,
+          outline: computed.outline,
         }
 
         // Get enhanced metadata
