@@ -2,6 +2,7 @@ import { ChevronRight, ChevronDown, File, Folder, Copy } from 'lucide-react'
 import React, { useState, useMemo } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { CodeAnnotator, useAgentatorGlobal } from '../lib/Agentator'
 import type { FlowGraph } from '../types/home.types'
 
 interface CodeViewerProps {
@@ -20,6 +21,20 @@ export default function CodeViewer({ flow }: CodeViewerProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
     new Set(['/components', '/lib', '/screens', '/']),
   )
+
+  // Get Agentator state for annotation mode
+  const { isActive } = useAgentatorGlobal()
+
+  // Extract screen name from file path for annotation purposes
+  // e.g., "/screens/LoginScreen.tsx" -> "LoginScreen"
+  const getScreenNameFromPath = (filePath: string): string => {
+    if (!filePath.startsWith('/screens/')) {
+      // For non-screen files, use the file path itself as the "screen name"
+      return filePath
+    }
+    const fileName = filePath.split('/').pop() || filePath
+    return fileName.replace(/\.(tsx|jsx|ts|js)$/, '')
+  }
 
   // Build file tree from unified project files
   const fileTree = useMemo(() => {
@@ -235,33 +250,72 @@ export default function CodeViewer({ flow }: CodeViewerProps) {
 
             {/* Code with syntax highlighting */}
             <div className="flex-1 overflow-auto">
-              <SyntaxHighlighter
-                language={getLanguage(selectedFile)}
-                style={vscDarkPlus}
-                showLineNumbers
-                customStyle={{
-                  margin: 0,
-                  padding: '20px',
-                  fontSize: '13px',
-                  lineHeight: '1.6',
-                  background: '#0A0A0F',
-                  height: '100%',
-                }}
-                lineNumberStyle={{
-                  minWidth: '3em',
-                  paddingRight: '1em',
-                  color: '#4A4A5A',
-                  userSelect: 'none',
-                }}
-                codeTagProps={{
-                  style: {
-                    fontFamily:
-                      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                  },
-                }}
-              >
-                {selectedFileContent}
-              </SyntaxHighlighter>
+              {isActive && selectedFile ? (
+                // Annotation mode active - wrap with CodeAnnotator
+                <CodeAnnotator
+                  screenName={getScreenNameFromPath(selectedFile)}
+                  code={selectedFileContent}
+                  lineHeight={20.8} // Based on lineHeight 1.6 * fontSize 13px
+                  isActive={isActive}
+                >
+                  <SyntaxHighlighter
+                    language={getLanguage(selectedFile)}
+                    style={vscDarkPlus}
+                    showLineNumbers
+                    customStyle={{
+                      margin: 0,
+                      padding: '20px',
+                      fontSize: '13px',
+                      lineHeight: '1.6',
+                      background: '#0A0A0F',
+                      height: '100%',
+                    }}
+                    lineNumberStyle={{
+                      minWidth: '3em',
+                      paddingRight: '1em',
+                      color: '#4A4A5A',
+                      userSelect: 'none',
+                    }}
+                    codeTagProps={{
+                      style: {
+                        fontFamily:
+                          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                      },
+                    }}
+                  >
+                    {selectedFileContent}
+                  </SyntaxHighlighter>
+                </CodeAnnotator>
+              ) : (
+                // Normal mode - just SyntaxHighlighter
+                <SyntaxHighlighter
+                  language={getLanguage(selectedFile)}
+                  style={vscDarkPlus}
+                  showLineNumbers
+                  customStyle={{
+                    margin: 0,
+                    padding: '20px',
+                    fontSize: '13px',
+                    lineHeight: '1.6',
+                    background: '#0A0A0F',
+                    height: '100%',
+                  }}
+                  lineNumberStyle={{
+                    minWidth: '3em',
+                    paddingRight: '1em',
+                    color: '#4A4A5A',
+                    userSelect: 'none',
+                  }}
+                  codeTagProps={{
+                    style: {
+                      fontFamily:
+                        'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                    },
+                  }}
+                >
+                  {selectedFileContent}
+                </SyntaxHighlighter>
+              )}
             </div>
           </>
         ) : (
