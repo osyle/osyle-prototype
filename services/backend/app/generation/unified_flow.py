@@ -9,6 +9,7 @@ Generates multi-screen flows as a SINGLE PROJECT with:
 """
 from typing import Dict, Any, List
 import asyncio
+import re
 
 from app.generation.multifile_parser import (
     ensure_default_dependencies,
@@ -66,9 +67,10 @@ def generate_router_code(
     
     for screen in screens:
         screen_id = screen['screen_id']
-        # Convert "Login" to "LoginScreen", and handle hyphens/special chars
+        # Convert "Login" to "LoginScreen", and handle special chars
         # "Step-by-Step Cooking" -> "StepByStepCookingScreen"
-        component_name = screen['name'].replace(' ', '').replace('-', '') + 'Screen'
+        # "Cart & Checkout" -> "CartCheckoutScreen"
+        component_name = re.sub(r'[^a-zA-Z0-9]', '', screen['name']) + 'Screen'
         imports.append(f"import {component_name} from './screens/{component_name}'")
     
     # Build transition map
@@ -85,7 +87,7 @@ def generate_router_code(
     for screen in screens:
         screen_id = screen['screen_id']
         # Same component name sanitization
-        component_name = screen['name'].replace(' ', '').replace('-', '') + 'Screen'
+        component_name = re.sub(r'[^a-zA-Z0-9]', '', screen['name']) + 'Screen'
         # Use explicit string concatenation to avoid f-string brace escaping issues
         case_code = f"    case '{screen_id}':\n"
         case_code += f"      return <{component_name} onTransition=" + "{handleTransition} />"
@@ -93,7 +95,7 @@ def generate_router_code(
     
     # Default case (entry screen)
     entry_screen = next(s for s in screens if s['screen_id'] == entry_screen_id)
-    entry_component_name = entry_screen['name'].replace(' ', '').replace('-', '') + 'Screen'
+    entry_component_name = re.sub(r'[^a-zA-Z0-9]', '', entry_screen['name']) + 'Screen'
     
     default_code = "    default:\n"
     default_code += f"      return <{entry_component_name} onTransition=" + "{handleTransition} />"
@@ -250,9 +252,10 @@ async def generate_unified_flow(
         """Generate a single screen component"""
         screen_id = screen['screen_id']
         screen_name = screen['name']
-        # Remove hyphens and spaces to create valid JavaScript identifier
+        # Remove all special chars to create valid JavaScript identifier
         # "Step-by-Step Cooking" -> "StepByStepCookingScreen"
-        component_name = screen_name.replace(' ', '').replace('-', '') + 'Screen'
+        # "Cart & Checkout" -> "CartCheckoutScreen"
+        component_name = re.sub(r'[^a-zA-Z0-9]', '', screen_name) + 'Screen'
         component_path = f'/screens/{component_name}.tsx'
         
         print(f"\n  [{idx+1}/{len(screens)}] {screen_name} → {component_path}")
@@ -279,10 +282,20 @@ async def generate_unified_flow(
                 task_with_transitions += f"- {trans['transition_id']}: {trans.get('label', trans['trigger'])} → {trans['to_screen_id']}\n"
         
         # CRITICAL: Add available components info to task
-        task_with_transitions += "\n\nAvailable UI components (import from @/components/ui):\n"
+        task_with_transitions += "\n\n=== COMPONENT IMPORTS - CRITICAL ===\n"
+        task_with_transitions += "ONLY import from:\n"
+        task_with_transitions += "1. @/components/ui/* (shadcn/ui components)\n"
+        task_with_transitions += "2. lucide-react (icons)\n"
+        task_with_transitions += "3. react (hooks)\n\n"
+        task_with_transitions += "Available shadcn/ui components:\n"
         task_with_transitions += "- Button, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter\n"
-        task_with_transitions += "- Input, Label, Checkbox, Badge, Separator\n"
-        task_with_transitions += "\nIMPORTANT: Import these components, do NOT define them inline.\n"
+        task_with_transitions += "- Input, Label, Checkbox, Badge, Separator, Dialog, Sheet, Tabs\n"
+        task_with_transitions += "- And 40+ more (see prompt for full list)\n\n"
+        task_with_transitions += "NEVER:\n"
+        task_with_transitions += "- Import from relative paths: ./components/*, ../components/*\n"
+        task_with_transitions += "- Import from URLs: https://..., esm.sh, CDN links\n"
+        task_with_transitions += "- Create separate helper component files\n"
+        task_with_transitions += "- If you need custom components, define them INLINE in the same file\n"
         
         # Generate screen component
         # Note: We use the SCREEN_COMPONENT mode, not the standalone mode
@@ -342,6 +355,22 @@ async def generate_unified_flow(
         if 'const Button = ' in screen_file or 'const Card = ' in screen_file:
             print(f"   ⚠️  WARNING: Screen {screen_name} defines components inline!")
             print(f"   This causes code duplication. Components should be imported.")
+        
+        # VALIDATION: Check for relative imports (should not exist)
+        relative_imports = re.findall(r"from ['\"]\.+/", screen_file)
+        if relative_imports:
+            print(f"   ⚠️  WARNING: Screen {screen_name} has RELATIVE IMPORTS!")
+            print(f"   Found: {relative_imports}")
+            print(f"   This will cause 'Module not found' errors.")
+            print(f"   ONLY import from @/components/ui/*, lucide-react, or react")
+        
+        # VALIDATION: Check for URL imports (should not exist)
+        url_imports = re.findall(r"from ['\"]https?://", screen_file)
+        if url_imports:
+            print(f"   ⚠️  WARNING: Screen {screen_name} has URL IMPORTS!")
+            print(f"   Found: {url_imports}")
+            print(f"   This will cause 'Module not found' errors.")
+            print(f"   Use package names: lucide-react, react, @/components/ui/*")
         
         # VALIDATION: Check for proper imports
         if '@/components/ui' not in screen_file:

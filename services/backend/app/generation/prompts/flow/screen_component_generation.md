@@ -34,6 +34,43 @@ export default function LoginScreen({ onTransition }: LoginScreenProps) {
 - ` ```tsx\n...` ```
 - Text before/after code
 - Defining components inline inside the function
+- **Importing from relative paths like `./components/*` or `../utils/*`**
+
+**❌ WRONG:**
+
+```typescript
+import { SomeComponent } from "./components/SomeComponent";
+import { Icon } from "https://esm.sh/lucide-react";
+```
+
+**✅ CORRECT:**
+
+```typescript
+import { ArrowLeft, Heart } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+
+export default function MyScreen({ onTransition }) {
+  const products = [
+    /* data */
+  ];
+
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      {products.map((product) => (
+        <Card key={product.id}>
+          <CardContent className="p-4">
+            <h3>{product.name}</h3>
+            <Badge>{product.category}</Badge>
+            <Button onClick={() => onTransition("t1")}>View</Button>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+```
 
 ---
 
@@ -70,9 +107,10 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 
 ### Lucide Icons
 
-Use Lucide React for all icons:
+**CRITICAL:** Import from the npm package `lucide-react` - NEVER from URLs.
 
 ```typescript
+// ✅ CORRECT
 import {
   Mail,
   Lock,
@@ -84,11 +122,34 @@ import {
   X,
   Menu,
 } from "lucide-react";
+
+// ❌ WRONG - NEVER use URL imports
+// import { Mail } from "https://esm.sh/lucide-react@0.263.1"
+// import { Lock } from "http://cdn.example.com/lucide-react"
 ```
 
 ### UI Components - MANDATORY
 
 **CRITICAL:** Import UI components from the shared component library. DO NOT define them inline.
+
+**ONLY ALLOWED IMPORTS:**
+
+1. `@/components/ui/*` (shadcn/ui components - see list below)
+2. `lucide-react` (icons)
+3. `react` (hooks)
+
+**NEVER:**
+
+- ❌ Import from relative paths: `./components/*`, `../components/*`
+- ❌ Create separate helper component files
+- ❌ Import custom components from anywhere except `@/components/ui/*`
+- ❌ Import from URLs: `https://...`, `http://...`, `esm.sh`, CDN links
+
+**If you need custom logic:**
+
+- ✅ Define helper functions inside the screen component
+- ✅ Define inline components inside the screen function
+- ✅ Keep everything in ONE file
 
 **Import UI components from the shared component library:**
 
@@ -569,10 +630,12 @@ export default function LoginScreen({ onTransition }: LoginScreenProps) {
 
 1. **Always import UI components** from `@/components/ui/*`
 2. **Never define components inline** - this causes code duplication
-3. **Use semantic color tokens** (`bg-primary`, not `bg-blue-500`)
-4. **Create responsive layouts** with Tailwind breakpoints
-5. **Implement transitions** using the `onTransition` prop
-6. **Output pure TypeScript** - no markdown, no explanations
+3. **NEVER import from relative paths** - no `./components/*` imports
+4. **Keep everything in ONE file** - define helper components inline if needed
+5. **Use semantic color tokens** (`bg-primary`, not `bg-blue-500`)
+6. **Create responsive layouts** with Tailwind breakpoints
+7. **Implement transitions** using the `onTransition` prop
+8. **Output pure TypeScript** - no markdown, no explanations
 
 Following these rules ensures:
 
@@ -581,3 +644,4 @@ Following these rules ensures:
 - ✅ High-quality, professional UIs
 - ✅ Smaller file sizes
 - ✅ Matches v0/Lovable architecture
+- ✅ Single-file screen components (no scattered files)
