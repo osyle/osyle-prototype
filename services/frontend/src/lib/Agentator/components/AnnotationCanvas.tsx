@@ -311,19 +311,6 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
         // PHASE 2 FIX: Extract computed styles for StyleEditor
         const computed = window.getComputedStyle(target)
 
-        // DEBUG: Log what we're capturing
-        console.log('🔍 INSPECT MODE - Clicked element:', {
-          tagName: target.tagName,
-          className: target.className,
-          id: target.id,
-          textContent: target.textContent?.substring(0, 50),
-          backgroundColor: computed.backgroundColor,
-          background: computed.background,
-          backgroundImage: computed.backgroundImage,
-          color: computed.color,
-          fontSize: computed.fontSize,
-        })
-
         const computedStyles: Record<string, string> = {
           // Layout
           display: computed.display,
