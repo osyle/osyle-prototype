@@ -115,7 +115,14 @@ export function StyleOverlayApplicator({
 
   // Apply overrides whenever they change or DOM updates
   useEffect(() => {
+    console.log(
+      '🎨 StyleOverlayApplicator - overrides:',
+      overrides.length,
+      overrides,
+    )
+
     if (!containerRef.current) {
+      console.log('⚠️ No containerRef.current')
       return
     }
 
@@ -127,11 +134,18 @@ export function StyleOverlayApplicator({
     }
 
     const container = containerRef.current
+    console.log('📦 Container:', container)
 
     // Apply each override
     const newAppliedElements = new Set<HTMLElement>()
 
     overrides.forEach(override => {
+      console.log(
+        '🔍 Looking for element:',
+        override.elementPath,
+        'index:',
+        override.elementIndex,
+      )
       const element = findElementByPath(
         container,
         override.elementPath,
@@ -139,8 +153,11 @@ export function StyleOverlayApplicator({
       )
 
       if (element) {
+        console.log('✅ Found element, applying styles:', override.styles)
         applyOverride(element, override.styles)
         newAppliedElements.add(element)
+      } else {
+        console.log('❌ Element not found!')
       }
     })
 
