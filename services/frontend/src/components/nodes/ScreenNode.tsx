@@ -541,6 +541,7 @@ export default function App() {
                       files={files}
                       entry={entry}
                       dependencies={dependencies}
+                      isConceptMode={true}
                     />
                   )}
                 </StyleOverlayApplicator>

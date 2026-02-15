@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
+import * as LucideReact from 'lucide-react'
+import clsx from 'clsx'
+import * as ReactRouterDOM from 'react-router-dom'
 
 declare global {
   interface Window {
@@ -21,16 +24,21 @@ interface MultiFileReactRendererProps {
   files: Record<string, string>
   entry?: string
   dependencies?: Record<string, string>
+  isConceptMode?: boolean // NEW: Disable interactivity for annotation modes
 }
 
 export default function MultiFileReactRenderer({
   files,
   entry = '/App.tsx',
   dependencies = {},
+  isConceptMode = false,
 }: MultiFileReactRendererProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  const directRenderRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [isReady, setIsReady] = useState(false)
+  const [DirectComponent, setDirectComponent] =
+    useState<React.ComponentType | null>(null)
 
   useEffect(() => {
     if (typeof window.Babel !== 'undefined') {
@@ -51,7 +59,7 @@ export default function MultiFileReactRenderer({
   }, [])
 
   useEffect(() => {
-    if (!isReady || !iframeRef.current || !files) return
+    if (!isReady || !files) return
 
     try {
       const Babel = window.Babel
@@ -64,7 +72,15 @@ export default function MultiFileReactRenderer({
       Object.entries(files).forEach(([path, code]) => {
         try {
           const result = Babel.transform(code, {
-            presets: [['react', { runtime: 'classic' }], 'typescript'],
+            presets: [
+              [
+                'react',
+                {
+                  runtime: isConceptMode ? 'automatic' : 'classic',
+                },
+              ],
+              'typescript',
+            ],
             plugins: [['transform-modules-commonjs']],
             filename: path,
           })
@@ -115,6 +131,153 @@ export default function MultiFileReactRenderer({
 
         resolvedModules[path] = resolved
       })
+
+      // CONCEPT MODE: Direct rendering in same DOM for annotation support
+      if (isConceptMode) {
+        // Create module system in window
+        const win = window as any
+        win.__modules = {}
+        win.__moduleCache = {}
+
+        // Register all modules
+        Object.entries(resolvedModules).forEach(([path, code]) => {
+          // eslint-disable-next-line no-new-func
+          win.__modules[path] = new Function(
+            'module',
+            'exports',
+            'require',
+            code,
+          )
+        })
+
+        // Create require function with external dependencies
+        win.__directRequire = function (path: string) {
+          // External dependencies - use imports from parent app
+          if (path === 'react') return React
+          if (path === 'react/jsx-runtime') {
+            return {
+              jsx: React.createElement,
+              jsxs: React.createElement,
+              Fragment: React.Fragment,
+            }
+          }
+          if (path === 'react/jsx-dev-runtime') {
+            return {
+              jsxDEV: React.createElement,
+              Fragment: React.Fragment,
+            }
+          }
+          if (path === 'react-dom' || path === 'react-dom/client') {
+            return { default: React }
+          }
+          if (path === 'lucide-react') return LucideReact
+          if (path === 'clsx') {
+            // clsx can be imported as default or named, support both
+            const clsxFn = clsx
+            return { default: clsxFn, clsx: clsxFn }
+          }
+          if (path === 'react-router-dom') return ReactRouterDOM
+          if (path === 'class-variance-authority') {
+            // Simple cva implementation
+            return {
+              cva: (base: string, config?: any) => (props?: any) => {
+                let classes = base || ''
+                if (config?.variants && props) {
+                  for (const key in props) {
+                    if (config.variants[key]?.[props[key]]) {
+                      classes += ' ' + config.variants[key][props[key]]
+                    }
+                  }
+                }
+                if (props?.className) classes += ' ' + props.className
+                return classes.trim()
+              },
+            }
+          }
+          if (path === 'tailwind-merge') {
+            return {
+              twMerge: (...args: string[]) => args.filter(Boolean).join(' '),
+            }
+          }
+          if (path === '@radix-ui/react-slot') {
+            return { Slot: ({ children }: any) => children }
+          }
+
+          // Check cache
+          if (win.__moduleCache[path]) {
+            return win.__moduleCache[path]
+          }
+
+          // Find module
+          const moduleFunc = win.__modules[path]
+          if (!moduleFunc) {
+            // Try with extensions
+            const extensions = [
+              '.tsx',
+              '.ts',
+              '.jsx',
+              '.js',
+              '/index.tsx',
+              '/index.ts',
+            ]
+            for (const ext of extensions) {
+              if (win.__modules[path + ext]) {
+                return win.__directRequire(path + ext)
+              }
+            }
+            throw new Error('Module not found: ' + path)
+          }
+
+          const module = { exports: {} }
+          const exports = module.exports
+          moduleFunc.call(exports, module, exports, win.__directRequire)
+
+          const result =
+            module.exports.default !== undefined
+              ? module.exports.default
+              : module.exports
+          win.__moduleCache[path] = result
+          return result
+        }
+
+        // Load entry component
+        const AppComponent = win.__directRequire(entry)
+
+        // Suppress React warnings in concept mode (non-interactive preview)
+        const originalWarn = console.warn
+        const originalError = console.error
+        console.warn = (...args) => {
+          const msg = args[0]?.toString() || ''
+          // Suppress React key warnings and other common React warnings
+          if (
+            msg.includes('Each child in a list should have a unique "key"') ||
+            msg.includes('Warning: Failed prop type') ||
+            msg.includes('Warning: React does not recognize')
+          ) {
+            return
+          }
+          originalWarn.apply(console, args)
+        }
+        console.error = (...args) => {
+          const msg = args[0]?.toString() || ''
+          // Suppress React warnings that appear as errors
+          if (
+            msg.includes('Each child in a list should have a unique "key"') ||
+            msg.includes('Warning: Failed prop type') ||
+            msg.includes('Warning: React does not recognize')
+          ) {
+            return
+          }
+          originalError.apply(console, args)
+        }
+
+        setDirectComponent(() => AppComponent)
+        setError(null)
+        return
+      }
+
+      // PROTOTYPE MODE: Iframe rendering for full interactivity
+      if (!iframeRef.current) return
 
       const moduleLoader = `
         window.__modules = {};
@@ -196,6 +359,33 @@ export default function MultiFileReactRenderer({
   <style>
     body { margin: 0; padding: 0; font-family: system-ui, sans-serif; }
     #root { width: 100%; height: 100vh; }
+    ${
+      isConceptMode
+        ? `
+    /* Disable all interactivity in concept mode for annotation support */
+    * {
+      pointer-events: none !important;
+      user-select: none !important;
+      cursor: default !important;
+    }
+    /* Disable hover effects */
+    *:hover {
+      filter: none !important;
+      transform: none !important;
+      opacity: inherit !important;
+      background: inherit !important;
+      color: inherit !important;
+      border: inherit !important;
+      box-shadow: inherit !important;
+    }
+    /* Disable transitions and animations */
+    *, *::before, *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+    `
+        : ''
+    }
   </style>
 </head>
 <body>
@@ -304,7 +494,7 @@ export default function MultiFileReactRenderer({
       const error = err as Error
       setError(error.message || 'Unknown error')
     }
-  }, [files, entry, dependencies, isReady])
+  }, [files, entry, dependencies, isReady, isConceptMode])
 
   if (error) {
     return (
@@ -327,6 +517,52 @@ export default function MultiFileReactRenderer({
     )
   }
 
+  // CONCEPT MODE: Direct render for annotation support
+  if (isConceptMode) {
+    if (!DirectComponent) {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-gray-100">
+          <div className="text-sm text-gray-600">Loading component...</div>
+        </div>
+      )
+    }
+
+    return (
+      <div
+        ref={directRenderRef}
+        style={{
+          width: '100%',
+          height: '100%',
+        }}
+        className="concept-mode-render"
+        onClickCapture={e => {
+          // Prevent all click interactions in concept mode
+          e.preventDefault()
+          e.stopPropagation()
+        }}
+        onMouseDownCapture={e => {
+          // Prevent drag/mousedown interactions
+          e.preventDefault()
+        }}
+      >
+        <style>{`
+          /* Disable hover effects and transitions in concept mode but keep pointer-events enabled */
+          .concept-mode-render * {
+            cursor: default !important;
+            transition: none !important;
+            animation: none !important;
+          }
+          .concept-mode-render *:hover {
+            filter: none !important;
+            transform: none !important;
+          }
+        `}</style>
+        <DirectComponent />
+      </div>
+    )
+  }
+
+  // PROTOTYPE MODE: Iframe render for full interactivity
   return (
     <iframe
       ref={iframeRef}
