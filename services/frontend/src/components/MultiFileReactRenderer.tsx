@@ -65,6 +65,7 @@ export default function MultiFileReactRenderer({
   const directRenderRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [isReady, setIsReady] = useState(false)
+  const [isTailwindReady, setIsTailwindReady] = useState(false)
   const [DirectComponent, setDirectComponent] =
     useState<React.ComponentType | null>(null)
 
@@ -78,6 +79,46 @@ export default function MultiFileReactRenderer({
       console.warn = originalWarn
     }
   }, [])
+
+  // Check if Tailwind CDN is ready (only for concept mode)
+  useEffect(() => {
+    if (!isConceptMode) {
+      setIsTailwindReady(true)
+      return
+    }
+
+    // Check if Tailwind CDN script exists and is loaded
+    const checkTailwind = () => {
+      // @ts-expect-error - Tailwind CDN exposes tailwind global
+      if (window.tailwind || document.querySelector('style[data-tailwind]')) {
+        setIsTailwindReady(true)
+        return true
+      }
+      return false
+    }
+
+    // Check immediately
+    if (checkTailwind()) return
+
+    // Poll for Tailwind to be ready (CDN loads asynchronously)
+    const interval = setInterval(() => {
+      if (checkTailwind()) {
+        clearInterval(interval)
+      }
+    }, 100)
+
+    // Timeout after 5 seconds
+    const timeout = setTimeout(() => {
+      clearInterval(interval)
+      console.warn('Tailwind CDN did not load in time')
+      setIsTailwindReady(true) // Proceed anyway
+    }, 5000)
+
+    return () => {
+      clearInterval(interval)
+      clearTimeout(timeout)
+    }
+  }, [isConceptMode])
 
   useEffect(() => {
     if (typeof window.Babel !== 'undefined') {
@@ -99,6 +140,9 @@ export default function MultiFileReactRenderer({
 
   useEffect(() => {
     if (!isReady || !files) return
+
+    // In concept mode, wait for Tailwind CDN to be ready
+    if (isConceptMode && !isTailwindReady) return
 
     try {
       const Babel = window.Babel
@@ -543,7 +587,7 @@ export default function MultiFileReactRenderer({
       const error = err as Error
       setError(error.message || 'Unknown error')
     }
-  }, [files, entry, dependencies, isReady, isConceptMode])
+  }, [files, entry, dependencies, isReady, isConceptMode, isTailwindReady])
 
   if (error) {
     return (
