@@ -2159,7 +2159,8 @@ export default function Home() {
 
   const tabs = [
     { id: 'left' as const, icon: <Sprout size={18} /> },
-    { id: 'middle' as const, icon: <Layers size={18} /> },
+    // Temporarily block styles tab on Home screen
+    // { id: 'middle' as const, icon: <Layers size={18} /> },
     { id: 'right' as const, icon: <Eye size={18} /> },
   ]
 
