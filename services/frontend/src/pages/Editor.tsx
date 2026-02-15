@@ -5,7 +5,7 @@ import {
   Maximize2,
   ChevronDown,
   Sparkles,
-  Plus,
+  //Plus,
   List,
 } from 'lucide-react'
 import React, { useState, useEffect, useRef } from 'react'
@@ -1553,6 +1553,8 @@ export default function Editor() {
 
           {/* Left Side Menu */}
           <div className="fixed left-6 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-40">
+            {/* Temporarily Disable Inspiration Images */}
+            {/*
             <button
               className="rounded-lg flex items-center justify-center transition-all hover:scale-105"
               style={{
@@ -1614,6 +1616,8 @@ export default function Editor() {
             >
               <Plus size={24} style={{ color: '#929397' }} />
             </button>
+
+            */}
 
             {/* Version History - RESTORED! */}
             {generationStage === 'complete' && currentFlowVersion > 0 && (
