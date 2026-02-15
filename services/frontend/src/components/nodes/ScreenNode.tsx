@@ -7,6 +7,12 @@ import DeviceFrame from '../DeviceFrame'
 import MultiFileReactRenderer from '../MultiFileReactRenderer'
 import { StyleOverlayApplicator } from '../StyleOverlayApplicator'
 
+declare global {
+  interface Window {
+    __annotationModeActive?: boolean
+  }
+}
+
 export interface ScreenNodeData extends Record<string, unknown> {
   screen: FlowScreen
   checkpoint?: string
@@ -52,7 +58,7 @@ function ScreenNode({ data, selected }: NodeProps) {
 
   // Set global flag for ReactFlowCanvas to check
   useEffect(() => {
-    ;(window as any).__annotationModeActive = isAnnotationModeActive
+    window.__annotationModeActive = isAnnotationModeActive
   }, [isAnnotationModeActive])
 
   // Compute files using useMemo to avoid recreating on every render

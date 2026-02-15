@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react'
-import * as LucideReact from 'lucide-react'
 import clsx from 'clsx'
+import * as LucideReact from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
 import * as ReactRouterDOM from 'react-router-dom'
 
 declare global {
@@ -17,7 +17,35 @@ declare global {
         },
       ) => { code: string }
     }
+    __modules?: Record<string, ModuleFunction>
+    __moduleCache?: Record<string, unknown>
+    // eslint-disable-next-line no-unused-vars
+    __directRequire?: (path: string) => unknown
   }
+}
+
+type ModuleFunction = (
+  // eslint-disable-next-line no-unused-vars
+  module: { exports: ModuleExports },
+  // eslint-disable-next-line no-unused-vars
+  exports: ModuleExports,
+  // eslint-disable-next-line no-unused-vars
+  require: (path: string) => unknown,
+) => void
+
+interface ModuleExports {
+  default?: unknown
+  [key: string]: unknown
+}
+
+interface CVAConfig {
+  variants?: Record<string, Record<string, string>>
+  defaultVariants?: Record<string, string>
+}
+
+interface CVAProps {
+  className?: string
+  [key: string]: unknown
 }
 
 interface MultiFileReactRendererProps {
@@ -135,23 +163,22 @@ export default function MultiFileReactRenderer({
       // CONCEPT MODE: Direct rendering in same DOM for annotation support
       if (isConceptMode) {
         // Create module system in window
-        const win = window as any
-        win.__modules = {}
-        win.__moduleCache = {}
+        window.__modules = {}
+        window.__moduleCache = {}
 
         // Register all modules
         Object.entries(resolvedModules).forEach(([path, code]) => {
           // eslint-disable-next-line no-new-func
-          win.__modules[path] = new Function(
+          window.__modules![path] = new Function(
             'module',
             'exports',
             'require',
             code,
-          )
+          ) as ModuleFunction
         })
 
         // Create require function with external dependencies
-        win.__directRequire = function (path: string) {
+        window.__directRequire = function (path: string): unknown {
           // External dependencies - use imports from parent app
           if (path === 'react') return React
           if (path === 'react/jsx-runtime') {
@@ -180,12 +207,13 @@ export default function MultiFileReactRenderer({
           if (path === 'class-variance-authority') {
             // Simple cva implementation
             return {
-              cva: (base: string, config?: any) => (props?: any) => {
+              cva: (base: string, config?: CVAConfig) => (props?: CVAProps) => {
                 let classes = base || ''
                 if (config?.variants && props) {
                   for (const key in props) {
-                    if (config.variants[key]?.[props[key]]) {
-                      classes += ' ' + config.variants[key][props[key]]
+                    if (config.variants[key]?.[props[key] as string]) {
+                      classes +=
+                        ' ' + config.variants[key][props[key] as string]
                     }
                   }
                 }
@@ -200,16 +228,18 @@ export default function MultiFileReactRenderer({
             }
           }
           if (path === '@radix-ui/react-slot') {
-            return { Slot: ({ children }: any) => children }
+            return {
+              Slot: ({ children }: { children?: React.ReactNode }) => children,
+            }
           }
 
           // Check cache
-          if (win.__moduleCache[path]) {
-            return win.__moduleCache[path]
+          if (window.__moduleCache?.[path]) {
+            return window.__moduleCache[path]
           }
 
           // Find module
-          const moduleFunc = win.__modules[path]
+          const moduleFunc = window.__modules?.[path]
           if (!moduleFunc) {
             // Try with extensions
             const extensions = [
@@ -221,27 +251,31 @@ export default function MultiFileReactRenderer({
               '/index.ts',
             ]
             for (const ext of extensions) {
-              if (win.__modules[path + ext]) {
-                return win.__directRequire(path + ext)
+              if (window.__modules?.[path + ext]) {
+                return window.__directRequire!(path + ext)
               }
             }
             throw new Error('Module not found: ' + path)
           }
 
-          const module = { exports: {} }
+          const module: { exports: ModuleExports } = { exports: {} }
           const exports = module.exports
-          moduleFunc.call(exports, module, exports, win.__directRequire)
+          moduleFunc.call(exports, module, exports, window.__directRequire!)
 
           const result =
             module.exports.default !== undefined
               ? module.exports.default
               : module.exports
-          win.__moduleCache[path] = result
+          if (window.__moduleCache) {
+            window.__moduleCache[path] = result
+          }
           return result
         }
 
         // Load entry component
-        const AppComponent = win.__directRequire(entry)
+        const AppComponent = window.__directRequire!(
+          entry,
+        ) as React.ComponentType
 
         // Suppress React warnings in concept mode (non-interactive preview)
         const originalWarn = console.warn
