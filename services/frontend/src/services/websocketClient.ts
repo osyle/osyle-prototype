@@ -56,11 +56,6 @@ export interface FlowArchitectureResult {
   flow_name: string
   description?: string
   entry_screen_id: string
-  project?: {
-    files: Record<string, string>
-    entry: string
-    dependencies: Record<string, string>
-  }
   screens: Array<{
     screen_id: string
     name: string
@@ -68,7 +63,6 @@ export interface FlowArchitectureResult {
     task_description: string
     platform: string
     dimensions: { width: number; height: number }
-    component_path?: string
     screen_type?: string
     semantic_role?: string
     user_provided?: boolean
@@ -241,10 +235,6 @@ export interface FlowGenerationCallbacks {
   onRethinkComplete?: (rethinkData: Record<string, unknown>) => void
   // eslint-disable-next-line no-unused-vars
   onFlowArchitecture?: (flowArchitecture: FlowArchitectureResult) => void
-  // eslint-disable-next-line no-unused-vars
-  onFileUpdate?: (path: string, content: string) => void
-  // eslint-disable-next-line no-unused-vars
-  onThinking?: (text: string) => void
   onUICheckpoint?: (
     // eslint-disable-next-line no-unused-vars
     screenId: string,
@@ -331,17 +321,6 @@ export function generateFlowWebSocket(
                   data: FlowArchitectureResult
                 }
               | {
-                  type: 'file_update'
-                  data: {
-                    path: string
-                    content: string
-                  }
-                }
-              | {
-                  type: 'thinking'
-                  data: { text: string }
-                }
-              | {
                   type: 'ui_checkpoint'
                   data: {
                     screen_id: string
@@ -375,10 +354,6 @@ export function generateFlowWebSocket(
               callbacks.onRethinkComplete?.(message.data)
             } else if (message.type === 'flow_architecture') {
               callbacks.onFlowArchitecture?.(message.data)
-            } else if (message.type === 'file_update') {
-              callbacks.onFileUpdate?.(message.data.path, message.data.content)
-            } else if (message.type === 'thinking') {
-              callbacks.onThinking?.(message.data.text)
             } else if (message.type === 'ui_checkpoint') {
               console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗

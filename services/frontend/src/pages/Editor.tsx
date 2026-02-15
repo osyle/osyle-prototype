@@ -12,8 +12,6 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AddInspirationModal from '../components/AddInspirationModal'
 import CodeViewer from '../components/CodeViewer'
-import { FileSystemPanel } from '../components/FileSystemPanel'
-import { FileViewer } from '../components/FileViewer'
 import ConversationBar from '../components/ConversationBar'
 import DeviceFrame from '../components/DeviceFrame'
 import PrototypeCanvas from '../components/PrototypeCanvas'
@@ -136,7 +134,6 @@ export default function Editor() {
   const [rethinkStage, setRethinkStage] = useState<RethinkStage>(null)
   const [flowGraph, setFlowGraph] = useState<FlowGraph | null>(null)
   const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null)
-  const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [isFlowNavigatorOpen, setIsFlowNavigatorOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -668,16 +665,8 @@ export default function Editor() {
           // Add ui_loading flag to each screen for progressive rendering
           const flowWithLoading: FlowGraph = {
             ...flowArch,
-            project: {
-              files: flowArch.project?.files || {},
-              entry: flowArch.project?.entry || '/App.tsx',
-              dependencies: flowArch.project?.dependencies || {},
-            },
             screens: flowArch.screens.map(s => ({
               ...s,
-              component_path:
-                s.component_path ||
-                `/screens/${s.name.replace(/\s+/g, '').replace(/-/g, '')}Screen.tsx`,
               ui_loading: true,
               ui_code: null,
             })),
@@ -688,50 +677,6 @@ export default function Editor() {
           setTimeout(() => {
             setGenerationStage('complete')
           }, 1000)
-        },
-        onFileUpdate: (path, content) => {
-          console.log(`📁 File update: ${path}`)
-
-          // Update project files in flowGraph
-          setFlowGraph(prev => {
-            if (!prev) return prev
-
-            const updatedFiles = {
-              ...(prev.project?.files || {}),
-              [path]: content,
-            }
-
-            // Check if this file belongs to a screen
-            const screenId = prev.screens.find(
-              s => s.component_path === path,
-            )?.screen_id
-
-            if (screenId) {
-              // Mark screen as no longer loading
-              return {
-                ...prev,
-                project: {
-                  ...prev.project,
-                  files: updatedFiles,
-                },
-                screens: prev.screens.map(s =>
-                  s.screen_id === screenId ? { ...s, ui_loading: false } : s,
-                ),
-              }
-            }
-
-            return {
-              ...prev,
-              project: {
-                ...prev.project,
-                files: updatedFiles,
-              },
-            }
-          })
-        },
-        onThinking: text => {
-          console.log(`💭 Agent: ${text}`)
-          // Could display this in UI if desired
         },
         onUICheckpoint: (screenId, uiCode, checkpointNumber) => {
           console.log(`📍 Checkpoint ${checkpointNumber} for ${screenId}`)
@@ -1632,42 +1577,9 @@ export default function Editor() {
                     overflow: 'hidden',
                     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
                     border: '1px solid rgba(255, 255, 255, 0.05)',
-                    display: 'flex',
                   }}
                 >
-                  {flowGraph?.project?.files ? (
-                    <>
-                      <div style={{ width: '280px', height: '100%' }}>
-                        <FileSystemPanel
-                          files={flowGraph.project.files}
-                          selectedFile={selectedFile}
-                          onFileSelect={setSelectedFile}
-                        />
-                      </div>
-                      <div style={{ flex: 1, height: '100%' }}>
-                        <FileViewer
-                          path={selectedFile}
-                          content={
-                            selectedFile
-                              ? flowGraph.project.files[selectedFile]
-                              : null
-                          }
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '100%',
-                        color: '#888',
-                      }}
-                    >
-                      No files generated yet
-                    </div>
-                  )}
+                  <CodeViewer flow={flowGraph} />
                 </div>
               </div>
             </div>
