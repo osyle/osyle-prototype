@@ -68,6 +68,17 @@ export default function MultiFileReactRenderer({
   const [DirectComponent, setDirectComponent] =
     useState<React.ComponentType | null>(null)
 
+  // Suppress all console warnings only
+  useEffect(() => {
+    const originalWarn = console.warn
+
+    console.warn = () => {}
+
+    return () => {
+      console.warn = originalWarn
+    }
+  }, [])
+
   useEffect(() => {
     if (typeof window.Babel !== 'undefined') {
       setIsReady(true)
@@ -389,6 +400,10 @@ export default function MultiFileReactRenderer({
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+    // Suppress all console warnings only
+    console.warn = function() {};
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { margin: 0; padding: 0; font-family: system-ui, sans-serif; }

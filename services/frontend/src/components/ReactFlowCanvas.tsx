@@ -218,8 +218,6 @@ export default function ReactFlowCanvas({
         height: number
       }>
       const { screenId, width, height } = customEvent.detail
-
-      console.log('📏 Resize event received:', { screenId, width, height })
       onScreenResize(screenId, width, height)
     }
 
