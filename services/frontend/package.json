@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@babel/standalone": "^7.28.5",
-    "@codesandbox/sandpack-react": "^2.20.0",
     "@xyflow/react": "^12.10.0",
     "aws-amplify": "^6.15.8",
     "clsx": "^2.1.1",

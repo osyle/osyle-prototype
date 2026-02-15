@@ -2,7 +2,18 @@ import React, { useEffect, useRef, useState } from 'react'
 
 declare global {
   interface Window {
-    Babel: any
+    Babel: {
+      transform: (
+        // eslint-disable-next-line no-unused-vars
+        code: string,
+        // eslint-disable-next-line no-unused-vars
+        options: {
+          presets: Array<string | [string, Record<string, unknown>]>
+          plugins: Array<string | [string]>
+          filename: string
+        },
+      ) => { code: string }
+    }
   }
 }
 
@@ -48,7 +59,6 @@ export default function MultiFileReactRenderer({
         throw new Error('Babel not loaded')
       }
 
-      // Transform all files with Babel
       const transformedModules: Record<string, string> = {}
 
       Object.entries(files).forEach(([path, code]) => {
@@ -59,27 +69,25 @@ export default function MultiFileReactRenderer({
             filename: path,
           })
           transformedModules[path] = result.code
-        } catch (err: any) {
-          console.error(`Failed to transform ${path}:`, err)
-          throw new Error(`Transform error in ${path}: ${err.message}`)
+        } catch (err) {
+          const error = err as Error
+          throw new Error(`Transform error in ${path}: ${error.message}`)
         }
       })
 
-      // Resolve imports
       const resolvedModules: Record<string, string> = {}
 
       Object.entries(transformedModules).forEach(([path, code]) => {
         let resolved = code
 
-        // Replace @/ imports
         resolved = resolved.replace(
           /require\(['"]@\/([^'"]+)['"]\)/g,
           (match, importPath) => `require('/${importPath}')`,
         )
 
-        // Replace relative imports
         resolved = resolved.replace(
-          /require\(['"]\.\/([\w\/\-\.]+)['"]\)/g,
+          // eslint-disable-next-line no-useless-escape
+          /require\(['"]\.\/([\w/\-\.]+)['"]\)/g,
           (match, importPath) => {
             const dir = path.substring(0, path.lastIndexOf('/'))
             let resolvedPath = `${dir}/${importPath}`
@@ -108,7 +116,6 @@ export default function MultiFileReactRenderer({
         resolvedModules[path] = resolved
       })
 
-      // Module system with smart path resolution
       const moduleLoader = `
         window.__modules = {};
         window.__moduleCache = {};
@@ -141,7 +148,6 @@ export default function MultiFileReactRenderer({
             throw new Error('Module not found: ' + path);
           }
           
-          // External libraries
           if (resolvedPath === 'react') return window.React;
           if (resolvedPath === 'react-dom') return window.ReactDOM;
           if (resolvedPath === 'react-router-dom') return window.ReactRouterDOM;
@@ -165,21 +171,14 @@ export default function MultiFileReactRenderer({
           const module = { exports: {} };
           const exports = module.exports;
           
-          try {
-            moduleFunc.call(exports, module, exports, window.require);
-          } catch (err) {
-            console.error('[Module Error]', resolvedPath, err);
-            throw err;
-          }
+          moduleFunc.call(exports, module, exports, window.require);
           
-          // Return default export or the whole exports object
           const result = module.exports.default !== undefined ? module.exports.default : module.exports;
           window.__moduleCache[resolvedPath] = result;
           return result;
         };
       `
 
-      // Wrap modules
       const wrappedModules = Object.entries(resolvedModules)
         .map(([path, code]) => {
           return `window.__modules['${path}'] = function(module, exports, require) {
@@ -188,7 +187,6 @@ export default function MultiFileReactRenderer({
         })
         .join('\n')
 
-      // Create HTML
       const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -207,13 +205,11 @@ export default function MultiFileReactRenderer({
   <script src="https://unpkg.com/react-router-dom@6.20.0/dist/umd/react-router-dom.production.min.js"></script>
   <script src="https://unpkg.com/clsx@2.0.0/dist/clsx.min.js"></script>
   <script>
-    // Polyfill Lucide React - create icon components on demand
     window.LucideReact = new Proxy({}, {
       get(target, iconName) {
         if (iconName === '__esModule') return true;
         if (iconName === 'default') return window.LucideReact;
         
-        // Return a React component that renders an SVG placeholder
         return window.React.forwardRef((props, ref) => {
           const { size = 24, color = 'currentColor', strokeWidth = 2, className = '', ...rest } = props;
           
@@ -234,7 +230,6 @@ export default function MultiFileReactRenderer({
       }
     });
     
-    // CVA polyfill
     window.cva = function(base, config) {
       return function(props) {
         if (!props) return base || '';
@@ -271,13 +266,10 @@ export default function MultiFileReactRenderer({
       return inputs.filter(Boolean).join(' ');
     };
     
-    // Module system
     ${moduleLoader}
     
-    // Modules
     ${wrappedModules}
     
-    // Render
     try {
       const App = window.require('${entry}');
       if (!App) {
@@ -287,7 +279,6 @@ export default function MultiFileReactRenderer({
       const root = ReactDOM.createRoot(document.getElementById('root'));
       root.render(React.createElement(App));
     } catch (err) {
-      console.error('[Render Error]', err);
       document.body.innerHTML = \`
         <div style="display: flex; align-items: center; justify-content: center; height: 100vh; background: #1a1a1a; color: white; padding: 20px;">
           <div style="max-width: 600px;">
@@ -309,9 +300,9 @@ export default function MultiFileReactRenderer({
       }
 
       setError(null)
-    } catch (err: any) {
-      console.error('Renderer error:', err)
-      setError(err.message || 'Unknown error')
+    } catch (err) {
+      const error = err as Error
+      setError(error.message || 'Unknown error')
     }
   }, [files, entry, dependencies, isReady])
 

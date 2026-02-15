@@ -14,13 +14,11 @@ interface PrototypeRunnerProps {
 export default function PrototypeRunner({
   flow,
   deviceInfo,
-  parametricValues = {},
+  /* parametricValues = {}, */
 }: PrototypeRunnerProps) {
   const projectFiles = flow.project.files
   const projectEntry = flow.project.entry
   const projectDependencies = flow.project.dependencies
-
-  console.log('PrototypeRunner: Running unified project with router')
 
   return (
     <div className="flex flex-col h-full">

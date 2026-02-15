@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react'
+import { ChevronRight, ChevronDown, File, Folder, Copy } from 'lucide-react'
+import React, { useState, useMemo } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { ChevronRight, ChevronDown, File, Folder, Copy } from 'lucide-react'
 import type { FlowGraph } from '../types/home.types'
 
 interface CodeViewerProps {
@@ -108,7 +108,7 @@ export default function CodeViewer({ flow }: CodeViewerProps) {
     })
   }
 
-  const renderNode = (node: FileNode, depth: number = 0): JSX.Element => {
+  const renderNode = (node: FileNode, depth: number = 0): React.JSX.Element => {
     if (node.type === 'folder') {
       const isExpanded = expandedFolders.has(node.path)
       return (

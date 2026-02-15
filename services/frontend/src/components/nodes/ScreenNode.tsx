@@ -1,6 +1,6 @@
 import { Handle, Position, NodeResizer } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useMemo } from 'react'
 import { Agentator, useAgentatorGlobal } from '../../lib/Agentator'
 import type { FlowScreen, Project } from '../../types/home.types'
 import DeviceFrame from '../DeviceFrame'
@@ -39,12 +39,62 @@ function ScreenNode({ data, selected }: NodeProps) {
     flowGraph,
   } = typedData
 
+  // Compute files using useMemo to avoid recreating on every render
+  const files = useMemo(() => {
+    if (!flowGraph?.project) return null
+
+    const projectFiles = flowGraph.project.files
+    const screenComponent = screen.component_path
+    const screenComponentName =
+      screenComponent?.split('/').pop()?.replace('.tsx', '') || 'Screen'
+
+    return {
+      '/App.tsx': `import ${screenComponentName} from '${screenComponent?.replace('.tsx', '') || '/screens/Screen'}'
+
+export default function App() {
+  const handleTransition = (transitionId: string) => {
+    console.log('Preview transition:', transitionId)
+  }
+  
+  return <${screenComponentName} onTransition={handleTransition} />
+}`,
+      ...(screenComponent
+        ? { [screenComponent]: projectFiles[screenComponent] || '' }
+        : {}),
+      ...Object.fromEntries(
+        Object.entries(projectFiles).filter(
+          ([path]) =>
+            path.startsWith('/components/') ||
+            path.startsWith('/lib/') ||
+            path === '/tsconfig.json' ||
+            path === '/package.json',
+        ),
+      ),
+    }
+  }, [flowGraph, screen.component_path])
+
+  const styleOverrides = getStyleOverrides(screen.screen_id)
+
+  // Load style overrides effect
   useEffect(() => {
     if (project?.project_id && screen.screen_id) {
       loadStyleOverrides(project.project_id, screen.screen_id)
     }
   }, [project?.project_id, screen.screen_id, loadStyleOverrides])
 
+  // Apply reorder mutations effect
+  useEffect(() => {
+    if (files && contentRef.current) {
+      const timer = setTimeout(() => {
+        if (contentRef.current) {
+          applyReorderMutations(screen.screen_id, contentRef.current)
+        }
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [files, screen.screen_id, applyReorderMutations])
+
+  // Early return if project not loaded
   if (!flowGraph?.project) {
     return (
       <div
@@ -70,55 +120,8 @@ function ScreenNode({ data, selected }: NodeProps) {
     )
   }
 
-  const projectFiles = flowGraph.project.files
-  const screenComponent = screen.component_path
-
-  const screenComponentName =
-    screenComponent?.split('/').pop()?.replace('.tsx', '') || 'Screen'
-
-  const files: Record<string, string> = {
-    '/App.tsx': `import ${screenComponentName} from '${screenComponent?.replace('.tsx', '') || '/screens/Screen'}'
-
-export default function App() {
-  const handleTransition = (transitionId: string) => {
-    console.log('Preview transition:', transitionId)
-  }
-  
-  return <${screenComponentName} onTransition={handleTransition} />
-}`,
-    ...(screenComponent
-      ? { [screenComponent]: projectFiles[screenComponent] || '' }
-      : {}),
-    ...Object.fromEntries(
-      Object.entries(projectFiles).filter(
-        ([path]) =>
-          path.startsWith('/components/') ||
-          path.startsWith('/lib/') ||
-          path === '/tsconfig.json' ||
-          path === '/package.json',
-      ),
-    ),
-  }
-
   const entry = '/App.tsx'
   const dependencies = flowGraph.project.dependencies || {}
-
-  console.log(
-    `ScreenNode ${screen.screen_id}: Extracted ${Object.keys(files).length} files`,
-  )
-
-  const styleOverrides = getStyleOverrides(screen.screen_id)
-
-  useEffect(() => {
-    if (files && contentRef.current) {
-      const timer = setTimeout(() => {
-        if (contentRef.current) {
-          applyReorderMutations(screen.screen_id, contentRef.current)
-        }
-      }, 100)
-      return () => clearTimeout(timer)
-    }
-  }, [files, screen.screen_id, applyReorderMutations])
 
   const displayWidth =
     deviceInfo.platform === 'phone'
@@ -239,11 +242,13 @@ export default function App() {
                 overrides={styleOverrides}
                 containerRef={contentRef}
               >
-                <MultiFileReactRenderer
-                  files={files}
-                  entry={entry}
-                  dependencies={dependencies}
-                />
+                {files && (
+                  <MultiFileReactRenderer
+                    files={files}
+                    entry={entry}
+                    dependencies={dependencies}
+                  />
+                )}
               </StyleOverlayApplicator>
 
               {isIterating && (

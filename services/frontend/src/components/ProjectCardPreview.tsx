@@ -1,27 +1,59 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { type ProjectDisplay } from '../types/home.types'
-import DynamicReactRenderer from './DynamicReactRenderer'
-
-// ============================================================================
-// TYPES
-// ============================================================================
+import MultiFileReactRenderer from './MultiFileReactRenderer'
 
 interface ProjectCardPreviewProps {
   project: ProjectDisplay
   cardHeight: number
 }
 
-// ============================================================================
-// PROJECT CARD PREVIEW COMPONENT
-// ============================================================================
-
 const ProjectCardPreview: React.FC<ProjectCardPreviewProps> = ({
   project,
   cardHeight,
 }) => {
+  // Build files for the entry screen (similar to ScreenNode)
+  // Must be called unconditionally at top level
+  const files = useMemo(() => {
+    if (!project.flow_mode || !project.flow_graph?.project?.files) {
+      return null
+    }
+
+    const entryScreen = project.flow_graph.screens?.find(
+      s => s.screen_id === project.flow_graph!.entry_screen_id,
+    )
+
+    if (!entryScreen) {
+      return null
+    }
+
+    const projectFiles = project.flow_graph.project.files
+    const screenComponent = entryScreen.component_path
+    const screenComponentName =
+      screenComponent?.split('/').pop()?.replace('.tsx', '') || 'Screen'
+
+    return {
+      '/App.tsx': `import ${screenComponentName} from '${screenComponent?.replace('.tsx', '') || '/screens/Screen'}'
+
+export default function App() {
+  return <${screenComponentName} onTransition={() => {}} />
+}`,
+      ...(screenComponent
+        ? { [screenComponent]: projectFiles[screenComponent] || '' }
+        : {}),
+      ...Object.fromEntries(
+        Object.entries(projectFiles).filter(
+          ([path]) =>
+            path.startsWith('/components/') ||
+            path.startsWith('/lib/') ||
+            path === '/tsconfig.json' ||
+            path === '/package.json',
+        ),
+      ),
+    }
+  }, [project.flow_mode, project.flow_graph])
+
   // For flow projects, render the entry screen
   if (project.flow_mode && project.flow_graph) {
-    // Check if flow_graph has the required structure
     if (
       !project.flow_graph.screens ||
       !Array.isArray(project.flow_graph.screens) ||
@@ -56,7 +88,7 @@ const ProjectCardPreview: React.FC<ProjectCardPreviewProps> = ({
       )
     }
 
-    if (entryScreen.ui_error || !entryScreen.ui_code) {
+    if (!project.flow_graph.project?.files || !files) {
       return (
         <div
           className="w-full h-full flex items-center justify-center"
@@ -94,79 +126,30 @@ const ProjectCardPreview: React.FC<ProjectCardPreviewProps> = ({
             transformOrigin: 'center center',
             width: baseWidth,
             height: baseHeight,
-            pointerEvents: 'none', // Disable all interactions in preview
+            pointerEvents: 'none',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <DynamicReactRenderer jsxCode={entryScreen.ui_code} />
+          <MultiFileReactRenderer
+            files={files}
+            entry="/App.tsx"
+            dependencies={project.flow_graph.project.dependencies || {}}
+          />
         </div>
       </div>
     )
   }
 
-  // Legacy single-screen project handling (won't be used anymore)
-  if (project.ui_loading) {
-    return (
-      <div
-        className="w-full h-full flex items-center justify-center"
-        style={{ backgroundColor: '#F7F5F3' }}
-      >
-        <div className="text-sm" style={{ color: '#929397' }}>
-          Loading preview...
-        </div>
-      </div>
-    )
-  }
-
-  if (project.ui_error || !project.ui) {
-    return (
-      <div
-        className="w-full h-full flex items-center justify-center"
-        style={{ backgroundColor: '#F7F5F3' }}
-      >
-        <div className="text-sm" style={{ color: '#929397' }}>
-          Preview unavailable
-        </div>
-      </div>
-    )
-  }
-
-  const baseWidth = 375
-  const baseHeight = 812
-
-  const availableHeight = cardHeight - 70
-  const availableWidth = 280
-
-  const scaleX = (availableWidth / baseWidth) * 1.2
-  const scaleY = (availableHeight / baseHeight) * 1.2
-  const scale = Math.min(scaleX, scaleY, 0.6)
-
+  // Legacy single-screen projects not supported with new renderer
   return (
     <div
-      className="w-full h-full flex items-center justify-center overflow-hidden"
+      className="w-full h-full flex items-center justify-center"
       style={{ backgroundColor: '#F7F5F3' }}
     >
-      <div
-        style={{
-          transform: `scale(${scale})`,
-          transformOrigin: 'center center',
-          width: baseWidth,
-          height: baseHeight,
-          pointerEvents: 'none',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        {typeof project.ui === 'string' ? (
-          // Handle JSX code strings from backend
-          <DynamicReactRenderer jsxCode={project.ui} />
-        ) : (
-          // Handle React component trees
-          <DynamicReactRenderer jsxCode={JSON.stringify(project.ui)} />
-        )}
+      <div className="text-sm" style={{ color: '#929397' }}>
+        Legacy project format
       </div>
     </div>
   )

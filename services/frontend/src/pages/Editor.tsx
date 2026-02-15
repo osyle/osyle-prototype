@@ -28,7 +28,7 @@ import {
   type Message,
   type ConversationAnnotation,
 } from '../services/iterationWebSocket'
-import type { FlowGraph, Project } from '../types/home.types'
+import type { FlowGraph, FlowScreen, Project } from '../types/home.types'
 import type {
   ParameterValues,
   VariationSpace,
@@ -340,7 +340,22 @@ export default function Editor() {
       const project = JSON.parse(currentProject)
       const versionData = await api.llm.getFlow(project.project_id, version)
 
-      setFlowGraph(versionData.flow_graph)
+      setFlowGraph({
+        ...versionData.flow_graph,
+        project: versionData.flow_graph.project ||
+          flowGraph?.project || {
+            files: {},
+            entry: '/App.tsx',
+            dependencies: {},
+          },
+        screens: versionData.flow_graph.screens.map(
+          (s): FlowScreen => ({
+            ...s,
+            component_path: (s.component_path ||
+              `/screens/${s.name.replace(/\s+/g, '')}Screen.tsx`) as string,
+          }),
+        ),
+      })
       setViewingVersion(version)
 
       // ✅ NEW: Load conversation for this version
@@ -372,7 +387,22 @@ export default function Editor() {
         version,
       )
 
-      setFlowGraph(result.flow_graph)
+      setFlowGraph({
+        ...result.flow_graph,
+        project: flowGraph?.project ||
+          result.flow_graph.project || {
+            files: {},
+            entry: '/App.tsx',
+            dependencies: {},
+          },
+        screens: result.flow_graph.screens.map(
+          (s): FlowScreen => ({
+            ...s,
+            component_path: (s.component_path ||
+              `/screens/${s.name.replace(/\s+/g, '')}Screen.tsx`) as string,
+          }),
+        ),
+      })
       setCurrentFlowVersion(result.new_version)
       setViewingVersion(null)
 
@@ -559,7 +589,22 @@ export default function Editor() {
       try {
         const flowData = await api.llm.getFlow(project.project_id)
         console.log('✅ Loaded latest flow from S3')
-        setFlowGraph(flowData.flow_graph)
+        setFlowGraph({
+          ...flowData.flow_graph,
+          project: flowData.flow_graph.project ||
+            flowGraph?.project || {
+              files: {},
+              entry: '/App.tsx',
+              dependencies: {},
+            },
+          screens: flowData.flow_graph.screens.map(
+            (s): FlowScreen => ({
+              ...s,
+              component_path: (s.component_path ||
+                `/screens/${s.name.replace(/\s+/g, '')}Screen.tsx`) as string,
+            }),
+          ),
+        })
         setGenerationStage('complete')
 
         // Load version info
@@ -584,7 +629,16 @@ export default function Editor() {
       // Fallback: Check if flow_graph exists in localStorage (for offline/edge cases)
       if (project.flow_graph && project.flow_graph.screens?.length > 0) {
         console.log('⚠️ Using flow graph from localStorage (S3 failed)')
-        setFlowGraph(project.flow_graph)
+        setFlowGraph({
+          ...project.flow_graph,
+          screens: project.flow_graph.screens.map(
+            (s: FlowScreen): FlowScreen => ({
+              ...s,
+              component_path: (s.component_path ||
+                `/screens/${s.name.replace(/\s+/g, '')}Screen.tsx`) as string,
+            }),
+          ),
+        })
         setGenerationStage('complete')
 
         // Load version info
@@ -662,14 +716,32 @@ export default function Editor() {
           // Keep modal visible and show "Generating screens" stage
           setRethinkStage('screens')
 
+          // Initialize project structure with router and empty screen files
+          // Screens will be populated as they're generated
+          const initialProject = {
+            files: {
+              '/App.tsx':
+                '// Router will be generated after screens are complete',
+            },
+            entry: '/App.tsx',
+            dependencies: {
+              'lucide-react': '^0.263.1',
+            },
+          }
+
           // Add ui_loading flag to each screen for progressive rendering
           const flowWithLoading: FlowGraph = {
             ...flowArch,
-            screens: flowArch.screens.map(s => ({
-              ...s,
-              ui_loading: true,
-              ui_code: null,
-            })),
+            project: initialProject,
+            screens: flowArch.screens.map(
+              (s): FlowScreen => ({
+                ...s,
+                component_path: (s['component_path'] ||
+                  `/screens/${s.name.replace(/\s+/g, '')}Screen.tsx`) as string,
+                ui_loading: true,
+                ui_code: null,
+              }),
+            ),
           }
           setFlowGraph(flowWithLoading)
 
@@ -702,12 +774,34 @@ export default function Editor() {
             [screenId]: uiCode,
           }))
 
-          // CRITICAL FIX: Set ui_loading to false so checkpoint renders
-          // Without this, the "Generating..." spinner blocks checkpoint rendering
+          // CRITICAL FIX: Add checkpoint to project.files AND set ui_loading to false
+          // This enables real-time progressive rendering as code streams in
           setFlowGraph(prev => {
             if (!prev) return prev
+
+            // Find the screen to get its component_path
+            const screen = prev.screens.find(s => s.screen_id === screenId)
+            if (!screen) return prev
+
+            const componentPath =
+              screen.component_path || `/screens/${screenId}.tsx`
+
+            // Update project.files with checkpoint code
+            const updatedFiles = {
+              ...(prev.project?.files || {}),
+              [componentPath]: uiCode,
+            }
+
             return {
               ...prev,
+              project: {
+                ...(prev.project || {}),
+                files: updatedFiles,
+                entry: prev.project?.entry || '/App.tsx',
+                dependencies: prev.project?.dependencies || {
+                  'lucide-react': '^0.263.1',
+                },
+              },
               screens: prev.screens.map(s =>
                 s.screen_id === screenId ? { ...s, ui_loading: false } : s,
               ),
@@ -753,8 +847,32 @@ export default function Editor() {
 
             setFlowGraph(prevGraph => {
               if (!prevGraph) return prevGraph
+
+              // Find the screen to get its component_path
+              const screen = prevGraph.screens.find(
+                s => s.screen_id === screenId,
+              )
+              if (!screen) return prevGraph
+
+              const componentPath =
+                screen.component_path || `/screens/${screenId}.tsx`
+
+              // Update project.files with the new screen code
+              const updatedFiles = {
+                ...(prevGraph.project?.files || {}),
+                [componentPath]: finalCode,
+              }
+
               return {
                 ...prevGraph,
+                project: {
+                  ...(prevGraph.project || {}),
+                  files: updatedFiles,
+                  entry: prevGraph.project?.entry || '/App.tsx',
+                  dependencies: prevGraph.project?.dependencies || {
+                    'lucide-react': '^0.263.1',
+                  },
+                },
                 screens: prevGraph.screens.map(s =>
                   s.screen_id === screenId
                     ? {
@@ -805,6 +923,23 @@ export default function Editor() {
 
           // Refresh available versions list
           loadVersionInfo()
+
+          // Update flow graph with final result (includes proper router)
+          setFlowGraph({
+            ...result.flow_graph,
+            project: flowGraph?.project || {
+              files: {},
+              entry: '/App.tsx',
+              dependencies: {},
+            },
+            screens: result.flow_graph.screens.map(
+              (s): FlowScreen => ({
+                ...s,
+                component_path: (s['component_path'] ||
+                  `/screens/${s.name.replace(/\s+/g, '')}Screen.tsx`) as string,
+              }),
+            ),
+          })
 
           // Update project in localStorage with flow_graph and version
           project.flow_graph = result.flow_graph

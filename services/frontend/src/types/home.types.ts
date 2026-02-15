@@ -54,7 +54,7 @@ export interface FlowScreen {
   task_description?: string
 
   // Unified project fields
-  component_path: string // Path to screen component (e.g., '/screens/LoginScreen.tsx')
+  component_path?: string // Path to screen component (e.g., '/screens/LoginScreen.tsx') - optional, can be generated
 
   // Device info (for canvas display)
   platform?: string
