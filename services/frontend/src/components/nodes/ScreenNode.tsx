@@ -258,17 +258,6 @@ export default function App() {
                     />
                   ))}
                 </div>
-                <span
-                  style={{
-                    color: 'rgba(255, 255, 255, 0.7)',
-                    fontSize: '12px',
-                    fontWeight: '500',
-                  }}
-                >
-                  {isGenerating || screen.ui_loading
-                    ? 'Generating...'
-                    : 'Loading...'}
-                </span>
               </div>
             </div>
 
