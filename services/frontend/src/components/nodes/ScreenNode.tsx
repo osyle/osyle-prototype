@@ -1,4 +1,4 @@
-import { Handle, Position, NodeResizer } from '@xyflow/react'
+import { Handle, Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import { useRef, useEffect, useMemo } from 'react'
 import { Agentator, useAgentatorGlobal } from '../../lib/Agentator'
@@ -20,13 +20,19 @@ export interface ScreenNodeData extends Record<string, unknown> {
   }
   project: Project
   flowGraph?: import('../../types/home.types').FlowGraph
+  actualScreenSize: { width: number; height: number }
 }
 
 function ScreenNode({ data, selected }: NodeProps) {
   const nodeRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  const { getStyleOverrides, loadStyleOverrides, applyReorderMutations } =
-    useAgentatorGlobal()
+  const {
+    getStyleOverrides,
+    loadStyleOverrides,
+    applyReorderMutations,
+    isActive,
+    mode,
+  } = useAgentatorGlobal()
 
   const typedData = data as unknown as ScreenNodeData
   const {
@@ -37,7 +43,17 @@ function ScreenNode({ data, selected }: NodeProps) {
     deviceInfo,
     project,
     flowGraph,
+    actualScreenSize,
   } = typedData
+
+  // Calculate if annotation mode is active
+  const isAnnotationModeActive =
+    isActive && (mode === 'annotate' || mode === 'inspect' || mode === 'drag')
+
+  // Set global flag for ReactFlowCanvas to check
+  useEffect(() => {
+    ;(window as any).__annotationModeActive = isAnnotationModeActive
+  }, [isAnnotationModeActive])
 
   // Compute files using useMemo to avoid recreating on every render
   const files = useMemo(() => {
@@ -101,10 +117,9 @@ export default function App() {
         ref={nodeRef}
         style={{
           width:
-            deviceInfo.screen.width +
-            (deviceInfo.platform === 'phone' ? 24 : 0),
+            actualScreenSize.width + (deviceInfo.platform === 'phone' ? 24 : 0),
           height:
-            deviceInfo.screen.height +
+            actualScreenSize.height +
             (deviceInfo.platform === 'phone' ? 48 : 40),
           display: 'flex',
           alignItems: 'center',
@@ -125,12 +140,12 @@ export default function App() {
 
   const displayWidth =
     deviceInfo.platform === 'phone'
-      ? deviceInfo.screen.width + 24
-      : deviceInfo.screen.width
+      ? actualScreenSize.width + 24
+      : actualScreenSize.width
   const displayHeight =
     deviceInfo.platform === 'phone'
-      ? deviceInfo.screen.height + 48
-      : deviceInfo.screen.height + 40
+      ? actualScreenSize.height + 48
+      : actualScreenSize.height + 40
 
   return (
     <div
@@ -164,24 +179,6 @@ export default function App() {
       />
 
       {selected && (
-        <NodeResizer
-          minWidth={320 + (deviceInfo.platform === 'phone' ? 24 : 0)}
-          minHeight={568 + (deviceInfo.platform === 'phone' ? 48 : 40)}
-          handleStyle={{
-            width: 12,
-            height: 12,
-            borderRadius: 4,
-            backgroundColor: 'rgba(59, 130, 246, 0.9)',
-            border: '2px solid white',
-          }}
-          lineStyle={{
-            border: '3px solid rgba(59, 130, 246, 0.7)',
-            borderRadius: 6,
-          }}
-        />
-      )}
-
-      {selected && (
         <div
           style={{
             position: 'absolute',
@@ -194,6 +191,261 @@ export default function App() {
               '0 0 0 1px rgba(59, 130, 246, 0.3), 0 4px 12px rgba(59, 130, 246, 0.2)',
           }}
         />
+      )}
+
+      {selected && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '-110px', // More gap from device frame
+            left: '0',
+            right: '0',
+            backgroundColor: 'rgba(0, 0, 0, 0.95)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(59, 130, 246, 0.4)',
+            borderRadius: '8px',
+            padding: '14px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            pointerEvents: 'auto',
+            zIndex: 100000,
+            minWidth: '320px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
+          }}
+          onPointerDown={e => {
+            e.stopPropagation()
+          }}
+          onClick={e => {
+            e.stopPropagation()
+          }}
+        >
+          {/* Header with Reset */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '4px',
+            }}
+          >
+            <span
+              style={{
+                fontSize: '12px',
+                fontWeight: 600,
+                color: 'rgba(255, 255, 255, 0.9)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}
+            >
+              Screen Size
+            </span>
+            <button
+              onClick={e => {
+                e.stopPropagation()
+                window.dispatchEvent(
+                  new CustomEvent('screenResize', {
+                    detail: {
+                      screenId: screen.screen_id,
+                      width: deviceInfo.screen.width,
+                      height: deviceInfo.screen.height,
+                    },
+                  }),
+                )
+              }}
+              onPointerDown={e => e.stopPropagation()}
+              style={{
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                color: 'rgba(255, 255, 255, 0.8)',
+                padding: '4px 10px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
+              }}
+            >
+              Reset
+            </button>
+          </div>
+
+          {/* Width Slider */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <label
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  color: 'rgba(255, 255, 255, 0.7)',
+                }}
+              >
+                Width
+              </label>
+              <span
+                style={{
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#3B82F6',
+                  fontFamily: 'monospace',
+                }}
+              >
+                {actualScreenSize.width}px
+              </span>
+            </div>
+            <input
+              type="range"
+              min="280"
+              max="2560"
+              step="10"
+              value={actualScreenSize.width}
+              onChange={e => {
+                e.stopPropagation()
+                const newWidth = parseInt(e.target.value)
+                window.dispatchEvent(
+                  new CustomEvent('screenResize', {
+                    detail: {
+                      screenId: screen.screen_id,
+                      width: newWidth,
+                      height: actualScreenSize.height,
+                    },
+                  }),
+                )
+              }}
+              onPointerDown={e => {
+                e.stopPropagation()
+              }}
+              onPointerUp={e => {
+                e.stopPropagation()
+              }}
+              onClick={e => {
+                e.stopPropagation()
+              }}
+              style={{
+                width: '100%',
+                height: '8px',
+                borderRadius: '4px',
+                background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${((actualScreenSize.width - 280) / (2560 - 280)) * 100}%, rgba(255, 255, 255, 0.15) ${((actualScreenSize.width - 280) / (2560 - 280)) * 100}%, rgba(255, 255, 255, 0.15) 100%)`,
+                outline: 'none',
+                cursor: 'pointer',
+                appearance: 'none',
+                WebkitAppearance: 'none',
+              }}
+            />
+          </div>
+
+          {/* Height Slider */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <label
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  color: 'rgba(255, 255, 255, 0.7)',
+                }}
+              >
+                Height
+              </label>
+              <span
+                style={{
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#3B82F6',
+                  fontFamily: 'monospace',
+                }}
+              >
+                {actualScreenSize.height}px
+              </span>
+            </div>
+            <input
+              type="range"
+              min="400"
+              max="1600"
+              step="10"
+              value={actualScreenSize.height}
+              onChange={e => {
+                e.stopPropagation()
+                const newHeight = parseInt(e.target.value)
+                window.dispatchEvent(
+                  new CustomEvent('screenResize', {
+                    detail: {
+                      screenId: screen.screen_id,
+                      width: actualScreenSize.width,
+                      height: newHeight,
+                    },
+                  }),
+                )
+              }}
+              onPointerDown={e => {
+                e.stopPropagation()
+              }}
+              onPointerUp={e => {
+                e.stopPropagation()
+              }}
+              onClick={e => {
+                e.stopPropagation()
+              }}
+              style={{
+                width: '100%',
+                height: '8px',
+                borderRadius: '4px',
+                background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${((actualScreenSize.height - 400) / (1600 - 400)) * 100}%, rgba(255, 255, 255, 0.15) ${((actualScreenSize.height - 400) / (1600 - 400)) * 100}%, rgba(255, 255, 255, 0.15) 100%)`,
+                outline: 'none',
+                cursor: 'pointer',
+                appearance: 'none',
+                WebkitAppearance: 'none',
+              }}
+            />
+          </div>
+
+          <style>
+            {`
+              input[type="range"]::-webkit-slider-thumb {
+                appearance: none;
+                width: 18px;
+                height: 18px;
+                border-radius: 50%;
+                background: #3B82F6;
+                cursor: pointer;
+                border: 3px solid white;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+              }
+              input[type="range"]::-moz-range-thumb {
+                width: 18px;
+                height: 18px;
+                border-radius: 50%;
+                background: #3B82F6;
+                cursor: pointer;
+                border: 3px solid white;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+              }
+              input[type="range"]::-webkit-slider-thumb:hover {
+                transform: scale(1.1);
+              }
+              input[type="range"]::-moz-range-thumb:hover {
+                transform: scale(1.1);
+              }
+            `}
+          </style>
+        </div>
       )}
 
       {isEntry && (
@@ -234,64 +486,107 @@ export default function App() {
         {screen.name}
       </div>
 
-      <DeviceFrame>
-        <div ref={contentRef} style={{ width: '100%', height: '100%' }}>
-          <Agentator screenId={screen.screen_id} screenName={screen.name}>
-            <>
-              <StyleOverlayApplicator
-                overrides={styleOverrides}
-                containerRef={contentRef}
-              >
-                {files && (
-                  <MultiFileReactRenderer
-                    files={files}
-                    entry={entry}
-                    dependencies={dependencies}
-                  />
+      <DeviceFrame screenSize={actualScreenSize}>
+        <div
+          ref={contentRef}
+          onMouseDown={e => {
+            // Prevent drag when selected or annotation mode - but only from this div, not sliders above
+            if (selected || isAnnotationModeActive) {
+              e.stopPropagation()
+            }
+          }}
+          style={{
+            width: '100%',
+            height: '100%',
+            position: 'relative',
+            cursor: selected || isAnnotationModeActive ? 'default' : 'grab',
+          }}
+        >
+          {/* 
+            Overlay logic:
+            - Show overlay when: NOT selected AND NOT in annotation mode
+            - Hide overlay when: selected OR annotation mode active
+          */}
+          {!selected && !isAnnotationModeActive && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 1000,
+                cursor: 'grab',
+                pointerEvents: 'auto',
+                backgroundColor: 'transparent',
+              }}
+            />
+          )}
+
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'auto', // Always enabled for content and annotations
+            }}
+          >
+            <Agentator screenId={screen.screen_id} screenName={screen.name}>
+              <>
+                <StyleOverlayApplicator
+                  overrides={styleOverrides}
+                  containerRef={contentRef}
+                >
+                  {files && (
+                    <MultiFileReactRenderer
+                      files={files}
+                      entry={entry}
+                      dependencies={dependencies}
+                    />
+                  )}
+                </StyleOverlayApplicator>
+
+                {isIterating && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '8px',
+                      left: '8px',
+                      background: 'rgba(249, 115, 22, 0.9)',
+                      color: 'white',
+                      padding: '4px 12px',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      zIndex: 100,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    🔄 Iterating...
+                  </div>
                 )}
-              </StyleOverlayApplicator>
 
-              {isIterating && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '8px',
-                    left: '8px',
-                    background: 'rgba(249, 115, 22, 0.9)',
-                    color: 'white',
-                    padding: '4px 12px',
-                    borderRadius: '12px',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    zIndex: 100,
-                    pointerEvents: 'none',
-                  }}
-                >
-                  🔄 Iterating...
-                </div>
-              )}
-
-              {isGenerating && !isIterating && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '8px',
-                    left: '8px',
-                    background: 'rgba(59, 130, 246, 0.9)',
-                    color: 'white',
-                    padding: '4px 12px',
-                    borderRadius: '12px',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    zIndex: 100,
-                    pointerEvents: 'none',
-                  }}
-                >
-                  ⏳ Generating...
-                </div>
-              )}
-            </>
-          </Agentator>
+                {isGenerating && !isIterating && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '8px',
+                      left: '8px',
+                      background: 'rgba(59, 130, 246, 0.9)',
+                      color: 'white',
+                      padding: '4px 12px',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      zIndex: 100,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    ⏳ Generating...
+                  </div>
+                )}
+              </>
+            </Agentator>
+          </div>
         </div>
       </DeviceFrame>
     </div>

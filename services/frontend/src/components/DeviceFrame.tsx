@@ -4,18 +4,23 @@ import { useDeviceContext } from '../hooks/useDeviceContext'
 interface DeviceFrameProps {
   children: ReactNode
   scaledDimensions?: { width: number; height: number; scale: number }
+  screenSize?: { width: number; height: number }
 }
 
 export default function DeviceFrame({
   children,
   scaledDimensions,
+  screenSize,
 }: DeviceFrameProps) {
   const { device_info } = useDeviceContext()
   const { platform, screen } = device_info
 
-  // Use scaled dimensions if provided, otherwise use original
-  const displayWidth = scaledDimensions?.width ?? screen.width
-  const displayHeight = scaledDimensions?.height ?? screen.height
+  // Use screenSize if provided, otherwise fall back to context screen
+  const actualScreen = screenSize || screen
+
+  // Use scaled dimensions if provided, otherwise use actual screen
+  const displayWidth = scaledDimensions?.width ?? actualScreen.width
+  const displayHeight = scaledDimensions?.height ?? actualScreen.height
 
   // Frame-specific styles
   const getFrameStyles = () => {

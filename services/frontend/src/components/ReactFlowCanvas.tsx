@@ -10,7 +10,7 @@ import {
   Panel,
 } from '@xyflow/react'
 import type { Node, Edge, Connection, OnNodesChange } from '@xyflow/react'
-import React, { useCallback, useEffect, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import '@xyflow/react/dist/style.css'
 import type { FlowGraph, Project } from '../types/home.types'
 
@@ -67,6 +67,24 @@ export default function ReactFlowCanvas({
   deviceInfo,
   project,
 }: ReactFlowCanvasProps) {
+  // Track annotation mode via global flag
+  const [isAnnotationMode, setIsAnnotationMode] = useState(false)
+
+  // Poll for annotation mode changes
+  useEffect(() => {
+    const checkAnnotationMode = () => {
+      const active = (window as any).__annotationModeActive || false
+      setIsAnnotationMode(active)
+    }
+
+    // Check immediately
+    checkAnnotationMode()
+
+    // Check periodically
+    const interval = setInterval(checkAnnotationMode, 100)
+
+    return () => clearInterval(interval)
+  }, [])
   // Convert screens to React Flow nodes
   const initialNodes: Node[] = useMemo(
     () =>
@@ -93,6 +111,7 @@ export default function ReactFlowCanvas({
           deviceInfo,
           project,
           flowGraph, // NEW: Pass flowGraph for unified project access
+          actualScreenSize: size, // Pass the actual screen size for this node
         }
 
         return {
@@ -103,7 +122,7 @@ export default function ReactFlowCanvas({
           selected: selectedScreenId === screen.screen_id,
           width: displayWidth,
           height: displayHeight,
-          draggable: true,
+          draggable: selectedScreenId !== screen.screen_id && !isAnnotationMode, // Can't drag when selected OR annotation mode
           selectable: true,
         }
       }),
@@ -116,6 +135,7 @@ export default function ReactFlowCanvas({
       currentIteratingScreenId,
       deviceInfo,
       project,
+      isAnnotationMode,
     ],
   )
 
@@ -189,29 +209,25 @@ export default function ReactFlowCanvas({
     [onNodesChange, onScreenMove],
   )
 
-  // Handle node resize
+  // Handle screen resize from sliders
   useEffect(() => {
     const handleResize = (event: Event) => {
       const customEvent = event as CustomEvent<{
-        nodeId: string
+        screenId: string
         width: number
         height: number
       }>
-      const { nodeId, width, height } = customEvent.detail
+      const { screenId, width, height } = customEvent.detail
 
-      // Subtract bezel from display size to get actual screen size
-      const actualWidth = deviceInfo.platform === 'phone' ? width - 24 : width
-      const actualHeight =
-        deviceInfo.platform === 'phone' ? height - 48 : height - 40
-
-      onScreenResize(nodeId, actualWidth, actualHeight)
+      console.log('📏 Resize event received:', { screenId, width, height })
+      onScreenResize(screenId, width, height)
     }
 
-    window.addEventListener('nodeResize', handleResize)
+    window.addEventListener('screenResize', handleResize)
     return () => {
-      window.removeEventListener('nodeResize', handleResize)
+      window.removeEventListener('screenResize', handleResize)
     }
-  }, [onScreenResize, deviceInfo.platform])
+  }, [onScreenResize])
 
   const onConnect = useCallback(
     (params: Connection) => setEdges(eds => addEdge(params, eds)),
@@ -237,7 +253,7 @@ export default function ReactFlowCanvas({
         minZoom={0.1}
         maxZoom={4}
         selectNodesOnDrag={false}
-        nodesDraggable={true} // Nodes are draggable
+        nodesDraggable={true} // Nodes are draggable (controlled in ScreenNode)
         panOnDrag={[2]} // Right mouse button for panning (middle button removed)
         panOnScroll={false} // Disable pan on scroll to allow element interactions
         zoomOnScroll={true} // Enable zoom on scroll
