@@ -765,7 +765,12 @@ export default function Home() {
       setIsRebuildingDtm(true)
       setDtmTrainingError(null)
 
-      // Open DTM training modal
+      // Count resources in selected taste
+      const selectedTaste = tastes.find(t => t.taste_id === selectedTasteId)
+      const resourceCount = selectedTaste?.resources.length || 0
+
+      // Open DTM training modal with resource count
+      setDtmResourceCount(resourceCount)
       setDtmTrainingState('training')
       setIsDtmTrainingModalOpen(true)
 

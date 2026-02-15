@@ -66,20 +66,23 @@ async def get_or_build_dtm(
         result["dtm"] = dtm
         result["was_cached"] = True  # DTR is cached
     
-    # Full taste: Load pre-computed global DTM
+    # Full taste: Load pre-computed global DTM (check freshness first)
     elif actual_mode == "full":
-        print(f"🌍 Full taste mode: Loading global DTM")
-        dtm = storage.load_dtm(taste_id)
+        print(f"🌍 Full taste mode: Checking global DTM freshness...")
         
-        if not dtm:
-            # Build if missing
-            print(f"⚠️  Global DTM not found, building...")
+        # Check if cached DTM is fresh (matches current resource set)
+        is_fresh = storage.is_dtm_fresh(taste_id, resource_ids)
+        
+        if is_fresh:
+            dtm = storage.load_dtm(taste_id)
+            print(f"✅ Loaded fresh global DTM from cache")
+            result["was_cached"] = True
+        else:
+            # Build/rebuild if missing or stale
+            print(f"🔨 Global DTM is stale or missing, rebuilding...")
             dtm = await synthesizer.synthesize_dtm(taste_id, resource_ids)
             storage.save_dtm(taste_id, dtm, resource_ids)
             result["was_cached"] = False
-        else:
-            print(f"✅ Loaded global DTM from cache")
-            result["was_cached"] = True
         
         result["dtm"] = dtm
     

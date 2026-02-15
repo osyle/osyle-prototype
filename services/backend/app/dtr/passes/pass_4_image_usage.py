@@ -190,8 +190,8 @@ class Pass4ImageUsage(BasePass):
             Updated placements list with asset_path (S3 key) filled in
         """
         try:
-            from app import db
-            from app import storage as s3_storage
+            from app.core import db
+            from app.core import storage as s3_storage
             
             # Get resource to find owner_id and taste_id
             resource = db.get_resource(resource_id)

@@ -311,31 +311,18 @@ async def handle_build_dtr(websocket: WebSocket, data: Dict[str, Any], user_id: 
             # Don't fail the whole process if DB update fails
         
         # ====================================================================
-        # TRIGGER DTM BUILD (Pass 7) if taste has 2+ resources
+        # INVALIDATE GLOBAL DTM (will be rebuilt on next use in Stage 3)
         # ====================================================================
-        print(f"\n{'='*70}")
-        print(f"Checking if DTM build needed for taste {taste_id}...")
-        print(f"{'='*70}\n")
+        print(f"🔄 Invalidating global DTM for taste {taste_id}...")
+        try:
+            from app.dtm import storage as dtm_storage
+            dtm_storage.invalidate_global_dtm(taste_id)
+            print(f"✅ Global DTM invalidated")
+        except Exception as e:
+            print(f"⚠️  Warning: Failed to invalidate DTM: {e}")
+            # Don't fail the whole process if DTM invalidation fails
         
-        # Create LLM service for DTM synthesis
-        llm = get_llm_service()
-        
-        dtm_result = await build_dtm_for_taste(
-            taste_id=taste_id,
-            llm=llm,
-            websocket=websocket
-        )
-        
-        if dtm_result.get("status") == "success":
-            print(f"✅ DTM built successfully!")
-            print(f"   Resource count: {dtm_result.get('total_resources')}")
-            print(f"   Confidence: {dtm_result.get('confidence')}")
-        elif dtm_result.get("status") == "skipped":
-            print(f"ℹ️  DTM build skipped: {dtm_result.get('reason')}")
-        else:
-            print(f"⚠️  DTM build failed: {dtm_result.get('error')}")
-        
-        # Send completion AFTER DTM (or skip it - DTM sends its own messages)
+        # Send completion
         await send_complete(websocket, {
             "status": "success",
             "resource_id": resource_id,

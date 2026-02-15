@@ -53,6 +53,18 @@ def save_dtm(taste_id: str, dtm: Pass7CompleteDTM, resource_ids: List[str]) -> s
     versioned_key = s3_storage.get_dtm_versioned_key(owner_id, taste_id, timestamp)
     s3_storage.save_json_to_s3(versioned_key, dtm_dict)
     
+    # Save metadata with resource IDs for freshness checking
+    from .schemas import DTMMetadata
+    metadata = DTMMetadata(
+        taste_id=taste_id,
+        last_rebuild=datetime.now().isoformat(),
+        resource_ids_at_rebuild=resource_ids,
+        rebuild_trigger="manual",
+        rebuild_duration_seconds=0.0,  # Not tracked here
+        subsets_cached=[]
+    )
+    save_dtm_metadata(metadata)
+    
     print(f"✅ Saved DTM to S3: {latest_key}")
     return latest_key
 
@@ -339,6 +351,62 @@ def load_subset_dtm(taste_id: str, resource_ids: List[str]) -> Optional[Pass7Com
     return Pass7CompleteDTM(**data)
 
 
+def delete_subsets_containing_resource(taste_id: str, resource_id: str):
+    """
+    Delete all subset DTMs that contain a specific resource
+    
+    Args:
+        taste_id: Taste UUID
+        resource_id: Resource UUID to find and delete
+    """
+    # Load subset index
+    index = load_subset_index(taste_id)
+    
+    if not index:
+        return
+    
+    # Get taste to find owner_id
+    taste = db.get_taste(taste_id)
+    if not taste:
+        return
+    
+    owner_id = taste["owner_id"]
+    
+    # Find subsets containing this resource
+    subsets_to_delete = []
+    for subset_hash, entry in index.items():
+        if resource_id in entry.get("resource_ids", []):
+            subsets_to_delete.append(subset_hash)
+    
+    if not subsets_to_delete:
+        print(f"ℹ️  No subset DTMs contain resource {resource_id}")
+        return
+    
+    # Delete each subset DTM
+    for subset_hash in subsets_to_delete:
+        key = s3_storage.get_dtm_subset_key(owner_id, taste_id, subset_hash)
+        s3_storage.delete_object(key)
+        del index[subset_hash]
+        print(f"🗑️  Deleted subset DTM: {subset_hash}")
+    
+    # Update index
+    index_key = s3_storage.get_dtm_subset_index_key(owner_id, taste_id)
+    s3_storage.save_json_to_s3(index_key, index)
+    
+    print(f"✅ Deleted {len(subsets_to_delete)} subset DTMs containing resource {resource_id}")
+
+
+def invalidate_global_dtm(taste_id: str):
+    """
+    Invalidate global DTM by deleting it (will be rebuilt on next use)
+    
+    Args:
+        taste_id: Taste UUID
+    """
+    delete_dtm(taste_id)
+    print(f"🔄 Invalidated global DTM for taste {taste_id}")
+
+
 # ============================================================================
 # METADATA OPERATIONS
 # ============================================================================
@@ -432,13 +500,20 @@ def is_dtm_fresh(taste_id: str, current_resource_ids: List[str]) -> bool:
     Returns:
         True if fresh, False otherwise
     """
-    metadata = load_dtm_metadata(taste_id)
-    
-    if not metadata:
+    # First check if DTM exists at all
+    dtm = load_dtm(taste_id)
+    if not dtm:
         return False
     
-    # Compare resource sets
-    current_set = set(current_resource_ids)
-    metadata_set = set(metadata.resource_ids_at_rebuild)
+    # Try to use metadata (preferred)
+    metadata = load_dtm_metadata(taste_id)
+    if metadata:
+        current_set = set(current_resource_ids)
+        metadata_set = set(metadata.resource_ids_at_rebuild)
+        return current_set == metadata_set
     
-    return current_set == metadata_set
+    # Fallback: Compare against DTM's resource_ids field
+    dtm_resource_set = set(dtm.resource_ids)
+    current_set = set(current_resource_ids)
+    
+    return dtm_resource_set == current_set

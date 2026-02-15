@@ -285,7 +285,7 @@ def handle_build_dtr(data: Dict[str, Any], apigw_management: Any, connection_id:
     - Pass 4: Image Usage Patterns
     """
     import asyncio
-    from app import storage, db
+    from app.core import storage, db
     
     # Get user_id from message data (required for Lambda)
     user_id = data.get("user_id")
