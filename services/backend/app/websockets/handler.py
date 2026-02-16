@@ -727,6 +727,27 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
         })
         
         # ============================================================================
+        # CRITICAL FIX: Send shared components IMMEDIATELY after architecture
+        # This allows screens to render progressively as they complete
+        # ============================================================================
+        
+        print("\n📦 Generating and sending shared components...")
+        from app.generation.unified_flow import generate_shared_components
+        shared_files = generate_shared_components()
+        
+        # Send shared components to frontend
+        await websocket.send_json({
+            "type": "shared_components",
+            "data": {
+                "files": shared_files,
+                "dependencies": {
+                    "lucide-react": "^0.263.1"
+                }
+            }
+        })
+        print(f"  ✓ Sent {len(shared_files)} shared component files to frontend")
+        
+        # ============================================================================
         # STEP 4: Generate Unified Flow (Single Project, Multiple Screens)
         # ============================================================================
         

@@ -235,6 +235,13 @@ export interface FlowGenerationCallbacks {
   onRethinkComplete?: (rethinkData: Record<string, unknown>) => void
   // eslint-disable-next-line no-unused-vars
   onFlowArchitecture?: (flowArchitecture: FlowArchitectureResult) => void
+  // eslint-disable-next-line no-unused-vars
+  onSharedComponents?: (
+    // eslint-disable-next-line no-unused-vars
+    files: Record<string, string>,
+    // eslint-disable-next-line no-unused-vars
+    dependencies: Record<string, string>,
+  ) => void
   onUICheckpoint?: (
     // eslint-disable-next-line no-unused-vars
     screenId: string,
@@ -321,6 +328,13 @@ export function generateFlowWebSocket(
                   data: FlowArchitectureResult
                 }
               | {
+                  type: 'shared_components'
+                  data: {
+                    files: Record<string, string>
+                    dependencies: Record<string, string>
+                  }
+                }
+              | {
                   type: 'ui_checkpoint'
                   data: {
                     screen_id: string
@@ -354,6 +368,16 @@ export function generateFlowWebSocket(
               callbacks.onRethinkComplete?.(message.data)
             } else if (message.type === 'flow_architecture') {
               callbacks.onFlowArchitecture?.(message.data)
+            } else if (message.type === 'shared_components') {
+              console.log('📦 Shared components received:', {
+                fileCount: Object.keys(message.data.files || {}).length,
+                dependencies: Object.keys(message.data.dependencies || {})
+                  .length,
+              })
+              callbacks.onSharedComponents?.(
+                message.data.files as Record<string, string>,
+                message.data.dependencies as Record<string, string>,
+              )
             } else if (message.type === 'ui_checkpoint') {
               console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗

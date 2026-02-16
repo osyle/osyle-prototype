@@ -750,6 +750,35 @@ export default function Editor() {
             setGenerationStage('complete')
           }, 1000)
         },
+        onSharedComponents: (files, dependencies) => {
+          console.log('📦 Shared components received!')
+          console.log(`  - ${Object.keys(files).length} component files`)
+          console.log(`  - ${Object.keys(dependencies).length} dependencies`)
+
+          // CRITICAL: Add shared components to flowGraph immediately
+          // This allows screens to import from @/components/ui/* as they're generated
+          setFlowGraph(prev => {
+            if (!prev) return prev
+
+            return {
+              ...prev,
+              project: {
+                ...(prev.project || {}),
+                files: {
+                  ...(prev.project?.files || {}),
+                  ...files, // Add all shadcn/ui components
+                },
+                entry: prev.project?.entry || '/App.tsx',
+                dependencies: {
+                  ...(prev.project?.dependencies || {}),
+                  ...dependencies, // Add dependencies
+                },
+              },
+            }
+          })
+
+          console.log('✅ Shared components added to project')
+        },
         onUICheckpoint: (screenId, uiCode, checkpointNumber) => {
           console.log(`📍 Checkpoint ${checkpointNumber} for ${screenId}`)
 
@@ -924,25 +953,64 @@ export default function Editor() {
           // Refresh available versions list
           loadVersionInfo()
 
-          // Update flow graph with final result (includes proper router)
-          setFlowGraph({
-            ...result.flow_graph,
-            project: flowGraph?.project || {
-              files: {},
-              entry: '/App.tsx',
-              dependencies: {},
-            },
-            screens: result.flow_graph.screens.map(
-              (s): FlowScreen => ({
-                ...s,
-                component_path: (s['component_path'] ||
-                  `/screens/${s.name.replace(/\s+/g, '')}Screen.tsx`) as string,
-              }),
-            ),
+          // CRITICAL FIX: Merge the final flow_graph with existing project files
+          // Don't overwrite the progressively built project.files that already has:
+          // 1. Shared components (shadcn/ui)
+          // 2. Screen components (progressively added)
+          // The backend sends the complete project, but we need to preserve what's already there
+          setFlowGraph(prev => {
+            if (!prev) {
+              // No previous state, use result as-is (cast to include project)
+              const flowGraphWithProject = result.flow_graph as FlowGraph
+              return {
+                ...flowGraphWithProject,
+                project: flowGraphWithProject.project || {
+                  files: {},
+                  entry: '/App.tsx',
+                  dependencies: {},
+                },
+                screens: flowGraphWithProject.screens.map(
+                  (s): FlowScreen => ({
+                    ...s,
+                    component_path: (s['component_path'] ||
+                      `/screens/${s.name.replace(/\s+/g, '')}Screen.tsx`) as string,
+                  }),
+                ),
+              }
+            }
+
+            // Merge with existing state (cast result to FlowGraph which includes project)
+            const flowGraphWithProject = result.flow_graph as FlowGraph
+            return {
+              ...flowGraphWithProject,
+              project: {
+                files: {
+                  // Keep existing files (shared components + screens)
+                  ...(prev.project?.files || {}),
+                  // Add/overwrite with final files (router, etc.)
+                  ...(flowGraphWithProject.project?.files || {}),
+                },
+                entry:
+                  flowGraphWithProject.project?.entry ||
+                  prev.project?.entry ||
+                  '/App.tsx',
+                dependencies: {
+                  ...(prev.project?.dependencies || {}),
+                  ...(flowGraphWithProject.project?.dependencies || {}),
+                },
+              },
+              screens: flowGraphWithProject.screens.map(
+                (s): FlowScreen => ({
+                  ...s,
+                  component_path: (s['component_path'] ||
+                    `/screens/${s.name.replace(/\s+/g, '')}Screen.tsx`) as string,
+                }),
+              ),
+            }
           })
 
           // Update project in localStorage with flow_graph and version
-          project.flow_graph = result.flow_graph
+          project.flow_graph = result.flow_graph as FlowGraph
           if (!project.metadata) {
             project.metadata = {}
           }
