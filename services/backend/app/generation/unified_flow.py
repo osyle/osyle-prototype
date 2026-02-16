@@ -234,6 +234,7 @@ async def generate_unified_flow(
     screens: List[Dict[str, Any]],
     transitions: List[Dict[str, Any]],
     entry_screen_id: str,
+    generated_copy: str,
     dtm: Dict[str, Any],
     device_info: Dict[str, Any],
     taste_source: str,
@@ -330,6 +331,14 @@ async def generate_unified_flow(
         
         # Build task description with transitions
         task_with_transitions = screen.get('task_description', screen.get('description', ''))
+        
+        # Add generated copy context if available
+        if generated_copy:
+            # The flow architecture already specified what copy goes on this screen
+            # in the task_description, so just add context that copy is available
+            task_with_transitions += f"\n\n=== CONTENT COPY ===\n"
+            task_with_transitions += f"Use the copy specified in the task description above. "
+            task_with_transitions += f"The flow architect has already determined what content should appear on this screen.\n"
         
         if outgoing_transitions:
             task_with_transitions += "\n\nOutgoing transitions:\n"

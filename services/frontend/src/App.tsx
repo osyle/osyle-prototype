@@ -11,6 +11,7 @@ import {
 
 import { config } from './config/env'
 
+import CopyEditor from './pages/CopyEditor'
 import Editor from './pages/Editor'
 import Home from './pages/Home'
 import LoginScreen from './pages/Login'
@@ -155,6 +156,10 @@ function AppContent() {
       <Route
         path="/editor"
         element={user ? <Editor /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/copy-editor"
+        element={user ? <CopyEditor /> : <Navigate to="/login" replace />}
       />
       <Route
         path="/mobbin"

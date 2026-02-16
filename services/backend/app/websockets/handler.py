@@ -35,6 +35,9 @@ from app.generation.streaming import generate_screen_ui_progressive
 from app.feedback.router import FeedbackRouter
 from app.feedback.applier import FeedbackApplier
 
+# Copy generation imports
+from app.copygen import generate_copy_response, extract_final_copy
+
 async def send_progress(websocket: WebSocket, stage: str, message: str, data: Dict[str, Any] = None):
     """Send progress update to client"""
     await websocket.send_json({
@@ -612,6 +615,7 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
         selected_taste_id = project.get("selected_taste_id")
         selected_resource_ids = project.get("selected_resource_ids", [])
         rendering_mode = project.get("rendering_mode", "react")
+        generated_copy = project.get("metadata", {}).get("generated_copy", "")
         
         if not device_info:
             await send_error(websocket, "Device info required")
@@ -622,6 +626,7 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
         print(f"{'='*80}")
         print(f"Project ID: {project_id}")
         print(f"Task: {task_description[:100]}...")
+        print(f"Generated Copy: {'Yes (' + str(len(generated_copy)) + ' chars)' if generated_copy else 'No'}")
         print(f"Taste ID: {selected_taste_id}")
         print(f"Resources: {len(selected_resource_ids) if selected_resource_ids else 'all'}")
         print(f"Device: {device_info.get('platform')} {device_info.get('screen', {}).get('width')}x{device_info.get('screen', {}).get('height')}")
@@ -677,6 +682,7 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
         flow_architecture = await generate_flow_architecture_default(
             llm=llm,
             task_description=task_description,
+            generated_copy=generated_copy,
             dtm=dtm,
             device_info=device_info,
             max_screens=max_screens
@@ -763,6 +769,7 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
             screens=screens,
             transitions=transitions,
             entry_screen_id=entry_screen_id,
+            generated_copy=generated_copy,
             dtm=dtm if dtm else {},
             device_info=device_info,
             taste_source=taste_source,
@@ -926,6 +933,7 @@ def calculate_layout_positions(flow_architecture: Dict[str, Any]) -> Dict[str, D
 async def generate_flow_architecture_default(
     llm,
     task_description: str,
+    generated_copy: str,
     dtm: Optional[Dict[str, Any]],
     device_info: Dict[str, Any],
     max_screens: int = 5
@@ -1024,6 +1032,21 @@ Return ONLY a valid JSON object (no markdown code fences, no explanations):
     
     # Add task
     prompt_parts.append(f"\n## Task Description\n\n{task_description}\n\n")
+    
+    # Add generated copy if available
+    if generated_copy:
+        prompt_parts.append(f"""## Generated Copy
+
+The following copy has been developed for this application. Use this as the content foundation when designing screens.
+Organize screens based on how this copy should be distributed and presented to users.
+
+When creating task_description for each screen, reference the specific copy that should appear on that screen.
+
+```
+{generated_copy}
+```
+
+""")
     
     # Add device context
     platform = device_info.get("platform", "web")
@@ -1434,6 +1457,146 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
         await send_error(websocket, str(e))
 
 
+async def handle_copy_message(websocket: WebSocket, data: Dict[str, Any], user_id: str):
+    """
+    Handle copy generation conversation message.
+    
+    Client sends:
+    {
+        "action": "copy-message",
+        "data": {
+            "project_id": "...",
+            "message": "user's message",
+            "conversation_history": [{"role": "user"|"assistant", "content": "..."}]
+        }
+    }
+    
+    Server responds with:
+    {
+        "type": "copy_response",
+        "message": "assistant's response"
+    }
+    """
+    try:
+        project_id = data.get("project_id")
+        user_message = data.get("message")
+        conversation_history = data.get("conversation_history", [])
+        
+        if not project_id:
+            await send_error(websocket, "Missing project_id")
+            return
+        
+        if not user_message:
+            await send_error(websocket, "Missing message")
+            return
+        
+        # Load project
+        project = db.get_project(project_id)
+        if not project:
+            await send_error(websocket, "Project not found")
+            return
+        
+        if project.get("owner_id") != user_id:
+            await send_error(websocket, "Not authorized")
+            return
+        
+        task_description = project.get("task_description", "")
+        
+        # Generate response with streaming
+        await send_progress(websocket, "generating", "Generating response...")
+        
+        llm = get_llm_service()
+        
+        response_text = await generate_copy_response(
+            llm=llm,
+            conversation_history=conversation_history,
+            project_description=task_description,
+            user_message=user_message,
+            websocket=websocket  # Enable streaming
+        )
+        
+        # Send final complete message
+        await websocket.send_json({
+            "type": "copy_response",
+            "message": response_text
+        })
+        
+    except Exception as e:
+        print(f"Error in handle_copy_message: {e}")
+        import traceback
+        traceback.print_exc()
+        await send_error(websocket, str(e))
+
+
+async def handle_finalize_copy(websocket: WebSocket, data: Dict[str, Any], user_id: str):
+    """
+    Extract and finalize the copy from conversation.
+    
+    Client sends:
+    {
+        "action": "finalize-copy",
+        "data": {
+            "project_id": "...",
+            "conversation_history": [{"role": "user"|"assistant", "content": "..."}]
+        }
+    }
+    
+    Server responds with:
+    {
+        "type": "copy_finalized",
+        "final_copy": "formatted final copy document"
+    }
+    """
+    try:
+        project_id = data.get("project_id")
+        conversation_history = data.get("conversation_history", [])
+        
+        if not project_id:
+            await send_error(websocket, "Missing project_id")
+            return
+        
+        # Load project
+        project = db.get_project(project_id)
+        if not project:
+            await send_error(websocket, "Project not found")
+            return
+        
+        if project.get("owner_id") != user_id:
+            await send_error(websocket, "Not authorized")
+            return
+        
+        task_description = project.get("task_description", "")
+        
+        # Extract final copy
+        await send_progress(websocket, "finalizing", "Organizing final copy...")
+        
+        llm = get_llm_service()
+        
+        final_copy = await extract_final_copy(
+            llm=llm,
+            conversation_history=conversation_history,
+            project_description=task_description
+        )
+        
+        # Save to project metadata
+        metadata = project.get("metadata", {})
+        metadata["generated_copy"] = final_copy
+        metadata["copy_conversation"] = conversation_history
+        db.update_project(project_id, metadata=metadata)
+        
+        # Send response
+        await websocket.send_json({
+            "type": "copy_finalized",
+            "final_copy": final_copy
+        })
+        
+    except Exception as e:
+        print(f"Error in handle_finalize_copy: {e}")
+        import traceback
+        traceback.print_exc()
+        await send_error(websocket, str(e))
+
+
 async def handle_websocket(websocket: WebSocket, user_id: str):
     """Main WebSocket handler"""
     await websocket.accept()
@@ -1453,6 +1616,10 @@ async def handle_websocket(websocket: WebSocket, user_id: str):
                 await handle_generate_flow(websocket, data, user_id)
             elif action == "iterate-ui":
                 await handle_iterate_ui(websocket, data, user_id)
+            elif action == "copy-message":
+                await handle_copy_message(websocket, data, user_id)
+            elif action == "finalize-copy":
+                await handle_finalize_copy(websocket, data, user_id)
             else:
                 await send_error(websocket, f"Unknown action: {action}")
                 

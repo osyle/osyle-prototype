@@ -112,6 +112,7 @@ export default function Home() {
 
   // Stage 3 state
   const [ideaText, setIdeaText] = useState('')
+  const [copyGenerationMode, setCopyGenerationMode] = useState(false)
 
   // Screen-based design inputs
   type ScreenMode = 'exact' | 'redesign' | 'inspiration' | 'rethink'
@@ -887,9 +888,13 @@ export default function Home() {
       setHasActiveProject(false)
       setActiveProjectName(null)
 
-      // Smooth transition to Editor with a slight delay for UX
+      // Smooth transition to appropriate page based on copy generation mode
       setTimeout(() => {
-        navigate('/editor', { replace: true })
+        if (copyGenerationMode) {
+          navigate('/copy-editor', { replace: true })
+        } else {
+          navigate('/editor', { replace: true })
+        }
       }, 300)
     } catch (err) {
       console.error('Failed to create project:', err)
@@ -2134,8 +2139,36 @@ export default function Home() {
           )}
           {/* End of screen definitions section - PARAMETRIC MODE CONDITIONAL */}
 
-          {/* Generate button */}
-          <div className="flex justify-end">
+          {/* Generate button with copy mode toggle */}
+          <div className="flex items-center justify-between">
+            {/* Copy Generation Mode Toggle */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setCopyGenerationMode(!copyGenerationMode)}
+                className="relative w-12 h-6 rounded-full transition-all"
+                style={{
+                  backgroundColor: copyGenerationMode ? '#F5C563' : '#E8E1DD',
+                }}
+              >
+                <div
+                  className="absolute top-0.5 w-5 h-5 rounded-full transition-all duration-300"
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    left: copyGenerationMode ? 'calc(100% - 22px)' : '2px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  }}
+                />
+              </button>
+              <div>
+                <p className="text-sm font-medium" style={{ color: '#3B3B3B' }}>
+                  Copy-first workflow
+                </p>
+                <p className="text-xs" style={{ color: '#929397' }}>
+                  Develop content before screens
+                </p>
+              </div>
+            </div>
+
             <button
               onClick={handleSubmitIdea}
               disabled={!ideaText.trim()}
