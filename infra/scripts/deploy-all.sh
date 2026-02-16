@@ -42,7 +42,15 @@ fi
 # Escape ALLOWED_ORIGINS for JSON (replace commas with escaped version)
 ALLOWED_ORIGINS_ESCAPED=$(echo "$ALLOWED_ORIGINS" | sed 's/,/\\,/g')
 
-# 1. Update Lambda environment variables
+# 1. Deploy backend code FIRST (in case function needs recreation)
+echo -e "${BLUE}🚀 Deploying backend code...${NC}"
+bash "${PROJECT_ROOT}/infra/scripts/deploy-backend.sh"
+
+# Wait for function to be ready
+echo -e "${BLUE}Waiting for Lambda function to be ready...${NC}"
+aws lambda wait function-active --function-name $LAMBDA_FUNCTION --region $REGION 2>/dev/null || sleep 5
+
+# 2. Update Lambda environment variables AFTER deployment
 echo -e "${BLUE}🔧 Updating Lambda environment variables...${NC}"
 aws lambda update-function-configuration \
     --function-name $LAMBDA_FUNCTION \
@@ -51,10 +59,6 @@ aws lambda update-function-configuration \
     --no-cli-pager > /dev/null
 
 echo -e "${GREEN}✓ Lambda environment variables updated${NC}"
-
-# 2. Deploy backend code
-echo -e "${BLUE}🚀 Deploying backend code...${NC}"
-bash "${PROJECT_ROOT}/infra/scripts/deploy-backend.sh"
 
 # 3. Update Amplify environment variables
 echo -e "${BLUE}🔧 Updating Amplify environment variables...${NC}"
