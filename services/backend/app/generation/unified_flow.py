@@ -17,6 +17,55 @@ from app.generation.multifile_parser import (
 )
 
 
+def sanitize_screen_name(name: str) -> str:
+    """
+    Sanitize screen name to ensure it can be used as a valid React component name.
+    
+    Handles common issues:
+    - Removes special characters (hyphens, ampersands, apostrophes, etc.)
+    - Converts numbers at start to words
+    - Ensures valid JavaScript identifier
+    
+    Examples:
+        "3D Interactive View" → "ThreeDInteractiveView"
+        "Product & Cart" → "ProductCart"
+        "Step-by-Step Guide" → "StepByStepGuide"
+        "User's Profile" → "UsersProfile"
+        "7-Day Calendar" → "SevenDayCalendar"
+    
+    Args:
+        name: Original screen name from LLM
+    
+    Returns:
+        Sanitized name safe for use as component name
+    """
+    # Mapping for common number prefixes
+    number_map = {
+        '1': 'One', '2': 'Two', '3': 'Three', '4': 'Four', '5': 'Five',
+        '6': 'Six', '7': 'Seven', '8': 'Eight', '9': 'Nine', '0': 'Zero'
+    }
+    
+    # Handle common number patterns at the start
+    # "3D" -> "ThreeD", "7-Day" -> "SevenDay", etc.
+    if name and name[0].isdigit():
+        first_char = name[0]
+        if first_char in number_map:
+            name = number_map[first_char] + name[1:]
+    
+    # Remove all non-alphanumeric characters (keep only letters and numbers)
+    sanitized = re.sub(r'[^a-zA-Z0-9]', '', name)
+    
+    # Ensure not empty
+    if not sanitized:
+        sanitized = "Screen"
+    
+    # Ensure starts with letter (should be guaranteed by above, but double-check)
+    if sanitized and sanitized[0].isdigit():
+        sanitized = "Screen" + sanitized
+    
+    return sanitized
+
+
 def generate_shared_components() -> Dict[str, str]:
     """
     Generate complete shadcn/ui component library (50+ components)
@@ -67,10 +116,9 @@ def generate_router_code(
     
     for screen in screens:
         screen_id = screen['screen_id']
-        # Convert "Login" to "LoginScreen", and handle special chars
-        # "Step-by-Step Cooking" -> "StepByStepCookingScreen"
-        # "Cart & Checkout" -> "CartCheckoutScreen"
-        component_name = re.sub(r'[^a-zA-Z0-9]', '', screen['name']) + 'Screen'
+        # Use same sanitization as component generation
+        sanitized_name = sanitize_screen_name(screen['name'])
+        component_name = sanitized_name + 'Screen'
         imports.append(f"import {component_name} from './screens/{component_name}'")
     
     # Build transition map
@@ -86,8 +134,9 @@ def generate_router_code(
     switch_cases = []
     for screen in screens:
         screen_id = screen['screen_id']
-        # Same component name sanitization
-        component_name = re.sub(r'[^a-zA-Z0-9]', '', screen['name']) + 'Screen'
+        # Use same sanitization as component generation
+        sanitized_name = sanitize_screen_name(screen['name'])
+        component_name = sanitized_name + 'Screen'
         # Use explicit string concatenation to avoid f-string brace escaping issues
         case_code = f"    case '{screen_id}':\n"
         case_code += f"      return <{component_name} onTransition=" + "{handleTransition} />"
@@ -95,7 +144,8 @@ def generate_router_code(
     
     # Default case (entry screen)
     entry_screen = next(s for s in screens if s['screen_id'] == entry_screen_id)
-    entry_component_name = re.sub(r'[^a-zA-Z0-9]', '', entry_screen['name']) + 'Screen'
+    entry_sanitized_name = sanitize_screen_name(entry_screen['name'])
+    entry_component_name = entry_sanitized_name + 'Screen'
     
     default_code = "    default:\n"
     default_code += f"      return <{entry_component_name} onTransition=" + "{handleTransition} />"
@@ -252,11 +302,16 @@ async def generate_unified_flow(
         """Generate a single screen component"""
         screen_id = screen['screen_id']
         screen_name = screen['name']
-        # Remove all special chars to create valid JavaScript identifier
-        # "Step-by-Step Cooking" -> "StepByStepCookingScreen"
-        # "Cart & Checkout" -> "CartCheckoutScreen"
-        component_name = re.sub(r'[^a-zA-Z0-9]', '', screen_name) + 'Screen'
+        
+        # Sanitize screen name to ensure valid component name
+        # This handles cases like "3D View", "Product & Cart", "Step-by-Step", etc.
+        sanitized_name = sanitize_screen_name(screen_name)
+        component_name = sanitized_name + 'Screen'
         component_path = f'/screens/{component_name}.tsx'
+        
+        # Log if name was changed for debugging
+        if sanitized_name != screen_name.replace(' ', ''):
+            print(f"  ⚠️  Sanitized screen name: '{screen_name}' → '{sanitized_name}'")
         
         print(f"\n  [{idx+1}/{len(screens)}] {screen_name} → {component_path}")
         

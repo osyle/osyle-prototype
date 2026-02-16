@@ -33,8 +33,8 @@ export default function LoginScreen({ onTransition }: LoginScreenProps) {
 - ` ```typescript\n...` ```
 - ` ```tsx\n...` ```
 - Text before/after code
-- Defining components inline inside the function
 - **Importing from relative paths like `./components/*` or `../utils/*`**
+- **Importing custom components from ANY path other than `@/components/ui/*`**
 
 **❌ WRONG:**
 
@@ -76,11 +76,39 @@ export default function MyScreen({ onTransition }) {
 
 ## Component Naming
 
-Your component name must match the screen name + "Screen" suffix:
+Your component name must match the screen name + "Screen" suffix.
+
+**CRITICAL NAMING RULES:**
+
+1. **Remove ALL special characters** (hyphens, ampersands, numbers at start, etc.)
+2. **Use PascalCase** (capitalize each word, no spaces)
+3. **Valid characters only**: Letters (A-Z, a-z) and numbers (0-9, but NOT at the start)
+4. **NO hyphens, underscores, or special symbols**
+
+**Examples of CORRECT naming:**
 
 - Screen: "Login" → Component: `LoginScreen`
 - Screen: "Dashboard" → Component: `DashboardScreen`
 - Screen: "Recipe Details" → Component: `RecipeDetailsScreen`
+- Screen: "Product & Cart" → Component: `ProductCartScreen` (remove &)
+- Screen: "Step-by-Step Guide" → Component: `StepByStepGuideScreen` (remove hyphens)
+- Screen: "7-Day Weather" → Component: `SevenDayWeatherScreen` (spell out number, remove hyphen)
+- Screen: "User's Profile" → Component: `UsersProfileScreen` (remove apostrophe)
+
+**Examples of WRONG naming (DO NOT USE):**
+
+- ❌ `Weather-Card` (has hyphen)
+- ❌ `7DayCalendar` (starts with number)
+- ❌ `Product&Info` (has ampersand)
+- ❌ `User's-Profile` (has apostrophe and hyphen)
+- ❌ `step_by_step` (has underscores)
+
+**Processing algorithm:**
+
+1. Remove ALL non-alphanumeric characters (keep only A-Z, a-z, 0-9)
+2. If starts with number, spell it out (7 → Seven)
+3. Convert to PascalCase
+4. Add "Screen" suffix
 
 ```typescript
 // Example:
@@ -148,8 +176,51 @@ import {
 **If you need custom logic:**
 
 - ✅ Define helper functions inside the screen component
-- ✅ Define inline components inside the screen function
-- ✅ Keep everything in ONE file
+- ✅ Define helper components inside the screen function (NOT as separate imports)
+- ✅ Keep everything in ONE single file
+- ❌ NEVER create separate component files to import
+- ❌ NEVER import custom components from ./components/ or any relative path
+
+**Example of CORRECT inline component:**
+
+```typescript
+export default function ProductListScreen({ onTransition }: Props) {
+  const [products, setProducts] = useState([...])
+
+  // ✅ CORRECT: Define helper component inline
+  const ProductCard = ({ product }: { product: Product }) => (
+    <Card>
+      <CardHeader>
+        <CardTitle>{product.name}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p>{product.description}</p>
+        <Button onClick={() => onTransition('view-product')}>View</Button>
+      </CardContent>
+    </Card>
+  )
+
+  return (
+    <div className="grid grid-cols-2 gap-4 p-4">
+      {products.map(product => (
+        <ProductCard key={product.id} product={product} />
+      ))}
+    </div>
+  )
+}
+```
+
+**Example of WRONG separate component file:**
+
+```typescript
+// ❌ WRONG: Do NOT create separate component files
+import { ProductCard } from "./components/ProductCard"; // NEVER DO THIS
+import { ProductCard } from "../ProductCard"; // NEVER DO THIS
+
+export default function ProductListScreen({ onTransition }: Props) {
+  // ...
+}
+```
 
 **Import UI components from the shared component library:**
 
@@ -629,9 +700,9 @@ export default function LoginScreen({ onTransition }: LoginScreenProps) {
 ## Key Takeaways
 
 1. **Always import UI components** from `@/components/ui/*`
-2. **Never define components inline** - this causes code duplication
-3. **NEVER import from relative paths** - no `./components/*` imports
-4. **Keep everything in ONE file** - define helper components inline if needed
+2. **ALWAYS define helper components inline** - inside the screen function, NOT as separate imports
+3. **NEVER import from relative paths** - no `./components/*` or `../components/*` imports
+4. **Keep everything in ONE single file** - all helper components must be defined inline
 5. **Use semantic color tokens** (`bg-primary`, not `bg-blue-500`)
 6. **Create responsive layouts** with Tailwind breakpoints
 7. **Implement transitions** using the `onTransition` prop
@@ -639,9 +710,37 @@ export default function LoginScreen({ onTransition }: LoginScreenProps) {
 
 Following these rules ensures:
 
-- ✅ Zero code duplication across screens
+- ✅ Zero "component not found" errors
+- ✅ Single file per screen (no scattered component files)
 - ✅ Consistent component behavior
 - ✅ High-quality, professional UIs
 - ✅ Smaller file sizes
 - ✅ Matches v0/Lovable architecture
-- ✅ Single-file screen components (no scattered files)
+
+---
+
+## CRITICAL FINAL REMINDERS
+
+🚨 **SINGLE FILE ONLY** 🚨
+
+- Your output is ONLY the TypeScript code for ONE file
+- Do NOT create a JSON structure with multiple files
+- Do NOT import custom components from relative paths
+- Define ALL helper components inside the main screen function
+
+🚨 **VALID COMPONENT NAMES ONLY** 🚨
+
+- Component name: `LoginScreen`, `DashboardScreen`, `RecipeDetailsScreen`
+- NO hyphens: ❌ `Weather-Card` → ✅ `WeatherCard`
+- NO starting with numbers: ❌ `7DayCalendar` → ✅ `SevenDayCalendar`
+- NO special characters: ❌ `Product&Info` → ✅ `ProductInfo`
+- Remove ALL non-alphanumeric characters, use PascalCase, add "Screen" suffix
+
+🚨 **ALLOWED IMPORTS ONLY** 🚨
+
+- ✅ `@/components/ui/*` (shadcn components)
+- ✅ `lucide-react` (icons)
+- ✅ `react` (hooks)
+- ❌ `./components/*` NEVER
+- ❌ `../components/*` NEVER
+- ❌ Any relative path imports NEVER
