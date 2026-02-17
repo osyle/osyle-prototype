@@ -1,4 +1,12 @@
-import { ChevronRight, ChevronDown, File, Folder, Copy } from 'lucide-react'
+import JSZip from 'jszip'
+import {
+  ChevronRight,
+  ChevronDown,
+  File,
+  Folder,
+  Copy,
+  Download,
+} from 'lucide-react'
 import React, { useState, useMemo } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
@@ -189,6 +197,36 @@ export default function CodeViewer({ flow }: CodeViewerProps) {
     }
   }
 
+  const downloadAsZip = async () => {
+    if (!flow?.project?.files) return
+
+    const zip = new JSZip()
+
+    // Add all files to the zip
+    Object.entries(flow.project.files).forEach(([filePath, content]) => {
+      // Remove leading slash if present
+      const cleanPath = filePath.startsWith('/') ? filePath.slice(1) : filePath
+      zip.file(cleanPath, content)
+    })
+
+    // Generate the zip file
+    const blob = await zip.generateAsync({ type: 'blob' })
+
+    // Create download link
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+
+    // Use flow name if available, otherwise use a default name
+    const projectName = flow.flow_name || 'osyle-project'
+    link.download = `${projectName}.zip`
+
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   if (!flow?.project?.files) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-[#0A0A0F]">
@@ -208,8 +246,18 @@ export default function CodeViewer({ flow }: CodeViewerProps) {
     <div className="w-full h-full flex bg-[#0A0A0F]">
       {/* File Tree Sidebar */}
       <div className="w-64 border-r border-[#1F1F28] flex flex-col bg-[#0D0D12]">
-        <div className="px-3 py-2 border-b border-[#1F1F28] text-xs font-semibold text-gray-400 uppercase tracking-wider">
-          Files ({fileCount})
+        <div className="px-3 py-2 border-b border-[#1F1F28] flex items-center justify-between">
+          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            Files ({fileCount})
+          </div>
+          <button
+            onClick={downloadAsZip}
+            className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-[#1A1A24] text-gray-400 hover:text-white hover:bg-[#232330] transition-colors"
+            title="Download all files as ZIP"
+          >
+            <Download className="w-3 h-3" />
+            ZIP
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto py-1">
           {fileTree.map(node => renderNode(node))}
