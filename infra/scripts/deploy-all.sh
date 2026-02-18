@@ -39,9 +39,6 @@ else
     exit 1
 fi
 
-# Escape ALLOWED_ORIGINS for JSON (replace commas with escaped version)
-ALLOWED_ORIGINS_ESCAPED=$(echo "$ALLOWED_ORIGINS" | sed 's/,/\\,/g')
-
 # 1. Deploy backend code FIRST (in case function needs recreation)
 echo -e "${BLUE}🚀 Deploying backend code...${NC}"
 bash "${PROJECT_ROOT}/infra/scripts/deploy-backend.sh"
@@ -52,10 +49,18 @@ aws lambda wait function-active --function-name $LAMBDA_FUNCTION --region $REGIO
 
 # 2. Update Lambda environment variables AFTER deployment
 echo -e "${BLUE}🔧 Updating Lambda environment variables...${NC}"
+LAMBDA_ENV_JSON=$(grep -v '^#' "${PROJECT_ROOT}/services/backend/.env.production" \
+    | grep '=' \
+    | while read -r line; do
+        key="${line%%=*}"
+        value="${line#*=}"
+        printf '"%s":"%s",' "$key" "$value"
+      done \
+    | sed 's/,$//')
 aws lambda update-function-configuration \
     --function-name $LAMBDA_FUNCTION \
     --region $REGION \
-    --environment "Variables={USER_POOL_ID=${USER_POOL_ID},S3_BUCKET=${S3_BUCKET},PRESIGNED_EXPIRATION=${PRESIGNED_EXPIRATION},USERS_TABLE=${USERS_TABLE},TASTES_TABLE=${TASTES_TABLE},RESOURCES_TABLE=${RESOURCES_TABLE},PROJECTS_TABLE=${PROJECTS_TABLE},ALLOWED_ORIGINS=${ALLOWED_ORIGINS_ESCAPED},ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}}" \
+    --environment "{\"Variables\":{${LAMBDA_ENV_JSON}}}" \
     --no-cli-pager > /dev/null
 
 echo -e "${GREEN}✓ Lambda environment variables updated${NC}"
