@@ -51,6 +51,7 @@ aws lambda wait function-active --function-name $LAMBDA_FUNCTION --region $REGIO
 echo -e "${BLUE}🔧 Updating Lambda environment variables...${NC}"
 LAMBDA_ENV_JSON=$(grep -v '^#' "${PROJECT_ROOT}/services/backend/.env.production" \
     | grep '=' \
+    | grep -v '^AWS_REGION=\|^AWS_ACCESS_KEY_ID=\|^AWS_SECRET_ACCESS_KEY=' \
     | while read -r line; do
         key="${line%%=*}"
         value="${line#*=}"
