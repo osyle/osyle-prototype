@@ -197,12 +197,331 @@ export default function CodeViewer({ flow }: CodeViewerProps) {
     }
   }
 
+  const getConfigFiles = (projectName: string) => {
+    return {
+      'package.json': JSON.stringify(
+        {
+          name: projectName.toLowerCase().replace(/\s+/g, '-'),
+          private: true,
+          version: '0.0.0',
+          type: 'module',
+          scripts: {
+            dev: 'vite',
+            build: 'tsc && vite build',
+            preview: 'vite preview',
+          },
+          dependencies: {
+            react: '^18.3.1',
+            'react-dom': '^18.3.1',
+            'lucide-react': '^0.468.0',
+            clsx: '^2.1.1',
+            'tailwind-merge': '^2.5.5',
+            'class-variance-authority': '^0.7.1',
+          },
+          devDependencies: {
+            '@types/react': '^18.3.12',
+            '@types/react-dom': '^18.3.1',
+            '@vitejs/plugin-react': '^4.3.4',
+            typescript: '^5.6.3',
+            vite: '^6.0.3',
+            tailwindcss: '^3.4.16',
+            autoprefixer: '^10.4.20',
+            postcss: '^8.4.49',
+          },
+        },
+        null,
+        2,
+      ),
+
+      'vite.config.ts': `import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import path from 'path'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './'),
+    },
+  },
+})
+`,
+
+      'tsconfig.json': JSON.stringify(
+        {
+          compilerOptions: {
+            target: 'ES2020',
+            useDefineForClassFields: true,
+            lib: ['ES2020', 'DOM', 'DOM.Iterable'],
+            module: 'ESNext',
+            skipLibCheck: true,
+            moduleResolution: 'bundler',
+            allowImportingTsExtensions: true,
+            isolatedModules: true,
+            moduleDetection: 'force',
+            noEmit: true,
+            jsx: 'react-jsx',
+            strict: true,
+            noUnusedLocals: true,
+            noUnusedParameters: true,
+            noFallthroughCasesInSwitch: true,
+            noUncheckedSideEffectImports: true,
+            baseUrl: '.',
+            paths: {
+              '@/*': ['./*'],
+            },
+          },
+          include: ['**/*.ts', '**/*.tsx'],
+        },
+        null,
+        2,
+      ),
+
+      'index.html': `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${projectName}</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+  </body>
+</html>
+`,
+
+      'main.tsx': `import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './index.css'
+import App from './App'
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+)
+`,
+
+      'index.css': `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 3.9%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+`,
+
+      'tailwind.config.js': `/** @type {import('tailwindcss').Config} */
+export default {
+  darkMode: ["class"],
+  content: [
+    "./index.html",
+    "./**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      borderRadius: {
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)'
+      },
+      colors: {
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        card: {
+          DEFAULT: 'hsl(var(--card))',
+          foreground: 'hsl(var(--card-foreground))'
+        },
+        popover: {
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))'
+        },
+        primary: {
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(var(--primary-foreground))'
+        },
+        secondary: {
+          DEFAULT: 'hsl(var(--secondary))',
+          foreground: 'hsl(var(--secondary-foreground))'
+        },
+        muted: {
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'hsl(var(--muted-foreground))'
+        },
+        accent: {
+          DEFAULT: 'hsl(var(--accent))',
+          foreground: 'hsl(var(--accent-foreground))'
+        },
+        destructive: {
+          DEFAULT: 'hsl(var(--destructive))',
+          foreground: 'hsl(var(--destructive-foreground))'
+        },
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
+      }
+    }
+  },
+  plugins: [],
+}
+`,
+
+      'postcss.config.js': `export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+`,
+
+      '.gitignore': `# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+`,
+
+      'README.md': `# ${projectName}
+
+This project was generated by Osyle and is ready to run locally.
+
+## Getting Started
+
+1. **Install dependencies:**
+   \`\`\`bash
+   npm install
+   \`\`\`
+
+2. **Run the development server:**
+   \`\`\`bash
+   npm run dev
+   \`\`\`
+
+3. **Open your browser:**
+   The app will be running at \`http://localhost:5173\`
+
+## Available Scripts
+
+- \`npm run dev\` - Start development server
+- \`npm run build\` - Build for production
+- \`npm run preview\` - Preview production build
+
+## Project Structure
+
+\`\`\`
+.
+├── App.tsx              # Main router component
+├── main.tsx             # React entry point
+├── index.html           # HTML entry point
+├── index.css            # Global styles with Tailwind
+├── screens/             # Screen components
+├── components/          # UI components (shadcn/ui)
+├── lib/                 # Utility functions
+├── vite.config.ts       # Vite configuration
+├── tsconfig.json        # TypeScript configuration
+├── tailwind.config.js   # Tailwind CSS configuration
+└── package.json         # Dependencies and scripts
+\`\`\`
+
+## Technologies
+
+- **React 18** - UI library
+- **TypeScript** - Type safety
+- **Vite** - Build tool
+- **Tailwind CSS** - Styling
+- **shadcn/ui** - UI components
+- **Lucide React** - Icons
+`,
+    }
+  }
+
   const downloadAsZip = async () => {
     if (!flow?.project?.files) return
 
     const zip = new JSZip()
+    const projectName = flow.flow_name || 'osyle-project'
 
-    // Add all files to the zip
+    // Add configuration files first
+    const configFiles = getConfigFiles(projectName)
+    Object.entries(configFiles).forEach(([filePath, content]) => {
+      zip.file(filePath, content)
+    })
+
+    // Add all project files
     Object.entries(flow.project.files).forEach(([filePath, content]) => {
       // Remove leading slash if present
       const cleanPath = filePath.startsWith('/') ? filePath.slice(1) : filePath
@@ -216,9 +535,6 @@ export default function CodeViewer({ flow }: CodeViewerProps) {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-
-    // Use flow name if available, otherwise use a default name
-    const projectName = flow.flow_name || 'osyle-project'
     link.download = `${projectName}.zip`
 
     document.body.appendChild(link)
