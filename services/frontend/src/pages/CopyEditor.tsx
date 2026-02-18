@@ -1,3 +1,4 @@
+import { getCurrentUser, fetchAuthSession } from 'aws-amplify/auth'
 import {
   ArrowLeft,
   Send,
@@ -8,7 +9,6 @@ import {
 } from 'lucide-react'
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getCurrentUser, fetchAuthSession } from 'aws-amplify/auth'
 import { sendCopyMessage, finalizeCopy } from '../services/copyWebSocket'
 
 interface UserInfo {
@@ -34,7 +34,6 @@ export default function CopyEditor() {
   // Project info from localStorage
   const [projectId, setProjectId] = useState<string>('')
   const [projectName, setProjectName] = useState<string>('')
-  const [taskDescription, setTaskDescription] = useState<string>('')
 
   // Copy generation state
   const [messages, setMessages] = useState<Message[]>([])
@@ -98,7 +97,6 @@ export default function CopyEditor() {
       const project = JSON.parse(currentProject)
       setProjectId(project.project_id || '')
       setProjectName(project.project_name || 'Untitled Project')
-      setTaskDescription(project.task_description || '')
 
       // Initialize first message with task description
       if (project.task_description) {
@@ -361,12 +359,12 @@ export default function CopyEditor() {
                       className="text-sm leading-relaxed"
                       style={{ color: '#929397' }}
                     >
-                      Let's develop all the written content your application
-                      will need before jumping into screen design. This helps
-                      ensure clear messaging and better information
-                      architecture. We'll iterate on the copy together until
-                      you're satisfied, then use it to inform the screen
-                      structure.
+                      Let&apos;s develop all the written content your
+                      application will need before jumping into screen design.
+                      This helps ensure clear messaging and better information
+                      architecture. We&apos;ll iterate on the copy together
+                      until you&apos;re satisfied, then use it to inform the
+                      screen structure.
                     </p>
                   </div>
                 </div>

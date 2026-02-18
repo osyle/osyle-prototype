@@ -8,7 +8,7 @@ import {
   //Plus,
   List,
 } from 'lucide-react'
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AddInspirationModal from '../components/AddInspirationModal'
 import CodeViewer from '../components/CodeViewer'

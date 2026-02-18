@@ -181,13 +181,13 @@ export default function MultiFileReactRenderer({
 
         resolved = resolved.replace(
           /require\(['"]@\/([^'"]+)['"]\)/g,
-          (match, importPath) => `require('/${importPath}')`,
+          (_, importPath) => `require('/${importPath}')`,
         )
 
         resolved = resolved.replace(
           // eslint-disable-next-line no-useless-escape
           /require\(['"]\.\/([\w/\-\.]+)['"]\)/g,
-          (match, importPath) => {
+          (_, importPath) => {
             const dir = path.substring(0, path.lastIndexOf('/'))
             let resolvedPath = `${dir}/${importPath}`
 
