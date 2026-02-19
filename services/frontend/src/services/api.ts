@@ -65,6 +65,7 @@ export interface Project {
   device_info?: DeviceInfo // Device settings when project was created
   rendering_mode?: 'react' | 'parametric' // Rendering mode when project was created
   responsive_mode?: boolean // Responsive design mode
+  image_generation_mode?: 'ai' | 'image_url' // Image generation preference (ai via fal.ai or image_url via LLM)
   flow_mode?: boolean // Enable flow mode
   max_screens?: number // Max screens in flow
   flow_graph?: FlowGraph // Flow graph structure
@@ -377,6 +378,7 @@ export const projectsAPI = {
     device_info?: DeviceInfo
     rendering_mode?: 'react' | 'parametric'
     responsive_mode?: boolean
+    image_generation_mode?: 'ai' | 'image_url'
     flow_mode?: boolean
     max_screens?: number
     metadata?: Record<string, unknown>
@@ -406,6 +408,9 @@ export const projectsAPI = {
     }
     if (data.responsive_mode !== undefined) {
       formData.append('responsive_mode', data.responsive_mode.toString())
+    }
+    if (data.image_generation_mode) {
+      formData.append('image_generation_mode', data.image_generation_mode)
     }
     if (data.flow_mode !== undefined) {
       formData.append('flow_mode', data.flow_mode.toString())

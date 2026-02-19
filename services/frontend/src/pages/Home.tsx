@@ -113,6 +113,7 @@ export default function Home() {
   // Stage 3 state
   const [ideaText, setIdeaText] = useState('')
   const [copyGenerationMode, setCopyGenerationMode] = useState(false)
+  const [imageGenerationMode, setImageGenerationMode] = useState(false) // 'image_url' (LLM generates URLs) or 'ai' (fal.ai generation)
 
   // Screen-based design inputs
   type ScreenMode = 'exact' | 'redesign' | 'inspiration' | 'rethink'
@@ -847,6 +848,7 @@ export default function Home() {
         device_info: device_info, // Save current device settings
         rendering_mode: rendering_mode, // Save current rendering mode
         responsive_mode: responsive_mode, // Save responsive mode setting
+        image_generation_mode: imageGenerationMode ? 'ai' : 'image_url', // NEW: Image generation preference
         // PARAMETRIC MODE RESTRICTIONS: Force single screen, no flow mode, no screen definitions
         flow_mode: rendering_mode === 'parametric' ? false : true,
         max_screens:
@@ -2141,31 +2143,72 @@ export default function Home() {
 
           {/* Generate button with copy mode toggle */}
           <div className="flex items-center justify-between">
-            {/* Copy Generation Mode Toggle */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setCopyGenerationMode(!copyGenerationMode)}
-                className="relative w-12 h-6 rounded-full transition-all"
-                style={{
-                  backgroundColor: copyGenerationMode ? '#F5C563' : '#E8E1DD',
-                }}
-              >
-                <div
-                  className="absolute top-0.5 w-5 h-5 rounded-full transition-all duration-300"
+            {/* Toggles - side by side */}
+            <div className="flex items-center gap-6">
+              {/* Copy-first workflow toggle */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setCopyGenerationMode(!copyGenerationMode)}
+                  className="relative w-12 h-6 rounded-full transition-all"
                   style={{
-                    backgroundColor: '#FFFFFF',
-                    left: copyGenerationMode ? 'calc(100% - 22px)' : '2px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    backgroundColor: copyGenerationMode ? '#F5C563' : '#E8E1DD',
                   }}
-                />
-              </button>
-              <div>
-                <p className="text-sm font-medium" style={{ color: '#3B3B3B' }}>
-                  Copy-first workflow
-                </p>
-                <p className="text-xs" style={{ color: '#929397' }}>
-                  Develop content before screens
-                </p>
+                >
+                  <div
+                    className="absolute top-0.5 w-5 h-5 rounded-full transition-all duration-300"
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      left: copyGenerationMode ? 'calc(100% - 22px)' : '2px',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    }}
+                  />
+                </button>
+                <div>
+                  <p
+                    className="text-sm font-medium"
+                    style={{ color: '#3B3B3B' }}
+                  >
+                    Copy-first workflow
+                  </p>
+                  <p className="text-xs" style={{ color: '#929397' }}>
+                    Develop content before screens
+                  </p>
+                </div>
+              </div>
+
+              {/* AI Image Generation toggle */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setImageGenerationMode(!imageGenerationMode)}
+                  className="relative w-12 h-6 rounded-full transition-all"
+                  style={{
+                    backgroundColor: imageGenerationMode
+                      ? '#F5C563'
+                      : '#E8E1DD',
+                  }}
+                >
+                  <div
+                    className="absolute top-0.5 w-5 h-5 rounded-full transition-all duration-300"
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      left: imageGenerationMode ? 'calc(100% - 22px)' : '2px',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    }}
+                  />
+                </button>
+                <div>
+                  <p
+                    className="text-sm font-medium"
+                    style={{ color: '#3B3B3B' }}
+                  >
+                    AI-generated images
+                  </p>
+                  <p className="text-xs" style={{ color: '#929397' }}>
+                    {imageGenerationMode
+                      ? '~$0.05-0.60 per project'
+                      : 'Free stock photos'}
+                  </p>
+                </div>
               </div>
             </div>
 
