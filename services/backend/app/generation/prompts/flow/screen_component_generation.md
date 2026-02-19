@@ -526,6 +526,61 @@ Implement them using the `onTransition` prop:
 
 ---
 
+## Image Sources - MANDATORY
+
+Every `<img src=...>`, `AvatarImage src=...`, and CSS `backgroundImage` must use a **real, publicly accessible URL**.
+
+### ✅ REQUIRED: Unsplash URLs
+
+Use contextually appropriate Unsplash photos. Always include width and quality params:
+
+```typescript
+// Hero / banner images
+<img src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&q=80" />
+
+// Card thumbnails
+<img src="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&q=80" />
+
+// Avatars (AvatarImage)
+<AvatarImage src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&q=80" />
+
+// CSS background
+style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1519904981063-b0cf448d479e?w=800&q=80)' }}
+```
+
+Pick a photo ID that fits the content (nature, food, people, tech, etc). The photo ID is the long number after `/photo-`.
+
+### ❌ FORBIDDEN: These patterns WILL break rendering
+
+```typescript
+// ❌ BROKEN - endpoint does not exist
+src = "/api/placeholder/300/200";
+src = "/api/placeholder/64/64";
+
+// ❌ BROKEN - relative paths serve nothing
+src = "/hero-image.png";
+src = "/avatar.png";
+src = "/images/product.jpg";
+
+// ❌ BROKEN - service is unreliable / blocked
+src = "https://via.placeholder.com/300";
+src = "https://placehold.co/300x200";
+src = "https://picsum.photos/200";
+```
+
+**Rule**: If you cannot think of a real Unsplash URL for the content, use one of these known-good fallbacks:
+
+| Use case              | URL                                                                       |
+| --------------------- | ------------------------------------------------------------------------- |
+| Person / avatar       | `https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&q=80` |
+| Nature / landscape    | `https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80` |
+| City / architecture   | `https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=800&q=80` |
+| Food                  | `https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&q=80` |
+| Technology            | `https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80` |
+| Abstract / background | `https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&q=80`    |
+
+---
+
 ## Styling Rules
 
 ### Use Semantic Color Tokens
@@ -707,6 +762,7 @@ export default function LoginScreen({ onTransition }: LoginScreenProps) {
 6. **Create responsive layouts** with Tailwind breakpoints
 7. **Implement transitions** using the `onTransition` prop
 8. **Output pure TypeScript** - no markdown, no explanations
+9. **ALL images must use real Unsplash URLs** - never `/api/placeholder/...` or relative paths
 
 Following these rules ensures:
 
@@ -744,3 +800,13 @@ Following these rules ensures:
 - ❌ `./components/*` NEVER
 - ❌ `../components/*` NEVER
 - ❌ Any relative path imports NEVER
+
+🚨 **REAL IMAGE URLS ONLY** 🚨
+
+- ✅ `https://images.unsplash.com/photo-XXXXX?w=800&q=80`
+- ❌ `/api/placeholder/300/200` NEVER — this endpoint does not exist
+- ❌ `/avatar.png` or any relative path NEVER
+- ❌ `https://via.placeholder.com/...` NEVER
+- ❌ `https://picsum.photos/...` NEVER — unreliable
+
+Every `<img>`, `<AvatarImage>`, and `backgroundImage` must point to a real Unsplash URL.

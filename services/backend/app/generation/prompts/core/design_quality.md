@@ -200,6 +200,7 @@ Small details that make huge differences:
 - Proper aspect ratios
 - Object-fit: cover for consistency
 - Subtle hover effects
+- **ALWAYS use real Unsplash URLs** (`https://images.unsplash.com/photo-XXXXX?w=800&q=80`) — never `/api/placeholder`, relative paths, or placeholder services
 
 **Shadows**:
 
