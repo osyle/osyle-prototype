@@ -1267,7 +1267,7 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
         
         if taste_id:
             try:
-                dtm = storage.get_taste_dtm(user_id, taste_id)  # OLD - still works for Phase 1
+                dtm = storage.get_taste_dtm(user_id, taste_id) 
             except:
                 print("Warning: Could not load DTM, will use minimal defaults")
         
@@ -1320,12 +1320,14 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
             })
             
             # Get current code
-            current_code = screen.get("ui_code", "")
+
+            component_path = screen.get("component_path", f"/screens/{screen.get('name', 'Screen').replace(' ', '').replace('-', '')}Screen.tsx")
+            project_files = flow_graph.get("project", {}).get("files", {})
+            current_code = project_files.get(component_path, "") or screen.get("ui_code", "")
             
             if not current_code:
-                print(f"Warning: Screen {screen_id} has no code")
-                await send_error(websocket, f"Screen '{screen_name}' has no generated code yet. Please generate the initial UI before iterating.")
-                return
+                print(f"Warning: Screen {screen_id} has no code (checked {component_path} and ui_code)")
+                continue
             
             # Build flow context
             flow_context = {
@@ -1399,7 +1401,13 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
                     full_conversation = chunk_data.get("conversation", "")
                     full_code = chunk_data.get("code", "")
                     
-                    # Update screen in flow graph
+                    # Update screen in flow graph - NEW format: write to project.files
+                    if "project" not in flow_graph:
+                        flow_graph["project"] = {"files": {}, "entry": "/App.tsx", "dependencies": {}}
+                    if "files" not in flow_graph["project"]:
+                        flow_graph["project"]["files"] = {}
+                    flow_graph["project"]["files"][component_path] = full_code
+                    # Also keep ui_code on screen for backward compatibility
                     screen["ui_code"] = full_code
                     
                     # Send updated screen to frontend
@@ -1407,6 +1415,7 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
                         "type": "screen_updated",
                         "data": {
                             "screen_id": screen_id,
+                            "component_path": component_path,
                             "ui_code": full_code,
                             "conversation": full_conversation
                         }
@@ -1423,8 +1432,7 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
         # Build summary message
         screen_names = [s["screen_name"] for s in updated_screens]
         if len(screen_names) == 0:
-            await send_error(websocket, "No screens could be updated. The screens identified for editing have no generated code yet — please generate the initial UI first.")
-            return
+            summary = "No screens were updated. The screens may not have existing code yet."
         elif len(screen_names) == 1:
             summary = f"Updated the {screen_names[0]} screen based on your feedback."
         elif len(screen_names) == 2:

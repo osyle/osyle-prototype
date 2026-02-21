@@ -59,6 +59,7 @@ export interface IterationCallbacks {
   onScreenUpdated?: (data: {
     screen_id: string
     ui_code: string
+    component_path?: string
     conversation?: string
   }) => void
 
@@ -176,6 +177,7 @@ export function iterateUIWebSocket(
                   data: {
                     screen_id: string
                     ui_code: string
+                    component_path?: string
                     conversation?: string
                   }
                 }

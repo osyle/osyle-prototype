@@ -1361,27 +1361,36 @@ export default function Editor() {
           onScreenUpdated: (data: {
             screen_id: string
             ui_code: string
+            component_path?: string
             conversation?: string
           }) => {
             console.log('Screen updated:', data.screen_id)
 
-            // Update the flow graph with new code
+            // Update the flow graph: write new code into project.files
             setFlowGraph(prevFlow => {
               if (!prevFlow) return prevFlow
 
-              const updatedScreens = prevFlow.screens.map(screen => {
-                if (screen.screen_id === data.screen_id) {
-                  return {
-                    ...screen,
-                    ui_code: data.ui_code,
+              // Resolve component_path from the message or derive it from screen metadata
+              const screen = prevFlow.screens.find(
+                s => s.screen_id === data.screen_id,
+              )
+              const componentPath =
+                data.component_path ||
+                (screen?.component_path as string | undefined)
+
+              const updatedFiles = componentPath
+                ? {
+                    ...prevFlow.project.files,
+                    [componentPath]: data.ui_code,
                   }
-                }
-                return screen
-              })
+                : prevFlow.project.files
 
               return {
                 ...prevFlow,
-                screens: updatedScreens,
+                project: {
+                  ...prevFlow.project,
+                  files: updatedFiles,
+                },
               }
             })
 
