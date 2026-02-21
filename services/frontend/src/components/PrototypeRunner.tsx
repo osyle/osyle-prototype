@@ -45,6 +45,8 @@ export default function PrototypeRunner({
             files={projectFiles}
             entry={projectEntry}
             dependencies={projectDependencies}
+            isConceptMode={true}
+            allowInteractions={true}
           />
         </div>
       </div>

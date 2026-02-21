@@ -52,7 +52,8 @@ interface MultiFileReactRendererProps {
   files: Record<string, string>
   entry?: string
   dependencies?: Record<string, string>
-  isConceptMode?: boolean // NEW: Disable interactivity for annotation modes
+  isConceptMode?: boolean // Use direct DOM render (real lucide-react, annotation support)
+  allowInteractions?: boolean // When true, skip click-blocking even in concept/direct mode
 }
 
 export default function MultiFileReactRenderer({
@@ -60,6 +61,7 @@ export default function MultiFileReactRenderer({
   entry = '/App.tsx',
   dependencies = {},
   isConceptMode = false,
+  allowInteractions = false,
 }: MultiFileReactRendererProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const directRenderRef = useRef<HTMLDivElement>(null)
@@ -487,31 +489,79 @@ export default function MultiFileReactRenderer({
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/react-router-dom@6.20.0/dist/umd/react-router-dom.production.min.js"></script>
   <script src="https://unpkg.com/clsx@2.0.0/dist/clsx.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.1/dist/umd/lucide.min.js"></script>
   <script>
-    window.LucideReact = new Proxy({}, {
-      get(target, iconName) {
-        if (iconName === '__esModule') return true;
-        if (iconName === 'default') return window.LucideReact;
-        
-        return window.React.forwardRef((props, ref) => {
-          const { size = 24, color = 'currentColor', strokeWidth = 2, className = '', ...rest } = props;
-          
-          return window.React.createElement('svg', {
-            ref,
-            width: size,
-            height: size,
-            viewBox: '0 0 24 24',
-            fill: 'none',
-            stroke: color,
-            strokeWidth,
-            strokeLinecap: 'round',
-            strokeLinejoin: 'round',
-            className: 'lucide lucide-' + iconName.toLowerCase() + ' ' + className,
-            ...rest
-          }, window.React.createElement('circle', { cx: 12, cy: 12, r: 10 }));
+    // lucide (base package, no React) exports to window.lucide as { IconName: [[tag, attrs], ...] }
+    // Build window.LucideReact by wrapping each icon's node data into React components
+    (function() {
+      var defaultSvgAttrs = {
+        xmlns: 'http://www.w3.org/2000/svg',
+        viewBox: '0 0 24 24',
+        fill: 'none',
+        stroke: 'currentColor',
+        strokeWidth: '2',
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round'
+      };
+
+      function makeIcon(iconName) {
+        return window.React.forwardRef(function(props, ref) {
+          var size = props.size !== undefined ? props.size : 24;
+          var color = props.color !== undefined ? props.color : 'currentColor';
+          var strokeWidth = props.strokeWidth !== undefined ? props.strokeWidth : 2;
+          var className = props.className || '';
+          // pull out known icon props, pass rest to svg
+          var rest = {};
+          for (var k in props) {
+            if (k !== 'size' && k !== 'color' && k !== 'strokeWidth' && k !== 'className' && k !== 'children') {
+              rest[k] = props[k];
+            }
+          }
+
+          var iconData = window.lucide && window.lucide[iconName];
+          var children;
+          if (iconData && Array.isArray(iconData)) {
+            // Each entry is [tagName, attrObject] or [tagName, attrObject, [children]]
+            children = iconData.map(function(node, i) {
+              var tag = node[0];
+              var attrs = Object.assign({}, node[1], { key: i });
+              return window.React.createElement(tag, attrs);
+            });
+          } else {
+            // Fallback: generic icon placeholder (X shape, more recognisable than circle)
+            children = [
+              window.React.createElement('line', { key: 0, x1: 18, y1: 6, x2: 6, y2: 18 }),
+              window.React.createElement('line', { key: 1, x1: 6, y1: 6, x2: 18, y2: 18 })
+            ];
+          }
+
+          return window.React.createElement(
+            'svg',
+            Object.assign({}, defaultSvgAttrs, rest, {
+              ref: ref,
+              width: size,
+              height: size,
+              stroke: color,
+              strokeWidth: strokeWidth,
+              className: ('lucide lucide-' + iconName.charAt(0).toLowerCase() + iconName.slice(1).replace(/([A-Z])/g, function(m) { return '-' + m.toLowerCase(); }) + (className ? ' ' + className : '')).trim()
+            }),
+            children
+          );
         });
       }
-    });
+
+      window.LucideReact = new Proxy({}, {
+        get: function(target, iconName) {
+          if (iconName === '__esModule') return true;
+          if (iconName === 'default') return window.LucideReact;
+          if (typeof iconName !== 'string') return undefined;
+          if (!target[iconName]) {
+            target[iconName] = makeIcon(iconName);
+          }
+          return target[iconName];
+        }
+      });
+    })();
     
     window.cva = function(base, config) {
       return function(props) {
@@ -628,15 +678,23 @@ export default function MultiFileReactRenderer({
           height: '100%',
         }}
         className="concept-mode-render"
-        onClickCapture={e => {
-          // Prevent all click interactions in concept mode
-          e.preventDefault()
-          e.stopPropagation()
-        }}
-        onMouseDownCapture={e => {
-          // Prevent drag/mousedown interactions
-          e.preventDefault()
-        }}
+        onClickCapture={
+          allowInteractions
+            ? undefined
+            : e => {
+                // Prevent all click interactions in concept mode
+                e.preventDefault()
+                e.stopPropagation()
+              }
+        }
+        onMouseDownCapture={
+          allowInteractions
+            ? undefined
+            : e => {
+                // Prevent drag/mousedown interactions
+                e.preventDefault()
+              }
+        }
       >
         <style>{`
           /* Disable hover effects and transitions in concept mode but keep pointer-events enabled */

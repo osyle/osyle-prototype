@@ -136,6 +136,7 @@ export default function App() {
             files={files}
             entry="/App.tsx"
             dependencies={project.flow_graph.project.dependencies || {}}
+            isConceptMode={true}
           />
         </div>
       </div>
