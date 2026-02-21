@@ -70,7 +70,7 @@ echo -e "${GREEN}✓ Lambda environment variables updated${NC}"
 echo -e "${BLUE}🔧 Updating HTTP API Gateway CORS...${NC}"
 HTTP_API_ID=$(aws apigatewayv2 get-apis \
     --region $REGION \
-    --query "Items[?Name==\'osyle-api\'].ApiId" \
+    --query 'Items[?Name==`osyle-api`].ApiId' \
     --output text)
 
 if [ -n "$HTTP_API_ID" ]; then
