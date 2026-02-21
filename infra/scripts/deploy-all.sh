@@ -84,7 +84,14 @@ else
     echo -e "${YELLOW}⚠️  Could not find HTTP API Gateway 'osyle-api' — skipping CORS update${NC}"
 fi
 
-# 4. Update Amplify environment variables
+# 4. Update S3 CORS (direct browser uploads via presigned URLs require this)
+echo -e "${BLUE}🔧 Updating S3 CORS policy...${NC}"
+aws s3api put-bucket-cors \
+    --bucket osyle-shared-assets-prod \
+    --cors-configuration '{"CORSRules":[{"AllowedOrigins":["https://app.osyle.com","https://main.d1z1przwpoqpmu.amplifyapp.com","http://localhost:3000","http://localhost:5173"],"AllowedMethods":["GET","PUT","POST","DELETE","HEAD"],"AllowedHeaders":["*"],"ExposeHeaders":["ETag"],"MaxAgeSeconds":3600}]}'
+echo -e "${GREEN}✓ S3 CORS policy updated${NC}"
+
+# 5. Update Amplify environment variables
 echo -e "${BLUE}🔧 Updating Amplify environment variables...${NC}"
 aws amplify update-app \
     --app-id $AMPLIFY_APP_ID \
@@ -94,7 +101,7 @@ aws amplify update-app \
 
 echo -e "${GREEN}✓ Amplify environment variables updated${NC}"
 
-# 4. Trigger Amplify deployment
+# 6. Trigger Amplify deployment
 echo -e "${BLUE}🚀 Triggering Amplify deployment...${NC}"
 JOB_ID=$(aws amplify start-job \
     --app-id $AMPLIFY_APP_ID \

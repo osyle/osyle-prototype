@@ -271,7 +271,19 @@ def handle_message(
             else:
                 send_error(apigw_management, connection_id, f"Unknown action: {action}")
 
-        asyncio.run(run())
+        # Use an explicit loop instead of asyncio.run() so the container isn't
+        # poisoned for subsequent requests. asyncio.run() destroys the loop on
+        # exit — any HTTP request hitting the same warm container afterwards
+        # finds no current event loop and Mangum raises RuntimeError -> 500.
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run())
+        finally:
+            loop.close()
+            # Restore a fresh loop so Mangum can handle the next HTTP request
+            # on this warm container without hitting RuntimeError.
+            asyncio.set_event_loop(asyncio.new_event_loop())
 
         return {"statusCode": 200}
 
