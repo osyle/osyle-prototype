@@ -91,7 +91,16 @@ aws s3api put-bucket-cors \
     --cors-configuration '{"CORSRules":[{"AllowedOrigins":["https://app.osyle.com","https://main.d1z1przwpoqpmu.amplifyapp.com","http://localhost:3000","http://localhost:5173"],"AllowedMethods":["GET","PUT","POST","DELETE","HEAD"],"AllowedHeaders":["*"],"ExposeHeaders":["ETag"],"MaxAgeSeconds":3600}]}'
 echo -e "${GREEN}✓ S3 CORS policy updated${NC}"
 
-# 5. Update Amplify environment variables
+# 5. Ensure Amplify SPA rewrite rule exists (routes all paths to index.html for React Router)
+echo -e "${BLUE}🔧 Configuring Amplify SPA rewrite rule...${NC}"
+aws amplify update-app \
+    --app-id $AMPLIFY_APP_ID \
+    --region $REGION \
+    --custom-rules '[{"source":"</^[^.]+$/>","target":"/index.html","status":"200"},{"source":"/<*>","target":"/index.html","status":"404-200"}]' \
+    --no-cli-pager > /dev/null
+echo -e "${GREEN}✓ Amplify SPA rewrite rule configured${NC}"
+
+# 6. Update Amplify environment variables
 echo -e "${BLUE}🔧 Updating Amplify environment variables...${NC}"
 aws amplify update-app \
     --app-id $AMPLIFY_APP_ID \

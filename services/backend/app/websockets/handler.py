@@ -479,7 +479,12 @@ async def build_dtm_for_taste(
 
 
 async def handle_generate_ui(websocket: WebSocket, data: Dict[str, Any], user_id: str):
-    """Handle generate-ui WebSocket request"""
+    """
+    Handle generate-ui WebSocket request (LEGACY SINGLE-SCREEN GENERATION)
+    
+    Note: This is the old single-screen generation endpoint.
+    New projects should use handle_generate_flow instead for multi-screen flows.
+    """
     try:
         project_id = data.get("project_id")
         task_description = data.get("task_description")
@@ -502,59 +507,69 @@ async def handle_generate_ui(websocket: WebSocket, data: Dict[str, Any], user_id
             await send_error(websocket, "Not authorized")
             return
         
-        # Load DTM
+        selected_taste_id = project.get("selected_taste_id")
+        selected_resource_ids = project.get("selected_resource_ids", [])
+        image_generation_mode = project.get("image_generation_mode", "image_url")
+        
+        # Load DTM via NEW builder
         await send_progress(websocket, "loading_dtm", "Loading designer taste model...")
         
         dtm = None
-        selected_taste_id = project.get("selected_taste_id")
-        selected_resource_ids = project.get("selected_resource_ids", [])
+        taste_source = "full_dtm"
         
         if selected_taste_id:
             try:
-                dtm = storage.get_taste_dtm(user_id, selected_taste_id)
-            except:
-                # Try converting single DTR
-                resources = db.list_resources_for_taste(selected_taste_id)
-                resources_with_dtr = [
-                    r for r in resources
-                    if storage.resource_dtr_exists(user_id, selected_taste_id, r["resource_id"])
-                ]
+                from app.generation.dtm_builder import get_dtm_builder
+                dtm_builder = get_dtm_builder()
                 
-                if len(resources_with_dtr) == 1:
-                    dtr = storage.get_resource_dtr(
-                        user_id,
-                        selected_taste_id,
-                        resources_with_dtr[0]["resource_id"]
-                    )
-                    dtm = _convert_dtr_to_dtm(dtr, selected_taste_id, user_id)
+                dtm_result = await dtm_builder.get_or_build_dtm(
+                    taste_id=selected_taste_id,
+                    resource_ids=selected_resource_ids,
+                    mode="auto"
+                )
+                
+                dtm_model = dtm_result["dtm"]
+                dtm = dtm_model.model_dump() if hasattr(dtm_model, 'model_dump') else dtm_model
+                taste_source = dtm_result["mode"]
+                
+            except Exception as e:
+                print(f"Warning: Could not load DTM: {e}")
+                # Continue without DTM
         
         # Generate UI
         await send_progress(websocket, "generating", "Generating UI...")
         
         llm = get_llm_service()
+        orchestrator = GenerationOrchestrator(llm, storage)
         
         if dtm:
-            # Use DTM with orchestrator
-            orchestrator = GenerationOrchestrator(llm, storage)
-            
-            ui_code = await orchestrator.generate_ui(
-                dtm=dtm,
+            # Use NEW orchestrator signature
+            result = await orchestrator.generate_ui(
                 task_description=task_description,
+                taste_data=dtm,
+                taste_source=taste_source,
                 device_info=device_info,
-                user_id=user_id,
-                taste_id=selected_taste_id,
-                selected_resource_ids=selected_resource_ids if selected_resource_ids else None,
-                max_examples=3
+                rendering_mode=rendering_mode,
+                validate_taste=True,
+                websocket=websocket,
+                responsive=project.get('responsive', True),
+                image_generation_mode=image_generation_mode
             )
+            ui_code = result.get("code", "")
         else:
-            # Generate without DTM
-            simple_prompt = f"Generate React component: {task_description}\nDevice: {device_info}"
-            response = await llm.call_claude(
-                prompt_name=get_prompt_name("generate_ui_v2"),
-                user_message=simple_prompt,
-                max_tokens=6000
+            # Generate without DTM - use simple generation
+            result = await orchestrator.generate_ui(
+                task_description=task_description,
+                taste_data={},
+                taste_source="none",
+                device_info=device_info,
+                rendering_mode=rendering_mode,
+                validate_taste=False,
+                websocket=websocket,
+                responsive=project.get('responsive', True),
+                image_generation_mode=image_generation_mode
             )
-            ui_code = response.get("text", "")
+            ui_code = result.get("code", "")
         
         # Save output
         await send_progress(websocket, "saving", "Saving output...")
@@ -571,6 +586,7 @@ async def handle_generate_ui(websocket: WebSocket, data: Dict[str, Any], user_id
         import traceback
         traceback.print_exc()
         await send_error(websocket, str(e))
+
 
 
 async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_id: str):
@@ -615,6 +631,7 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
         selected_taste_id = project.get("selected_taste_id")
         selected_resource_ids = project.get("selected_resource_ids", [])
         rendering_mode = project.get("rendering_mode", "react")
+        image_generation_mode = project.get("image_generation_mode", "image_url")  # NEW: Image generation mode
         generated_copy = project.get("metadata", {}).get("generated_copy", "")
         
         if not device_info:
@@ -774,7 +791,8 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
             device_info=device_info,
             taste_source=taste_source,
             websocket=websocket,
-            responsive=project.get('responsive', True)  # Default to responsive
+            responsive=project.get('responsive', True),  # Default to responsive
+            image_generation_mode=image_generation_mode  # NEW: Pass image generation mode
         )
         
         project = unified_result['project']
@@ -1306,7 +1324,8 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
             
             if not current_code:
                 print(f"Warning: Screen {screen_id} has no code")
-                continue
+                await send_error(websocket, f"Screen '{screen_name}' has no generated code yet. Please generate the initial UI before iterating.")
+                return
             
             # Build flow context
             flow_context = {
@@ -1403,7 +1422,10 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
         
         # Build summary message
         screen_names = [s["screen_name"] for s in updated_screens]
-        if len(screen_names) == 1:
+        if len(screen_names) == 0:
+            await send_error(websocket, "No screens could be updated. The screens identified for editing have no generated code yet — please generate the initial UI first.")
+            return
+        elif len(screen_names) == 1:
             summary = f"Updated the {screen_names[0]} screen based on your feedback."
         elif len(screen_names) == 2:
             summary = f"Updated the {screen_names[0]} and {screen_names[1]} screens."
