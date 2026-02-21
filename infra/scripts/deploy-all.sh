@@ -66,12 +66,30 @@ aws lambda update-function-configuration \
 
 echo -e "${GREEN}✓ Lambda environment variables updated${NC}"
 
-# 3. Update Amplify environment variables
+# 3. Update HTTP API Gateway CORS (must include app.osyle.com or browser preflight will be blocked)
+echo -e "${BLUE}🔧 Updating HTTP API Gateway CORS...${NC}"
+HTTP_API_ID=$(aws apigatewayv2 get-apis \
+    --region $REGION \
+    --query "Items[?Name==\'osyle-api\'].ApiId" \
+    --output text)
+
+if [ -n "$HTTP_API_ID" ]; then
+    aws apigatewayv2 update-api \
+        --api-id $HTTP_API_ID \
+        --region $REGION \
+        --cors-configuration AllowOrigins="https://app.osyle.com","https://main.d1z1przwpoqpmu.amplifyapp.com","http://localhost:3000","http://localhost:5173",AllowMethods="GET","POST","PUT","PATCH","DELETE","OPTIONS",AllowHeaders="content-type","x-amz-date","authorization","x-api-key","x-amz-security-token",AllowCredentials=false,MaxAge=3600 \
+        --no-cli-pager > /dev/null
+    echo -e "${GREEN}✓ HTTP API Gateway CORS updated${NC}"
+else
+    echo -e "${YELLOW}⚠️  Could not find HTTP API Gateway 'osyle-api' — skipping CORS update${NC}"
+fi
+
+# 4. Update Amplify environment variables
 echo -e "${BLUE}🔧 Updating Amplify environment variables...${NC}"
 aws amplify update-app \
     --app-id $AMPLIFY_APP_ID \
     --region $REGION \
-    --environment-variables VITE_API_URL=${VITE_API_URL},VITE_WS_URL=${VITE_WS_URL},VITE_AWS_REGION=${VITE_AWS_REGION},VITE_USER_POOL_ID=${VITE_USER_POOL_ID},VITE_USER_POOL_CLIENT_ID=${VITE_USER_POOL_CLIENT_ID},VITE_OAUTH_DOMAIN=${VITE_OAUTH_DOMAIN},VITE_REDIRECT_SIGNIN=https://app.osyle.com/,VITE_REDIRECT_SIGNOUT=https://app.osyle.com/login \
+    --environment-variables VITE_API_URL=${VITE_API_URL},VITE_WS_URL=${VITE_WS_URL},VITE_AWS_REGION=${VITE_AWS_REGION},VITE_USER_POOL_ID=${VITE_USER_POOL_ID},VITE_USER_POOL_CLIENT_ID=${VITE_USER_POOL_CLIENT_ID},VITE_OAUTH_DOMAIN=${VITE_OAUTH_DOMAIN},VITE_REDIRECT_SIGNIN=${VITE_REDIRECT_SIGNIN},VITE_REDIRECT_SIGNOUT=${VITE_REDIRECT_SIGNOUT} \
     --no-cli-pager > /dev/null
 
 echo -e "${GREEN}✓ Amplify environment variables updated${NC}"
