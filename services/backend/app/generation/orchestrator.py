@@ -51,7 +51,8 @@ class GenerationOrchestrator:
         websocket=None,
         screen_id: str = None,
         screen_name: str = None,
-        responsive: bool = True  # NEW: Enable responsive design (default True)
+        responsive: bool = True,  # NEW: Enable responsive design (default True)
+        image_generation_mode: str = "image_url"  # NEW: "ai" or "image_url"
     ) -> Dict[str, Any]:
         """
         Generate UI with PROGRESSIVE STREAMING and 4-layer taste constraints.
@@ -106,7 +107,8 @@ class GenerationOrchestrator:
             flow_context=flow_context,
             mode="default",
             model=model,
-            responsive=responsive  # Pass responsive flag
+            responsive=responsive,  # Pass responsive flag
+            image_generation_mode=image_generation_mode  # Pass image generation mode
         )
         
         print(f"\n{'='*70}")
@@ -211,6 +213,26 @@ class GenerationOrchestrator:
                 cleaned_files[filepath] = cleaned_code
             
             files = cleaned_files
+            
+            # STEP: AI Image Generation (if enabled)
+            if image_generation_mode == "ai":
+                print(f"    🎨 Generating AI images for placeholders...")
+                from app.generation.image_generation import get_image_service
+                
+                image_service = get_image_service(model="fal-ai/flux/schnell")
+                image_cache = {}  # Cache images across all files in this generation
+                
+                # Process each file
+                ai_processed_files = {}
+                for filepath, code in files.items():
+                    modified_code, image_cache = image_service.replace_placeholders_with_images(
+                        code,
+                        cache=image_cache
+                    )
+                    ai_processed_files[filepath] = modified_code
+                
+                files = ai_processed_files
+                print(f"    ✅ AI image generation complete ({len(image_cache)} images generated/cached)")
             
             # For backward compatibility: extract main file code
             # This is the "/App.tsx" or entry point file

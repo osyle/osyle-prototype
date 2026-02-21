@@ -376,6 +376,7 @@ def create_project(
     inspiration_image_keys: List[str] = None,  # S3 keys for inspiration images
     device_info: dict = None,  # Device settings when project was created
     rendering_mode: str = None,  # 'react' or 'parametric'
+    image_generation_mode: str = "image_url",  # 'ai' or 'image_url'
     flow_mode: bool = True,  # NEW: Flow mode flag
     max_screens: int = 5,  # NEW: Max screens in flow
     screen_definitions: List[dict] = None,  # NEW: Screen definitions from user
@@ -397,6 +398,7 @@ def create_project(
         "inspiration_image_keys": inspiration_image_keys or [],  # S3 keys
         "device_info": device_info or {},  # Store device settings
         "rendering_mode": rendering_mode or "react",  # Store rendering mode
+        "image_generation_mode": image_generation_mode,  # Store image generation mode
         "flow_mode": flow_mode,  # NEW: Store flow mode
         "max_screens": max_screens,  # NEW: Store max screens
         "screen_definitions": screen_definitions or [],  # NEW: Store screen definitions

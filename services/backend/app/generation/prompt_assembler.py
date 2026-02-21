@@ -55,7 +55,8 @@ class PromptAssembler:
         flow_context: Optional[Dict[str, Any]] = None,
         mode: str = "default",
         model: str = "claude-sonnet-4.5",
-        responsive: bool = True
+        responsive: bool = True,
+        image_generation_mode: str = "image_url"
     ) -> str:
         """
         Assemble complete generation prompt
@@ -69,6 +70,7 @@ class PromptAssembler:
             mode: Generation mode ("default", "parametric", etc.)
             model: Target LLM model
             responsive: Enable responsive design mode (default: True)
+            image_generation_mode: "ai" (fal.ai generation) or "image_url" (direct URLs)
         
         Returns:
             Complete prompt string
@@ -97,6 +99,14 @@ class PromptAssembler:
         
         # 3. Design quality standards (ALWAYS included)
         sections.append(self._load_template("core/design_quality.md"))
+        
+        # 3.5 Images & Media (conditional based on image generation mode)
+        if image_generation_mode == "ai":
+            sections.append(self._load_template("images/ai_mode.md"))
+            print("    🎨 Image mode: AI generation (fal.ai)")
+        else:
+            sections.append(self._load_template("images/image_url_mode.md"))
+            print("    🖼️  Image mode: Direct URLs (Unsplash Source)")
         
         # 4. Responsive system (if enabled)
         if responsive:

@@ -672,11 +672,7 @@ These patterns show HOW LAYOUTS CHANGE, not just scale:
 
       {/* Image/illustration */}
       <div className="flex-1 w-full max-w-md lg:max-w-none">
-        <img
-          src="https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&q=80"
-          className="w-full"
-          alt="Product"
-        />
+        <img src="[IMAGE_URL]" className="w-full" alt="Product" />
       </div>
     </div>
   </div>

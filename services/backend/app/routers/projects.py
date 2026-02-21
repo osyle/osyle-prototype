@@ -54,6 +54,7 @@ async def create_project(
     selected_taste_id = form_data.get('selected_taste_id')
     device_info_str = form_data.get('device_info')
     rendering_mode = form_data.get('rendering_mode')
+    image_generation_mode = form_data.get('image_generation_mode', 'image_url')  # Default to image_url
     max_screens = int(form_data.get('max_screens', 5))
     metadata_str = form_data.get('metadata')
     screen_definitions_str = form_data.get('screen_definitions')
@@ -243,6 +244,7 @@ async def create_project(
         inspiration_image_keys=inspiration_keys,
         device_info=device_info_dict,
         rendering_mode=rendering_mode,
+        image_generation_mode=image_generation_mode,
         flow_mode=True,  # Always use flow mode
         max_screens=max_screens,
         screen_definitions=screen_defs,

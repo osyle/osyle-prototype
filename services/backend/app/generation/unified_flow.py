@@ -239,7 +239,8 @@ async def generate_unified_flow(
     device_info: Dict[str, Any],
     taste_source: str,
     websocket=None,
-    responsive: bool = True
+    responsive: bool = True,
+    image_generation_mode: str = "image_url"
 ) -> Dict[str, Any]:
     """
     Generate a unified multi-screen flow as a single project
@@ -262,6 +263,7 @@ async def generate_unified_flow(
         taste_source: Taste source mode
         websocket: Optional websocket for progress updates
         responsive: Enable responsive design (default: True)
+        image_generation_mode: "ai" or "image_url" (default: "image_url")
     
     Returns:
         {
@@ -381,7 +383,8 @@ async def generate_unified_flow(
             websocket=None,  # Don't send checkpoint updates (causes too many messages)
             screen_id=screen_id,
             screen_name=screen_name,
-            responsive=responsive  # Pass responsive flag
+            responsive=responsive,  # Pass responsive flag
+            image_generation_mode=image_generation_mode  # Pass image generation mode
         )
         
         # Extract the screen component code
