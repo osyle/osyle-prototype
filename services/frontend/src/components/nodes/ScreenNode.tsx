@@ -137,7 +137,7 @@ export default function App() {
           <div
             style={{
               width: '100%',
-              height: '100%',
+              height: actualScreenSize.height,
               background:
                 'linear-gradient(to bottom, #0a0a0a 0%, #000000 100%)',
               position: 'relative',
@@ -221,40 +221,6 @@ export default function App() {
                   />
                 </div>
               ))}
-
-              {/* Loading indicator */}
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: '24px',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '8px 16px',
-                  background: 'rgba(99, 102, 241, 0.1)',
-                  border: '1px solid rgba(99, 102, 241, 0.2)',
-                  borderRadius: '20px',
-                }}
-              >
-                {/* Spinning dots */}
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  {[0, 1, 2].map(i => (
-                    <div
-                      key={i}
-                      style={{
-                        width: '6px',
-                        height: '6px',
-                        borderRadius: '50%',
-                        background: 'rgba(99, 102, 241, 0.8)',
-                        animation: 'bounce 1.4s infinite ease-in-out both',
-                        animationDelay: `${i * 0.16}s`,
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
             </div>
 
             {/* Keyframe animations */}
@@ -272,14 +238,6 @@ export default function App() {
                   50% { 
                     opacity: 0.5;
                     transform: translate(-50%, -50%) scale(1.1);
-                  }
-                }
-                @keyframes bounce {
-                  0%, 80%, 100% {
-                    transform: scale(0);
-                  }
-                  40% {
-                    transform: scale(1);
                   }
                 }
               `}
