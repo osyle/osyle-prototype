@@ -102,7 +102,8 @@ export default function App() {
     }
 
     // Get dimensions from entry screen (with fallback for old projects)
-    const dimensions = entryScreen.dimensions || { width: 1280, height: 720 }
+    // Default to mobile dimensions since most AI-generated projects are mobile apps
+    const dimensions = entryScreen.dimensions || { width: 390, height: 844 }
     const baseWidth = dimensions.width
     const baseHeight = dimensions.height
 
@@ -110,10 +111,10 @@ export default function App() {
     const availableHeight = cardHeight - 70
     const availableWidth = 280 // Card width
 
-    // Calculate scale to fit
-    const scaleX = (availableWidth / baseWidth) * 1.2
-    const scaleY = (availableHeight / baseHeight) * 1.2
-    const scale = Math.min(scaleX, scaleY, 0.6)
+    // Calculate scale to fit exactly within card bounds (no 1.2x boost to prevent overflow)
+    const scaleX = availableWidth / baseWidth
+    const scaleY = availableHeight / baseHeight
+    const scale = Math.min(scaleX, scaleY)
 
     return (
       <div
@@ -126,10 +127,12 @@ export default function App() {
             transformOrigin: 'center center',
             width: baseWidth,
             height: baseHeight,
+            // overflow:hidden is critical — scale() doesn't clip layout,
+            // so content that overflows baseWidth×baseHeight would bleed
+            // outside the card without this.
+            overflow: 'hidden',
+            flexShrink: 0,
             pointerEvents: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
           }}
         >
           <MultiFileReactRenderer
