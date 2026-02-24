@@ -293,9 +293,10 @@ export default function App() {
   const entry = '/App.tsx'
   const dependencies = flowGraph.project.dependencies || {}
 
-  // Node dimensions match exactly the screen size — no bezel inflation
+  // Width is fixed (configured screen width). Height is unconstrained —
+  // the node grows to fit rendered content, which may be taller than the
+  // configured screen height. React Flow measures actual DOM height.
   const displayWidth = actualScreenSize.width
-  const displayHeight = actualScreenSize.height
 
   return (
     <div
@@ -304,7 +305,7 @@ export default function App() {
         position: 'relative',
         pointerEvents: 'auto',
         width: displayWidth,
-        height: displayHeight,
+        minHeight: actualScreenSize.height, // content can exceed this
       }}
     >
       <Handle
@@ -647,7 +648,7 @@ export default function App() {
           }}
           style={{
             width: '100%',
-            height: '100%',
+            minHeight: actualScreenSize.height,
             position: 'relative',
             cursor: selected || isAnnotationModeActive ? 'default' : 'grab',
           }}
@@ -676,7 +677,7 @@ export default function App() {
           <div
             style={{
               width: '100%',
-              height: '100%',
+              minHeight: actualScreenSize.height,
               pointerEvents: 'auto', // Always enabled for content and annotations
             }}
           >

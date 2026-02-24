@@ -27,15 +27,15 @@ export default function DeviceFrame({
       <div
         style={{
           width: '100%',
-          height: '100%',
+          minHeight: '100%',
           position: 'relative',
           backgroundColor: '#ffffff',
           borderRadius: '12px',
-          overflow: 'hidden',
+          overflow: 'visible',
           boxShadow: '0 0 0 1px rgba(0,0,0,0.08), 0 4px 24px rgba(0,0,0,0.12)',
         }}
       >
-        <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+        <div style={{ width: '100%', minHeight: '100%', overflow: 'visible' }}>
           {children}
         </div>
       </div>

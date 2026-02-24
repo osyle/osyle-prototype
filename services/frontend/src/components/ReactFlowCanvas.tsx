@@ -96,9 +96,8 @@ export default function ReactFlowCanvas({
           height: deviceInfo.screen.height,
         }
 
-        // Node dimensions match exactly the screen size — no bezel inflation
+        // Node width matches configured screen width; height is auto-measured
         const displayWidth = size.width
-        const displayHeight = size.height
 
         const nodeData: ScreenNodeData = {
           screen,
@@ -120,8 +119,9 @@ export default function ReactFlowCanvas({
           data: nodeData as Record<string, unknown>,
           selected: selectedScreenId === screen.screen_id,
           width: displayWidth,
-          height: displayHeight,
-          draggable: selectedScreenId !== screen.screen_id && !isAnnotationMode, // Can't drag when selected OR annotation mode
+          // height intentionally omitted — React Flow measures actual DOM height
+          // so tall content screens expand naturally without clipping
+          draggable: selectedScreenId !== screen.screen_id && !isAnnotationMode,
           selectable: true,
         }
       }),

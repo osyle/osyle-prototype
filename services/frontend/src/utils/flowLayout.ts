@@ -1,12 +1,20 @@
 /**
  * Auto-layout utility for flow graphs
- * Creates hierarchical layouts based on transitions/connections
+ *
+ * Figma-style: screens are placed left-to-right in flow order,
+ * so they never overlap regardless of height. Each screen renders
+ * at its configured width and at whatever height its content needs.
  */
 
-import type { FlowGraph, FlowScreen } from '../types/home.types'
+import type { FlowGraph } from '../types/home.types'
+
+const HORIZONTAL_GAP = 120 // px gap between screens
+const START_X = 100
+const START_Y = 100
 
 /**
- * Calculate auto-layout positions for screens based on flow structure
+ * Calculate positions: sort screens in BFS order from entry,
+ * then place them left to right with a fixed gap.
  */
 export function calculateFlowLayout(
   flowGraph: FlowGraph,
@@ -16,138 +24,58 @@ export function calculateFlowLayout(
 ): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>()
 
-  if (!flowGraph.screens.length) {
-    return positions
-  }
+  if (!flowGraph.screens.length) return positions
 
-  // Build adjacency map (screen -> children)
+  // Build BFS order starting from entry screen
   const adjacency = new Map<string, string[]>()
-  flowGraph.screens.forEach(screen => {
-    adjacency.set(screen.screen_id, [])
+  flowGraph.screens.forEach(s => adjacency.set(s.screen_id, []))
+  flowGraph.transitions.forEach(t => {
+    const children = adjacency.get(t.from_screen_id) || []
+    if (!children.includes(t.to_screen_id)) children.push(t.to_screen_id)
+    adjacency.set(t.from_screen_id, children)
   })
 
-  flowGraph.transitions.forEach(transition => {
-    const children = adjacency.get(transition.from_screen_id) || []
-    if (!children.includes(transition.to_screen_id)) {
-      children.push(transition.to_screen_id)
-    }
-    adjacency.set(transition.from_screen_id, children)
-  })
-
-  // Find root nodes (entry screens or nodes with no incoming edges)
   const hasIncoming = new Set<string>()
   flowGraph.transitions.forEach(t => hasIncoming.add(t.to_screen_id))
 
-  const roots: string[] = []
-  flowGraph.screens.forEach(screen => {
-    if (screen.screen_type === 'entry' || !hasIncoming.has(screen.screen_id)) {
-      roots.push(screen.screen_id)
-    }
-  })
+  // Find entry points
+  const entryIds = flowGraph.screens
+    .filter(s => s.screen_type === 'entry' || !hasIncoming.has(s.screen_id))
+    .map(s => s.screen_id)
 
-  if (roots.length === 0 && flowGraph.screens.length > 0) {
-    // Fallback: use first screen as root
-    roots.push(flowGraph.screens[0].screen_id)
-  }
+  if (entryIds.length === 0) entryIds.push(flowGraph.screens[0].screen_id)
 
-  // Node dimensions are exactly the screen dimensions — no bezel inflation
-  const getScreenDimensions = (screen: FlowScreen) => {
-    return {
-      width: screen.dimensions?.width || deviceInfo.screen.width,
-      height: screen.dimensions?.height || deviceInfo.screen.height,
-    }
-  }
-
-  // Layout parameters
-  const HORIZONTAL_SPACING = 200 // Space between columns
-  const VERTICAL_SPACING = 100 // Space between rows
-  const START_X = 100
-  const START_Y = 100
-
-  // Assign levels using BFS
-  const levels = new Map<string, number>()
-  const queue: Array<{ id: string; level: number }> = []
+  // BFS to get ordered list
   const visited = new Set<string>()
-
-  roots.forEach(rootId => {
-    queue.push({ id: rootId, level: 0 })
-    visited.add(rootId)
-  })
+  const ordered: string[] = []
+  const queue = [...entryIds]
+  entryIds.forEach(id => visited.add(id))
 
   while (queue.length > 0) {
-    const { id, level } = queue.shift()!
-    levels.set(id, level)
-
+    const id = queue.shift()!
+    ordered.push(id)
     const children = adjacency.get(id) || []
-    children.forEach(childId => {
-      if (!visited.has(childId)) {
-        visited.add(childId)
-        queue.push({ id: childId, level: level + 1 })
+    for (const child of children) {
+      if (!visited.has(child)) {
+        visited.add(child)
+        queue.push(child)
       }
-    })
+    }
   }
 
-  // Handle any unvisited nodes (disconnected components)
-  flowGraph.screens.forEach(screen => {
-    if (!levels.has(screen.screen_id)) {
-      levels.set(screen.screen_id, 0)
-    }
+  // Add any disconnected screens at the end
+  flowGraph.screens.forEach(s => {
+    if (!visited.has(s.screen_id)) ordered.push(s.screen_id)
   })
 
-  // Group screens by level
-  const screensByLevel = new Map<number, FlowScreen[]>()
-  flowGraph.screens.forEach(screen => {
-    const level = levels.get(screen.screen_id) || 0
-    if (!screensByLevel.has(level)) {
-      screensByLevel.set(level, [])
-    }
-    screensByLevel.get(level)!.push(screen)
-  })
-
-  // Calculate maximum screen height per level
-  const maxHeightPerLevel = new Map<number, number>()
-  screensByLevel.forEach((screens, level) => {
-    const maxHeight = Math.max(
-      ...screens.map(s => getScreenDimensions(s).height),
-    )
-    maxHeightPerLevel.set(level, maxHeight)
-  })
-
-  // Position screens level by level
+  // Place screens left to right
   let currentX = START_X
-  const sortedLevels = Array.from(screensByLevel.keys()).sort((a, b) => a - b)
-
-  sortedLevels.forEach(level => {
-    const screensInLevel = screensByLevel.get(level)!
-    const maxWidth = Math.max(
-      ...screensInLevel.map(s => getScreenDimensions(s).width),
-    )
-
-    // Calculate total height needed for this level
-    const totalHeight = screensInLevel.reduce((sum, screen, idx) => {
-      const dims = getScreenDimensions(screen)
-      return sum + dims.height + (idx > 0 ? VERTICAL_SPACING : 0)
-    }, 0)
-
-    // Center the column vertically
-    let currentY =
-      START_Y - totalHeight / 2 + (maxHeightPerLevel.get(level) || 0) / 2
-
-    screensInLevel.forEach(screen => {
-      const dims = getScreenDimensions(screen)
-
-      // Center screen horizontally in its column
-      const x = currentX + (maxWidth - dims.width) / 2
-      const y = currentY
-
-      positions.set(screen.screen_id, { x, y })
-
-      currentY += dims.height + VERTICAL_SPACING
-    })
-
-    // Move to next column
-    currentX += maxWidth + HORIZONTAL_SPACING
-  })
+  for (const screenId of ordered) {
+    const screen = flowGraph.screens.find(s => s.screen_id === screenId)
+    const width = screen?.dimensions?.width ?? deviceInfo.screen.width
+    positions.set(screenId, { x: currentX, y: START_Y })
+    currentX += width + HORIZONTAL_GAP
+  }
 
   return positions
 }
