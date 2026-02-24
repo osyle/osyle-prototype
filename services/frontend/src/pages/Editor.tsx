@@ -126,7 +126,7 @@ export default function Editor() {
   // Right panel tab state
   const [activeRightTab, setActiveRightTab] = useState<
     'explore' | 'refine' | 'annotate' | 'reflect'
-  >('explore')
+  >('refine')
 
   // Generation state
   const [generationStage, setGenerationStage] =

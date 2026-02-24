@@ -311,6 +311,7 @@ export default function RightPanel({
                   className="flex items-center gap-0 border-b overflow-x-auto"
                   style={{ borderColor: '#E8E1DD' }}
                 >
+                  {/*
                   <button
                     onClick={() => setActiveTab('explore')}
                     className="px-3 py-2 text-xs font-medium transition-colors border-b-2 whitespace-nowrap"
@@ -322,6 +323,7 @@ export default function RightPanel({
                   >
                     Explore
                   </button>
+                  */}
                   <button
                     onClick={() => setActiveTab('refine')}
                     className="px-3 py-2 text-xs font-medium transition-colors border-b-2 whitespace-nowrap"
@@ -355,6 +357,7 @@ export default function RightPanel({
                       </span>
                     )}
                   </button>
+                  {/*
                   <button
                     onClick={() => setActiveTab('reflect')}
                     className="px-3 py-2 text-xs font-medium transition-colors border-b-2 whitespace-nowrap"
@@ -366,6 +369,7 @@ export default function RightPanel({
                   >
                     Reflect
                   </button>
+                  */}
                 </div>
               </div>
 
