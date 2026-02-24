@@ -115,7 +115,8 @@ export default function PrototypeRunner({
           width: deviceInfo.screen.width,
           height: deviceInfo.screen.height,
           flexShrink: 0,
-          overflow: 'hidden',
+          overflowY: 'auto',
+          overflowX: 'hidden',
         }}
       >
         <MultiFileReactRenderer
