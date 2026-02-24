@@ -158,7 +158,7 @@ export default function Editor() {
     flowGraph?.screens.find(s => s.screen_id === selectedScreenId) || null
 
   // Right panel collapsed state
-  const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false)
+  const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(true)
 
   // Fullscreen prototype state
   const [isFullscreenPrototype, setIsFullscreenPrototype] = useState(false)
