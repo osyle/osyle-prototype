@@ -1570,8 +1570,11 @@ export default function Editor() {
                       key={screen.screen_id}
                       onClick={() => {
                         setSelectedScreenId(screen.screen_id)
-                        // React Flow handles screen focusing
-                        // centerScreen(screen.screen_id, true)
+                        window.dispatchEvent(
+                          new CustomEvent('focusScreen', {
+                            detail: { screenId: screen.screen_id },
+                          }),
+                        )
                         setIsFlowNavigatorOpen(false)
                       }}
                       className="w-full text-left px-3 py-2 rounded-lg mb-1 transition-all hover:scale-[1.02]"

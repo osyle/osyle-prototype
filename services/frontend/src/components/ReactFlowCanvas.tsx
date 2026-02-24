@@ -8,6 +8,7 @@ import {
   addEdge,
   MarkerType,
   Panel,
+  useReactFlow,
 } from '@xyflow/react'
 import type { Node, Edge, Connection, OnNodesChange } from '@xyflow/react'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
@@ -51,6 +52,26 @@ const edgeTypes = {
   error: ErrorEdge,
   branch: BranchEdge,
   success: SuccessEdge,
+}
+
+function FlowController() {
+  const { fitView } = useReactFlow()
+
+  useEffect(() => {
+    const handleFocusScreen = (event: Event) => {
+      const { screenId } = (event as CustomEvent<{ screenId: string }>).detail
+      fitView({
+        nodes: [{ id: screenId }],
+        duration: 400,
+        padding: 0.6,
+      })
+    }
+
+    window.addEventListener('focusScreen', handleFocusScreen)
+    return () => window.removeEventListener('focusScreen', handleFocusScreen)
+  }, [fitView])
+
+  return null
 }
 
 export default function ReactFlowCanvas({
@@ -258,6 +279,7 @@ export default function ReactFlowCanvas({
         multiSelectionKeyCode="Meta" // Cmd/Ctrl for multi-select
         style={{ backgroundColor: '#0F0F0F' }}
       >
+        <FlowController />
         <Background
           color="rgba(255, 255, 255, 0.06)"
           gap={24}
