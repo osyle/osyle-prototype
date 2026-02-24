@@ -42,7 +42,7 @@ class RethinkProcessor:
         Args:
             reference_files: Figma JSON and/or images
             task_description: What the user wants to build
-            device_info: Platform and dimensions
+            device_info: Screen dimensions
             domain: Optional domain hint (e.g., "e-commerce", "healthcare")
             dtm: Optional Designer Taste Model (DTM v3)
             

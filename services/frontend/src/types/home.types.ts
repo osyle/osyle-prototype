@@ -57,7 +57,6 @@ export interface FlowScreen {
   component_path?: string // Path to screen component (e.g., '/screens/LoginScreen.tsx') - optional, can be generated
 
   // Device info (for canvas display)
-  platform?: string
   dimensions?: { width: number; height: number }
 
   // Additional metadata
@@ -100,7 +99,7 @@ export interface Project {
   task_description: string
   selected_taste_id: string
   selected_resource_ids: string[]
-  device_info?: { platform: string; screen: { width: number; height: number } }
+  device_info?: { screen: { width: number; height: number } }
   rendering_mode?: 'react' | 'parametric'
   responsive_mode?: boolean
   flow_mode?: boolean
@@ -132,7 +131,7 @@ export interface CreateProjectPayload {
   selected_taste_id: string
   selected_resource_ids: string[]
   inspiration_images?: File[]
-  device_info?: { platform: string; screen: { width: number; height: number } }
+  device_info?: { screen: { width: number; height: number } }
   rendering_mode?: 'react' | 'parametric'
   responsive_mode?: boolean // NEW: Responsive design toggle
   flow_mode?: boolean // NEW
@@ -155,7 +154,7 @@ export interface ProjectDetails {
   task_description: string
   selected_taste_id: string
   selected_resource_ids: string[]
-  device_info?: { platform: string; screen: { width: number; height: number } }
+  device_info?: { screen: { width: number; height: number } }
   rendering_mode?: 'react' | 'parametric'
   responsive_mode?: boolean
   inspiration_image_keys?: string[] // S3 keys

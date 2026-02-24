@@ -21,7 +21,6 @@ export interface ScreenNodeData extends Record<string, unknown> {
   isIterating: boolean
   isGenerating: boolean
   deviceInfo: {
-    platform: 'phone' | 'web'
     screen: { width: number; height: number }
   }
   project: Project
@@ -129,15 +128,12 @@ export default function App() {
       <div
         ref={nodeRef}
         style={{
-          width:
-            actualScreenSize.width + (deviceInfo.platform === 'phone' ? 24 : 0),
-          height:
-            actualScreenSize.height +
-            (deviceInfo.platform === 'phone' ? 48 : 40),
+          width: actualScreenSize.width,
+          height: actualScreenSize.height,
           position: 'relative',
         }}
       >
-        <DeviceFrame screenSize={actualScreenSize}>
+        <DeviceFrame variant="canvas">
           <div
             style={{
               width: '100%',
@@ -297,14 +293,9 @@ export default function App() {
   const entry = '/App.tsx'
   const dependencies = flowGraph.project.dependencies || {}
 
-  const displayWidth =
-    deviceInfo.platform === 'phone'
-      ? actualScreenSize.width + 24
-      : actualScreenSize.width
-  const displayHeight =
-    deviceInfo.platform === 'phone'
-      ? actualScreenSize.height + 48
-      : actualScreenSize.height + 40
+  // Node dimensions match exactly the screen size — no bezel inflation
+  const displayWidth = actualScreenSize.width
+  const displayHeight = actualScreenSize.height
 
   return (
     <div
@@ -645,7 +636,7 @@ export default function App() {
         {screen.name}
       </div>
 
-      <DeviceFrame screenSize={actualScreenSize}>
+      <DeviceFrame variant="canvas">
         <div
           ref={contentRef}
           onMouseDown={e => {

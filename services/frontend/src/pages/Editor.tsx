@@ -1131,23 +1131,12 @@ export default function Editor() {
     ) {
       if (activeTab === 'Prototype') {
         return (
-          <DeviceFrame>
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                paddingTop: device_info.platform === 'phone' ? '28px' : '0', // Notch space
-                paddingBottom: device_info.platform === 'phone' ? '16px' : '0', // Home indicator space
-                boxSizing: 'border-box',
-                overflow: 'auto',
-              }}
-            >
-              <PrototypeRunner
-                flow={flowGraph}
-                deviceInfo={device_info}
-                parametricValues={parameterValues}
-              />
-            </div>
+          <DeviceFrame variant="prototype">
+            <PrototypeRunner
+              flow={flowGraph}
+              deviceInfo={device_info}
+              parametricValues={parameterValues}
+            />
           </DeviceFrame>
         )
       }
@@ -1850,16 +1839,8 @@ export default function Editor() {
                   }}
                 >
                   <PrototypeCanvas
-                    deviceWidth={
-                      device_info.platform === 'phone'
-                        ? device_info.screen.width + 24 // Total width including DeviceFrame bezel
-                        : device_info.screen.width
-                    }
-                    deviceHeight={
-                      device_info.platform === 'phone'
-                        ? device_info.screen.height + 48 // Total height including DeviceFrame bezel
-                        : device_info.screen.height + 40 // Total height including browser chrome
-                    }
+                    deviceWidth={device_info.screen.width}
+                    deviceHeight={device_info.screen.height}
                   >
                     {renderDeviceContent()}
                   </PrototypeCanvas>
@@ -2855,10 +2836,7 @@ export default function Editor() {
                   style={{
                     maxWidth: '100%',
                     maxHeight: '100%',
-                    aspectRatio:
-                      device_info.platform === 'phone'
-                        ? `${device_info.screen.width + 24} / ${device_info.screen.height + 48}`
-                        : `${device_info.screen.width} / ${device_info.screen.height + 40}`,
+                    aspectRatio: `${device_info.screen.width} / ${device_info.screen.height}`,
                     width: '100%',
                     height: '100%',
                     display: 'flex',
@@ -2870,14 +2848,8 @@ export default function Editor() {
                     style={{
                       width: '100%',
                       height: '100%',
-                      maxWidth:
-                        device_info.platform === 'phone'
-                          ? `${device_info.screen.width + 24}px`
-                          : `${device_info.screen.width}px`,
-                      maxHeight:
-                        device_info.platform === 'phone'
-                          ? `${device_info.screen.height + 48}px`
-                          : `${device_info.screen.height + 40}px`,
+                      maxWidth: `${device_info.screen.width}px`,
+                      maxHeight: `${device_info.screen.height}px`,
                       transform: 'scale(var(--scale))',
                       transformOrigin: 'center center',
                     }}
@@ -2888,14 +2860,8 @@ export default function Editor() {
                       const container = el.parentElement
                       if (!container) return
 
-                      const deviceWidth =
-                        device_info.platform === 'phone'
-                          ? device_info.screen.width + 24
-                          : device_info.screen.width
-                      const deviceHeight =
-                        device_info.platform === 'phone'
-                          ? device_info.screen.height + 48
-                          : device_info.screen.height + 40
+                      const deviceWidth = device_info.screen.width
+                      const deviceHeight = device_info.screen.height
 
                       const scaleX = container.clientWidth / deviceWidth
                       const scaleY = container.clientHeight / deviceHeight
@@ -2904,24 +2870,11 @@ export default function Editor() {
                       el.style.setProperty('--scale', scale.toString())
                     }}
                   >
-                    <DeviceFrame>
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          paddingTop:
-                            device_info.platform === 'phone' ? '28px' : '0',
-                          paddingBottom:
-                            device_info.platform === 'phone' ? '16px' : '0',
-                          boxSizing: 'border-box',
-                          overflow: 'auto',
-                        }}
-                      >
-                        <PrototypeRunner
-                          flow={flowGraph}
-                          deviceInfo={device_info}
-                        />
-                      </div>
+                    <DeviceFrame variant="prototype">
+                      <PrototypeRunner
+                        flow={flowGraph}
+                        deviceInfo={device_info}
+                      />
                     </DeviceFrame>
                   </div>
                 </div>

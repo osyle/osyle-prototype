@@ -36,7 +36,6 @@ interface ReactFlowCanvasProps {
   onScreenMove: (id: string, x: number, y: number) => void
   currentIteratingScreenId: string | null
   deviceInfo: {
-    platform: 'phone' | 'web'
     screen: { width: number; height: number }
   }
   project: Project
@@ -73,7 +72,9 @@ export default function ReactFlowCanvas({
   // Poll for annotation mode changes
   useEffect(() => {
     const checkAnnotationMode = () => {
-      const active = (window as any).__annotationModeActive || false
+      const active =
+        (window as Window & { __annotationModeActive?: boolean })
+          .__annotationModeActive || false
       setIsAnnotationMode(active)
     }
 
@@ -95,11 +96,9 @@ export default function ReactFlowCanvas({
           height: deviceInfo.screen.height,
         }
 
-        // Add bezel size for display
-        const displayWidth =
-          deviceInfo.platform === 'phone' ? size.width + 24 : size.width
-        const displayHeight =
-          deviceInfo.platform === 'phone' ? size.height + 48 : size.height + 40
+        // Node dimensions match exactly the screen size — no bezel inflation
+        const displayWidth = size.width
+        const displayHeight = size.height
 
         const nodeData: ScreenNodeData = {
           screen,

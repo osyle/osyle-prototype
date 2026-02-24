@@ -646,7 +646,7 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
         print(f"Generated Copy: {'Yes (' + str(len(generated_copy)) + ' chars)' if generated_copy else 'No'}")
         print(f"Taste ID: {selected_taste_id}")
         print(f"Resources: {len(selected_resource_ids) if selected_resource_ids else 'all'}")
-        print(f"Device: {device_info.get('platform')} {device_info.get('screen', {}).get('width')}x{device_info.get('screen', {}).get('height')}")
+        print(f"Device: {device_info.get('screen', {}).get('width')}x{device_info.get('screen', {}).get('height')}px")
         print(f"Max screens: {max_screens}")
         print(f"{'='*80}\n")
         
@@ -732,7 +732,6 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
                         "name": s["name"],
                         "description": s.get("description", ""),
                         "task_description": s.get("task_description", s.get("description", "")),
-                        "platform": device_info.get("platform", "web"),
                         "dimensions": device_info.get("screen", {"width": 1280, "height": 720}),
                         "screen_type": s.get("screen_type"),
                         "semantic_role": s.get("semantic_role"),
@@ -1001,7 +1000,6 @@ Return ONLY a valid JSON object (no markdown code fences, no explanations):
       "name": "string (screen name)",
       "description": "string (brief description)",
       "task_description": "string (detailed - what to build on this screen)",
-      "platform": "web" | "phone",
       "dimensions": {"width": number, "height": number},
       "screen_type": "entry" | "intermediate" | "success" | "error" | "exit"
     }
@@ -1067,13 +1065,13 @@ When creating task_description for each screen, reference the specific copy that
 """)
     
     # Add device context
-    platform = device_info.get("platform", "web")
     width = device_info.get("screen", {}).get("width", 1440)
     height = device_info.get("screen", {}).get("height", 900)
-    
+    ux_style = "touch-first (mobile)" if width <= 480 else "pointer-capable (desktop/tablet)"
+
     prompt_parts.append(f"## Device Context\n\n")
-    prompt_parts.append(f"- Platform: {platform}\n")
-    prompt_parts.append(f"- Screen dimensions: {width}x{height}px\n")
+    prompt_parts.append(f"- Viewport: {width}x{height}px\n")
+    prompt_parts.append(f"- UX style: {ux_style}\n")
     prompt_parts.append(f"- Maximum screens: {max_screens}\n\n")
     
     prompt_parts.append("Generate the flow architecture JSON now:")
@@ -1112,10 +1110,8 @@ When creating task_description for each screen, reference the specific copy that
     try:
         architecture = json.loads(json_str)
         
-        # Ensure all screens have required platform/dimensions
+        # Ensure all screens have required dimensions
         for screen in architecture.get("screens", []):
-            if "platform" not in screen:
-                screen["platform"] = platform
             if "dimensions" not in screen:
                 screen["dimensions"] = {"width": width, "height": height}
         
@@ -1137,7 +1133,6 @@ When creating task_description for each screen, reference the specific copy that
                     "name": "Main Screen",
                     "description": "Primary application screen",
                     "task_description": task_description,
-                    "platform": platform,
                     "dimensions": {"width": width, "height": height},
                     "screen_type": "entry"
                 }
@@ -1284,7 +1279,6 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
         
         # Get device info
         device_info = project.get("device_info", {
-            "platform": "web",
             "screen": {"width": 1440, "height": 900}
         })
         

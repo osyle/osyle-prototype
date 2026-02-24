@@ -32,8 +32,7 @@ You receive:
    ```typescript
    {
      width: number,
-     height: number,
-     platform: "web" | "phone"
+     height: number
    }
    ```
 
@@ -98,7 +97,6 @@ Return **ONLY** a valid JSON object (no markdown, no explanations):
       "name": "string (strategic name from optimal design)",
       "description": "string (strategic description)",
       "task_description": "string (strategic task with context from rethinking)",
-      "platform": "web" | "phone",
       "dimensions": {"width": number, "height": number},
       "screen_type": "entry" | "intermediate" | "success" | "error" | "exit",
       "user_provided": boolean,
@@ -149,7 +147,6 @@ Return **ONLY** a valid JSON object (no markdown, no explanations):
       "name": "Opportunity Feed",
       "description": "AI-powered feed of competitive opportunities",
       "task_description": "Display opportunity cards with strategic context: market insight, trend data, revenue potential, and clear CTAs. Each opportunity should include: title (e.g., 'Immunity Defense'), strategic insight (e.g., 'Competitors out of Vitamin C stock'), trend indicator (+95% searches), revenue potential ($4.5k-$9k weekly), and primary action button ('Capture Traffic Now'). Implement zero-setup approach - show pre-analyzed opportunities immediately.",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "entry",
       "user_provided": false,
@@ -170,7 +167,6 @@ Return **ONLY** a valid JSON object (no markdown, no explanations):
       "name": "Opportunity Detail",
       "description": "Deep-dive into specific opportunity with full competitive intelligence",
       "task_description": "Detailed view of opportunity with: full market analysis, competitive intel (which competitors affected, stock status, pricing), trend visualization, revenue projections breakdown, recommended campaign actions, and alternative strategies. Include 'Launch Campaign' primary CTA and 'Explore Related' secondary action.",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "intermediate",
       "user_provided": false,
@@ -191,7 +187,6 @@ Return **ONLY** a valid JSON object (no markdown, no explanations):
       "name": "Campaign Launch",
       "description": "Quick campaign creation pre-filled with opportunity data",
       "task_description": "Campaign builder with opportunity context pre-filled: target audience (Vitamin C searchers), creative angle (in-stock emphasis), budget recommendation ($4.5-9k), duration (2-week window), and platform selection (Google/Instagram split). One-tap launch with smart defaults, optional customization before launch.",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "success",
       "user_provided": false,

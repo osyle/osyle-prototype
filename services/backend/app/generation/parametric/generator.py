@@ -50,7 +50,7 @@ class ParametricGenerator:
         Args:
             task_description: What this UI should accomplish
             dtm: Designer Taste Model (DTM v3) with learned taste
-            device_info: Device dimensions and platform
+            device_info: Device screen dimensions
             screen_context: Optional flow context
             
         Returns:
@@ -64,7 +64,7 @@ class ParametricGenerator:
         print(f"PARAMETRIC GENERATION")
         print(f"{'='*60}")
         print(f"Task: {task_description}")
-        print(f"Device: {device_info['platform']} {device_info['screen']['width']}x{device_info['screen']['height']}")
+        print(f"Device: {device_info['screen']['width']}x{device_info['screen']['height']}px")
         
         # Build user message with task context
         dtm_context = self._extract_dtm_context(dtm)
@@ -73,8 +73,7 @@ class ParametricGenerator:
 {task_description}
 
 ## DEVICE
-Platform: {device_info['platform']}
-Screen: {device_info['screen']['width']}px × {device_info['screen']['height']}px
+Viewport: {device_info['screen']['width']}px × {device_info['screen']['height']}px
 
 ## YOUR DESIGNER'S TASTE
 {dtm_context}

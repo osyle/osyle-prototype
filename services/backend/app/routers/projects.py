@@ -36,7 +36,7 @@ async def create_project(
     - **selected_resource_ids**: Optional list of resource IDs (must all belong to selected_taste)
     - **inspiration_images**: Optional list of image files for visual inspiration (max 5)
     - **screen_definitions**: Optional JSON array of screen definitions
-    - **device_info**: Optional JSON string of device settings (platform, screen dimensions)
+    - **device_info**: Optional JSON string of device settings (screen dimensions)
     - **rendering_mode**: Optional rendering mode ('react' or 'parametric')
     - **metadata**: Optional JSON metadata
     - **screen_N_figma**: Optional figma.json file for screen N

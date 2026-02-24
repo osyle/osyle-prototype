@@ -34,8 +34,7 @@ You receive:
    ```typescript
    {
      width: number,      // Screen width in pixels
-     height: number,     // Screen height in pixels
-     platform: "web" | "phone"
+     height: number     // Screen height in pixels
    }
    ```
 

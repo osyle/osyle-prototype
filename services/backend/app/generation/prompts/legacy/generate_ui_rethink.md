@@ -28,8 +28,7 @@ You receive:
    ```typescript
    {
      width: number,
-     height: number,
-     platform: "web" | "phone"
+     height: number
    }
    ```
 
@@ -222,24 +221,6 @@ Use the strategic framing from the intent analysis. Content should communicate:
 - Real-time indicators (pulse animations, "live" badges)
 - Time-sensitivity indicators ("2 min ago", "48hr window")
 - Notification-style alerts for high-priority items
-
-### 6. Platform-Specific Optimizations
-
-**Mobile** (when platform === "phone"):
-
-- Bottom navigation for thumb reach
-- Large touch targets (≥ 44x44px)
-- Swipe gestures for actions
-- Vertical scroll, minimal horizontal
-- One primary action per card
-
-**Desktop** (when platform === "web"):
-
-- Multi-column layouts for efficiency
-- Hover states for additional context
-- Keyboard navigation support
-- Side-by-side comparisons
-- Multiple CTAs when appropriate
 
 ---
 
@@ -968,21 +949,19 @@ export default function App({ onTransition }) {
 
 3. **Information Hierarchy**: Strategic info most prominent, supporting context accessible
 
-4. **Platform Optimization**: Adapt interaction patterns to device
+4. **Flow Integration**: Implement all transitions with correct IDs
 
-5. **Flow Integration**: Implement all transitions with correct IDs
+5. **NO IMPORT STATEMENTS**: React hooks (`useState`, `useEffect`, `useCallback`, `useMemo`, `useRef`) are already available, use them directly - imports will break execution
 
-6. **NO IMPORT STATEMENTS**: React hooks (`useState`, `useEffect`, `useCallback`, `useMemo`, `useRef`) are already available, use them directly - imports will break execution
+6. **FUNCTION NAME MUST BE "App"**: Always use `export default function App`, never custom names
 
-7. **FUNCTION NAME MUST BE "App"**: Always use `export default function App`, never custom names
+7. **NO MARKDOWN CODE BLOCKS**: Output pure React code only, no \`\`\`jsx, \`\`\`javascript, \`\`\`tsx, or \`\`\`typescript fences, no explanations, no preamble
 
-8. **NO MARKDOWN CODE BLOCKS**: Output pure React code only, no \`\`\`jsx, \`\`\`javascript, \`\`\`tsx, or \`\`\`typescript fences, no explanations, no preamble
+8. **Root div dimensions**: Must match device width and height exactly
 
-9. **Root div dimensions**: Must match device width and height exactly
+9. **Production Quality**: This is a real design, not a prototype - polish matters
 
-10. **Production Quality**: This is a real design, not a prototype - polish matters
-
-11. **ALL HELPER COMPONENTS INSIDE APP**: If you need helper components or sub-components, define them INSIDE the main App function, not at the file level outside App. This avoids Babel transpilation errors.
+10. **ALL HELPER COMPONENTS INSIDE APP**: If you need helper components or sub-components, define them INSIDE the main App function, not at the file level outside App. This avoids Babel transpilation errors.
 
 ---
 

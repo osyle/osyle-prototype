@@ -68,7 +68,7 @@ class GenerationOrchestrator:
             task_description: What to build
             taste_data: DTM or DTR data (from new system)
             taste_source: Source type ("dtr", "subset_dtm", "full_dtm")
-            device_info: Platform and screen dimensions
+            device_info: Screen dimensions
             flow_context: Optional flow context for multi-screen
             rendering_mode: "react" or "parametric"
             model: LLM model to use
@@ -116,7 +116,7 @@ class GenerationOrchestrator:
         print(f"{'='*70}")
         print(f"Task: {task_description[:100]}...")
         print(f"Taste source: {taste_source}")
-        print(f"Device: {device_info.get('platform')} {device_info.get('screen', {}).get('width')}x{device_info.get('screen', {}).get('height')}")
+        print(f"Device: {device_info.get('screen', {}).get('width')}x{device_info.get('screen', {}).get('height')}px")
         print(f"Model: {model}")
         print(f"Responsive: {responsive}")
         print(f"Prompt length: {len(prompt)} chars")

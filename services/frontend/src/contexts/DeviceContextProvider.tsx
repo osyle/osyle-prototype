@@ -17,18 +17,13 @@ const getStoredValue = <T,>(key: string, defaultValue: T): T => {
   }
 }
 
-// Preset screen sizes
+// Preset screen sizes (unified, no phone/web distinction)
 export const SCREEN_PRESETS = {
-  web: {
-    desktop: { width: 1440, height: 900 },
-    laptop: { width: 1280, height: 800 },
-    tablet: { width: 1024, height: 768 },
-  },
-  phone: {
-    iphone14: { width: 390, height: 844 },
-    iphone14pro: { width: 393, height: 852 },
-    pixel7: { width: 412, height: 915 },
-  },
+  mobile: { width: 390, height: 844 },
+  mobileLarge: { width: 430, height: 932 },
+  tablet: { width: 768, height: 1024 },
+  laptop: { width: 1280, height: 800 },
+  desktop: { width: 1440, height: 900 },
 }
 
 export default function DeviceContextProvider({
@@ -37,8 +32,7 @@ export default function DeviceContextProvider({
   // Initialize states with values from localStorage if available
   const [device_info, setDeviceInfoState] = useState<DeviceInfo>(() =>
     getStoredValue('device_info', {
-      platform: 'phone',
-      screen: SCREEN_PRESETS.phone.iphone14,
+      screen: SCREEN_PRESETS.mobile,
     }),
   )
 

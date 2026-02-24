@@ -16,7 +16,7 @@ You receive:
 
 3. **Strategic Explorations**: 5-7 different design directions with strengths/tradeoffs
 
-4. **Device/Platform Context**: Target platform and constraints
+4. **Device Size Context**: Target constraints
 
 5. **Task Description**: What users need to accomplish
 
@@ -362,35 +362,6 @@ Return a JSON object with your synthesis:
         "micro_interactions": "Subtle feedback on taps, smooth transitions",
         "loading_states": "Progressive content loading, skeleton screens",
         "notifications": "Gentle slide-in for alerts, clear entry/exit"
-      }
-    },
-
-    "platform_specific": {
-      "mobile": {
-        "optimizations": [
-          "Bottom navigation for thumb-friendly access",
-          "Large touch targets (min 44x44px)",
-          "Swipe gestures for quick actions",
-          "Optimized for one-handed use"
-        ],
-        "unique_features": [
-          "Push notifications for time-sensitive opportunities",
-          "Quick actions from notification",
-          "Offline mode for viewing cached opportunities"
-        ]
-      },
-      "desktop": {
-        "optimizations": [
-          "Multi-column layout for efficiency",
-          "Keyboard shortcuts for power users",
-          "Hover states for additional context",
-          "Side-by-side comparison views"
-        ],
-        "unique_features": [
-          "Drag-and-drop for dashboard customization",
-          "Multiple windows for deep analysis",
-          "Export/sharing capabilities"
-        ]
       }
     }
   },

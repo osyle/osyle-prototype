@@ -100,8 +100,7 @@ You receive:
    ```typescript
    {
      width: number,      // Screen width in pixels
-     height: number,     // Screen height in pixels
-     platform: "web" | "phone"
+     height: number     // Screen height in pixels
    }
    ```
 
@@ -903,28 +902,6 @@ const [selected, setSelected] = useState("option1");
 
 ---
 
-## Platform-Specific Adaptations
-
-### For `platform: "phone"`
-
-- **Layout**: Prioritize vertical layouts (`flexDirection: 'column'`)
-- **Touch Targets**: Minimum 44×44px (from universal principles)
-- **Spacing**: Use larger spacing multipliers (quantum _ 2, quantum _ 3)
-- **Content Flow**: Single-column, avoid complex multi-column grids
-- **Typography**: Slightly larger sizes for readability
-- **Navigation**: Bottom tabs or hamburger menu preferred
-
-### For `platform: "web"`
-
-- **Layout**: Allow horizontal layouts and multi-column grids
-- **Spacing**: More generous negative space
-- **Content Density**: Can be higher (more information per screen)
-- **Typography**: Can use wider range of sizes
-- **Navigation**: Top navigation bar or sidebar acceptable
-- **Hover States**: Add cursor: 'pointer' and hover effects
-
----
-
 ## Complete Example: Basic Flow
 
 **Input**:
@@ -932,7 +909,7 @@ const [selected, setSelected] = useState("option1");
 ```json
 {
   "task": "Welcome screen for signup flow",
-  "device": { "width": 375, "height": 812, "platform": "phone" },
+  "device": { "width": 375, "height": 812 },
   "flow_context": {
     "screen_name": "Welcome",
     "position_in_flow": 1,
@@ -1311,13 +1288,6 @@ Before outputting, verify:
 - ✓ Applied in appropriate contexts (hero, cards, overlays)
 - ✓ Matches aesthetic of visual reference examples
 
-**Platform & Code Quality**:
-
-- ✓ Platform-specific adaptations applied (phone vs web)
-- ✓ Component uses React hooks appropriately
-- ✓ Code is valid React JSX
-- ✓ No syntax errors
-
 ---
 
 ## Critical Reminders
@@ -1351,11 +1321,9 @@ Before outputting, verify:
 
 9. **Flow Integration**: Implement ALL outgoing_transitions with correct onTransition calls.
 
-10. **Platform Adaptation**: Phone needs bigger touch targets, vertical layouts, larger spacing.
+10. **Trust the DTM**: It's already filtered and optimized for this task.
 
-11. **Trust the DTM**: It's already filtered and optimized for this task.
-
-12. **Output Code Only**: No explanations, no markdown fences, just pure React code.
+11. **Output Code Only**: No explanations, no markdown fences, just pure React code.
 
 ---
 

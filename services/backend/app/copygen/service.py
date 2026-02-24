@@ -180,15 +180,15 @@ async def generate_initial_copy_draft(
         Initial copy draft as string
     """
     system_prompt = load_copy_system_prompt()
-    
-    platform = "web" if not device_info else device_info.get("platform", "web")
-    
+
+    width = device_info.get("screen", {}).get("width", 1440) if device_info else 1440
+
     prompt = f"""{system_prompt}
 
 Generate an initial copy draft for this project:
 
 Project Description: "{project_description}"
-Platform: {platform}
+Viewport: {width}px wide
 
 Create a starting point that covers:
 1. Main headline/value proposition

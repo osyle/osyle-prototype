@@ -5,7 +5,6 @@ import MultiFileReactRenderer from './MultiFileReactRenderer'
 interface PrototypeRunnerProps {
   flow: FlowGraph
   deviceInfo: {
-    platform: 'web' | 'phone'
     screen: { width: number; height: number }
   }
   parametricValues?: ParameterValues

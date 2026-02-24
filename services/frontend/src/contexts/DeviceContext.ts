@@ -6,7 +6,6 @@ export interface DeviceScreen {
 }
 
 export interface DeviceInfo {
-  platform: 'web' | 'phone'
   screen: DeviceScreen
 }
 

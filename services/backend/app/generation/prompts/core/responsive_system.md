@@ -178,61 +178,6 @@ className="leading-tight md:leading-snug lg:leading-normal"
 
 ## Layout Responsiveness
 
-### Platform Context Still Matters
-
-Even though viewports can resize, **platform determines UX patterns**:
-
-#### Mobile-First Patterns
-
-**When**: platform === "phone" OR viewport width < 640px
-
-Apply these patterns:
-
-- ✅ Single column layouts
-- ✅ Bottom navigation (thumb-friendly)
-- ✅ Large touch targets (min 44px × 44px)
-- ✅ Vertical scrolling primary
-- ✅ Stacked cards/content
-- ✅ Hamburger or bottom sheet menus
-- ✅ Full-width form inputs
-- ✅ One primary action per view
-
-```jsx
-// Mobile navigation
-<nav className="fixed bottom-0 w-full md:hidden">
-  <button className="min-h-[44px] min-w-[44px]">  // Touch target
-```
-
-#### Desktop Patterns
-
-**When**: platform === "web" AND viewport width >= 1024px
-
-Apply these patterns:
-
-- ✅ Multi-column layouts
-- ✅ Top or side navigation
-- ✅ Hover states for interactions
-- ✅ Keyboard navigation support
-- ✅ Horizontal space utilization
-- ✅ Multiple simultaneous CTAs
-- ✅ Side-by-side comparisons
-- ✅ Smaller, precise click targets
-
-```jsx
-// Desktop navigation
-<nav className="hidden md:flex">
-  <button className="px-4 py-2 hover:bg-opacity-80">  // Hover states
-```
-
-#### Adaptive Zone (640px - 1024px)
-
-Gracefully transition between mobile and desktop patterns:
-
-- May use 2-column layouts
-- Hybrid navigation (top bar with condensed menu)
-- Medium-sized touch targets
-- Progressive disclosure of features
-
 ### Breakpoint Strategy
 
 Use Tailwind's responsive prefixes systematically:
@@ -525,18 +470,11 @@ Before generating code, verify:
 - [ ] No color changes based on breakpoint
 - [ ] Same color roles across viewports
 
-### ✅ Platform Patterns
-
-- [ ] Mobile patterns applied when platform="phone" or width < 640px
-- [ ] Desktop patterns applied when platform="web" and width >= 1024px
-- [ ] Touch targets >= 44px on mobile
-- [ ] Hover states on desktop
-
 ### ✅ Layout Adaptation
 
 - [ ] Single column on mobile
 - [ ] Multi-column on desktop (when appropriate)
-- [ ] Navigation adapted per platform
+- [ ] Navigation adapted per screen dimensions
 - [ ] Components reflow gracefully
 
 ---
@@ -745,7 +683,6 @@ These patterns show HOW LAYOUTS CHANGE, not just scale:
 2. The designer's aesthetic identity is preserved
 3. All content is accessible and readable
 4. The layout makes intelligent use of space
-5. Interaction patterns match the platform
 
 **This is not**:
 
@@ -756,5 +693,4 @@ These patterns show HOW LAYOUTS CHANGE, not just scale:
 **This is**:
 
 - ✅ Fluid, intentional design at every width
-- ✅ Platform-appropriate patterns throughout
 - ✅ Designer's taste maintained across all viewports

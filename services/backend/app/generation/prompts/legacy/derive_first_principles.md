@@ -66,7 +66,7 @@ For this domain and task, what are the **unchangeable facts**?
 
 - What can be automated vs. needs human judgment?
 - What data is available vs. needs manual input?
-- What patterns work best on this platform/device?
+- What patterns work best on this screen dimensions?
 - What technical constraints exist?
 
 ### Step 2: Derive Core Principles

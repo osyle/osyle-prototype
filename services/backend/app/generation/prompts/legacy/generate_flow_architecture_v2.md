@@ -28,8 +28,7 @@ You receive:
    ```typescript
    {
      width: number,      // Screen width in pixels
-     height: number,     // Screen height in pixels
-     platform: "web" | "phone"
+     height: number     // Screen height in pixels
    }
    ```
 
@@ -121,7 +120,6 @@ Return **ONLY** a valid JSON object (no markdown, no explanations):
       "name": "string",
       "description": "string",
       "task_description": "string",
-      "platform": "web" | "phone",
       "dimensions": {"width": number, "height": number},
       "screen_type": "entry" | "intermediate" | "success" | "error" | "exit",
       "user_provided": boolean,        // NEW: true if this screen came from user's screen definitions
@@ -167,7 +165,6 @@ Return **ONLY** a valid JSON object (no markdown, no explanations):
 - **name**: Human-readable name (e.g., "Welcome", "Create Account")
 - **description**: What this screen does (e.g., "Landing page with signup CTA")
 - **task_description**: Specific UI generation task for this screen (e.g., "Welcome screen with app logo, tagline, and prominent Sign Up button")
-- **platform**: Use same platform as device context
 - **dimensions**: Use same dimensions as device context
 - **screen_type**:
   - `entry`: First screen in flow
@@ -253,7 +250,6 @@ If task can be accomplished on one screen (and no screen definitions provided), 
       "name": "Landing Page",
       "description": "Complete landing page",
       "task_description": "Landing page with hero section, features, and CTA",
-      "platform": "web",
       "dimensions": { "width": 1200, "height": 800 },
       "screen_type": "entry",
       "user_provided": false,
@@ -332,7 +328,6 @@ For processes that need multiple screens:
       "name": "Ingredients",
       "description": "Ingredient checklist from user's design",
       "task_description": "Preserve ingredient list with checkboxes, quantities, and 'Start Cooking' button from user's design. Maintain all text content and component types. Redesign with DTM colors, spacing quantum, typography scale, corner radii, and signature glassmorphic treatment.",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "entry",
       "user_provided": true,
@@ -344,7 +339,6 @@ For processes that need multiple screens:
       "name": "Cooking Steps",
       "description": "Step-by-step cooking instructions",
       "task_description": "Screen showing cooking steps with step numbers, instructions, timer, and next/previous navigation (inspired by user's reference images)",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "intermediate",
       "user_provided": true,
@@ -356,7 +350,6 @@ For processes that need multiple screens:
       "name": "Done",
       "description": "Cooking completion screen",
       "task_description": "Recreate user's exact completion design with success message, dish photo, cooking time summary, and share/finish buttons",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "success",
       "user_provided": true,
@@ -409,7 +402,6 @@ For processes that need multiple screens:
       "name": "Welcome",
       "description": "Landing screen with signup option",
       "task_description": "Welcome screen with app logo, tagline 'Connect with friends', and prominent 'Sign Up' button",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "entry",
       "user_provided": false,
@@ -421,7 +413,6 @@ For processes that need multiple screens:
       "name": "Create Account",
       "description": "Account creation form",
       "task_description": "Form with fields for email, username, password, and 'Create Account' button",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "intermediate",
       "user_provided": false,
@@ -433,7 +424,6 @@ For processes that need multiple screens:
       "name": "Verify Email",
       "description": "Email verification prompt",
       "task_description": "Screen showing 'Check your email' message with email icon and 'Resend Code' link",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "intermediate",
       "user_provided": false,
@@ -445,7 +435,6 @@ For processes that need multiple screens:
       "name": "Success",
       "description": "Account created confirmation",
       "task_description": "Success screen with checkmark icon, 'Welcome to the community!' message, and 'Get Started' button",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "success",
       "user_provided": false,
@@ -512,7 +501,6 @@ For processes that need multiple screens:
       "name": "Cart",
       "description": "Shopping cart with items",
       "task_description": "Cart screen showing product list, subtotal, and 'Proceed to Checkout' button",
-      "platform": "web",
       "dimensions": { "width": 1200, "height": 800 },
       "screen_type": "entry",
       "user_provided": false,
@@ -524,7 +512,6 @@ For processes that need multiple screens:
       "name": "Login or Guest",
       "description": "Choose login or guest checkout",
       "task_description": "Screen with two options: 'Login' and 'Continue as Guest' buttons",
-      "platform": "web",
       "dimensions": { "width": 1200, "height": 800 },
       "screen_type": "intermediate",
       "user_provided": false,
@@ -536,7 +523,6 @@ For processes that need multiple screens:
       "name": "Shipping Info",
       "description": "Shipping address form",
       "task_description": "Form with address fields (street, city, zip) and 'Continue' button",
-      "platform": "web",
       "dimensions": { "width": 1200, "height": 800 },
       "screen_type": "intermediate",
       "user_provided": false,
@@ -548,7 +534,6 @@ For processes that need multiple screens:
       "name": "Payment",
       "description": "Payment information",
       "task_description": "Payment form with card details and 'Place Order' button",
-      "platform": "web",
       "dimensions": { "width": 1200, "height": 800 },
       "screen_type": "intermediate",
       "user_provided": false,
@@ -560,7 +545,6 @@ For processes that need multiple screens:
       "name": "Order Confirmed",
       "description": "Order confirmation",
       "task_description": "Success screen with order number, 'Thank you!' message, and 'Track Order' button",
-      "platform": "web",
       "dimensions": { "width": 1200, "height": 800 },
       "screen_type": "success",
       "user_provided": false,
@@ -634,7 +618,6 @@ For processes that need multiple screens:
       "name": "Dashboard",
       "description": "Metrics dashboard",
       "task_description": "Dashboard with user metrics cards showing revenue, users, and sessions",
-      "platform": "web",
       "dimensions": { "width": 1200, "height": 800 },
       "screen_type": "entry",
       "user_provided": false,
@@ -664,7 +647,6 @@ For processes that need multiple screens:
       "name": "Ingredients",
       "description": "List of ingredients needed",
       "task_description": "Screen showing ingredient list with checkboxes and 'Start Cooking' button",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "entry",
       "user_provided": false,
@@ -676,7 +658,6 @@ For processes that need multiple screens:
       "name": "Preparation Steps",
       "description": "Step-by-step cooking instructions",
       "task_description": "Screen showing cooking steps with navigation between steps",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "intermediate",
       "user_provided": false,
@@ -688,7 +669,6 @@ For processes that need multiple screens:
       "name": "Cooking Complete",
       "description": "Final result and sharing",
       "task_description": "Success screen with dish photo, timer summary, and share button",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "success",
       "user_provided": false,
@@ -735,7 +715,6 @@ For processes that need multiple screens:
       "name": "Select Duration",
       "description": "Choose meditation length",
       "task_description": "Screen with 5min, 10min, 15min duration cards and 'Begin' button",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "entry",
       "user_provided": false,
@@ -747,7 +726,6 @@ For processes that need multiple screens:
       "name": "Meditation Timer",
       "description": "Active meditation session",
       "task_description": "Screen with breathing animation, timer countdown, and soft background",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "intermediate",
       "user_provided": false,
@@ -759,7 +737,6 @@ For processes that need multiple screens:
       "name": "Session Complete",
       "description": "Meditation completed",
       "task_description": "Success screen with completion message, session stats, and 'Finish' button",
-      "platform": "phone",
       "dimensions": { "width": 375, "height": 812 },
       "screen_type": "success",
       "user_provided": false,

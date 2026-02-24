@@ -285,9 +285,8 @@ class FeedbackApplier:
         
         # Device info
         parts.append("## Device Context\n")
-        parts.append(f"**Platform:** {device_info.get('platform', 'web')}\n")
         screen = device_info.get('screen', {})
-        parts.append(f"**Dimensions:** {screen.get('width', 375)}x{screen.get('height', 812)}px\n\n")
+        parts.append(f"**Viewport:** {screen.get('width', 375)}x{screen.get('height', 812)}px\n\n")
         
         # Instruction
         parts.append("## Your Task\n")

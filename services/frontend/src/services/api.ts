@@ -76,7 +76,6 @@ export interface Project {
 }
 
 export interface DeviceInfo {
-  platform: 'web' | 'phone'
   screen: {
     width: number
     height: number

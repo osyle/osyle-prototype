@@ -11,7 +11,6 @@ import type { FlowGraph, FlowScreen } from '../types/home.types'
 export function calculateFlowLayout(
   flowGraph: FlowGraph,
   deviceInfo: {
-    platform: 'phone' | 'web'
     screen: { width: number; height: number }
   },
 ): Map<string, { x: number; y: number }> {
@@ -51,15 +50,11 @@ export function calculateFlowLayout(
     roots.push(flowGraph.screens[0].screen_id)
   }
 
-  // Calculate screen dimensions (including bezel/chrome)
+  // Node dimensions are exactly the screen dimensions — no bezel inflation
   const getScreenDimensions = (screen: FlowScreen) => {
-    const baseWidth = screen.dimensions?.width || deviceInfo.screen.width
-    const baseHeight = screen.dimensions?.height || deviceInfo.screen.height
-
     return {
-      width: deviceInfo.platform === 'phone' ? baseWidth + 24 : baseWidth,
-      height:
-        deviceInfo.platform === 'phone' ? baseHeight + 48 : baseHeight + 40,
+      width: screen.dimensions?.width || deviceInfo.screen.width,
+      height: screen.dimensions?.height || deviceInfo.screen.height,
     }
   }
 

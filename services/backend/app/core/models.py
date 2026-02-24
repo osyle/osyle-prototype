@@ -118,7 +118,6 @@ class DeviceScreen(BaseModel):
 
 class DeviceInfo(BaseModel):
     """Device information"""
-    platform: str  # 'web' or 'phone'
     screen: DeviceScreen
 
 
@@ -161,7 +160,6 @@ class FlowScreen(BaseModel):
     name: str
     description: str
     task_description: str  # Specific UI generation task
-    platform: str  # 'web' | 'phone'
     dimensions: dict  # {width: int, height: int}
     screen_type: Optional[str] = "intermediate"  # "entry" | "intermediate" | "success" | "error" | "exit"
     semantic_role: Optional[str] = None  # "form" | "confirmation" | "decision" | "content"

@@ -207,24 +207,6 @@ export default function App({ onTransition }) {
 
 Use Tailwind's responsive utilities (`sm:`, `md:`, `lg:`, `xl:`) to adapt layouts at different breakpoints.
 
-### Platform Optimization
-
-**Mobile** (when platform === "phone"):
-
-- Bottom navigation for thumb reach
-- Large touch targets (≥ 44x44px)
-- Swipe gestures for actions
-- Vertical scroll, minimal horizontal
-- One primary action per card
-
-**Desktop** (when platform === "web"):
-
-- Multi-column layouts for efficiency
-- Hover states for additional context
-- Keyboard navigation support
-- Side-by-side comparisons
-- Multiple CTAs when appropriate
-
 ---
 
 ## QUALITY PRINCIPLES

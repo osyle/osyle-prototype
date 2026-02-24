@@ -61,7 +61,6 @@ export interface FlowArchitectureResult {
     name: string
     description?: string
     task_description: string
-    platform: string
     dimensions: { width: number; height: number }
     screen_type?: string
     semantic_role?: string
@@ -203,7 +202,7 @@ export function buildDTRWebSocket(
 export function generateUIWebSocket(
   projectId: string,
   taskDescription: string,
-  deviceInfo: { platform: string; screen: { width: number; height: number } },
+  deviceInfo: { screen: { width: number; height: number } },
   renderingMode: 'react' | 'parametric',
   callbacks: WSCallbacks,
 ): Promise<Record<string, unknown>> {

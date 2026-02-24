@@ -18,7 +18,7 @@ You receive:
 2. **Contextualized Feedback** - Specific changes needed for this screen
 3. **Designer Taste Model (DTM v2)** - The designer's visual intelligence and patterns
 4. **Flow Context** - Information about this screen's role in the flow and navigation
-5. **Device Context** - Platform and screen dimensions
+5. **Device Context** - Screen dimensions
 
 ## Two-Part Output Format
 

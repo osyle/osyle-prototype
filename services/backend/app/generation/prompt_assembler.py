@@ -65,7 +65,7 @@ class PromptAssembler:
             task_description: What to build
             taste_data: DTM or DTR data
             taste_source: "dtr", "subset_dtm", or "full_dtm"
-            device_info: Platform and screen dimensions
+            device_info: Screen dimensions
             flow_context: Optional flow context for multi-screen
             mode: Generation mode ("default", "parametric", etc.)
             model: Target LLM model
@@ -603,14 +603,12 @@ class PromptAssembler:
         
         # Device context
         parts.append("## Device Context\n")
-        platform = device_info.get("platform", "web")
         width = device_info.get("screen", {}).get("width", 1440)
         height = device_info.get("screen", {}).get("height", 900)
-        
-        parts.append(f"- Platform: {platform}")
-        parts.append(f"- Initial viewport: {width}x{height}px")
+
+        parts.append(f"- Viewport: {width}x{height}px")
         parts.append("")
-        
+
         if is_responsive:
             # Responsive mode
             parts.append("## Responsive Design Requirements\n")
@@ -624,14 +622,14 @@ class PromptAssembler:
             parts.append("  {/* NOT fixed pixels */}")
             parts.append("</div>")
             parts.append("```\n")
-            parts.append("**Platform determines UX patterns, NOT layout adaptation**:")
-            if platform == "phone":
-                parts.append("- Platform='phone' → Use touch-friendly interactions (≥44px tap targets, bottom nav)")
+            parts.append("**UX patterns are determined by viewport width, not platform**:")
+            if width <= 480:
+                parts.append("- Starting viewport is mobile-width → Use touch-friendly interactions (≥44px tap targets, bottom nav)")
                 parts.append("- BUT: Layout MUST still adapt - use multi-column grids when space allows")
-                parts.append("- A phone app at 1440px wide should use that space efficiently")
+                parts.append("- At 1440px wide the same app should use that space efficiently")
             else:
-                parts.append("- Platform='web' → Use desktop-capable interactions (hover states, keyboard nav)")
-                parts.append("- Adapt down gracefully if viewport shrinks to mobile size")
+                parts.append("- Starting viewport is desktop/tablet-width → Use pointer-capable interactions (hover states, keyboard nav)")
+                parts.append("- Adapt down gracefully if viewport shrinks to mobile size (≤480px)")
                 parts.append("- Always fill available space - never create fixed-width centered cards")
             parts.append("")
             parts.append("**Implementation approach**:")
