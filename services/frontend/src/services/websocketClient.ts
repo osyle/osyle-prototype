@@ -218,6 +218,79 @@ export function generateUIWebSocket(
   )
 }
 
+// ============================================================================
+// DTM WebSocket helpers
+// ============================================================================
+
+/**
+ * Shape of the result returned inside the "complete" message from
+ * the "get-or-build-dtm" WebSocket action.
+ */
+export interface GetOrBuildDTMResult {
+  status: string
+  mode: string
+  hash?: string
+  was_cached: boolean
+  build_time_ms: number
+  resource_ids: string[]
+  dtm?: Record<string, unknown>
+}
+
+/**
+ * Shape of the result returned inside the "complete" message from
+ * the "rebuild-dtm" WebSocket action.
+ */
+export interface RebuildDTMResult {
+  status: string
+  dtm_id: string
+  resource_count: number
+  confidence: number
+  duration_seconds: number
+}
+
+/**
+ * Get an existing cached DTM or build a new one via WebSocket.
+ *
+ * Replaces the old HTTP POST /api/dtm/{tasteId}/get-or-build call which
+ * would always 503 in production because API Gateway has a hard 29-second
+ * HTTP timeout and DTM synthesis regularly takes longer than that.
+ */
+export function getOrBuildDTMWebSocket(
+  tasteId: string,
+  resourceIds: string[],
+  mode: 'auto' | 'single' | 'subset' | 'full' = 'auto',
+  callbacks: WSCallbacks,
+): Promise<GetOrBuildDTMResult> {
+  return connectWebSocket(
+    'get-or-build-dtm',
+    {
+      taste_id: tasteId,
+      resource_ids: resourceIds,
+      mode,
+    },
+    callbacks,
+  ) as unknown as Promise<GetOrBuildDTMResult>
+}
+
+/**
+ * Force-rebuild the DTM for an entire taste via WebSocket.
+ *
+ * Replaces the old HTTP POST /api/dtm/{tasteId}/rebuild call for the same
+ * timeout reason as above.
+ */
+export function rebuildDTMWebSocket(
+  tasteId: string,
+  callbacks: WSCallbacks,
+): Promise<RebuildDTMResult> {
+  return connectWebSocket(
+    'rebuild-dtm',
+    {
+      taste_id: tasteId,
+    },
+    callbacks,
+  ) as unknown as Promise<RebuildDTMResult>
+}
+
 /**
  * Generate Flow via WebSocket with progressive updates
  */

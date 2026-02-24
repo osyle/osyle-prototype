@@ -268,6 +268,10 @@ def handle_message(
                 await ws_handler.handle_copy_message(adapter, data, user_id)
             elif action == "finalize-copy":
                 await ws_handler.handle_finalize_copy(adapter, data, user_id)
+            elif action == "get-or-build-dtm":
+                await ws_handler.handle_get_or_build_dtm(adapter, data, user_id)
+            elif action == "rebuild-dtm":
+                await ws_handler.handle_rebuild_dtm(adapter, data, user_id)
             else:
                 send_error(apigw_management, connection_id, f"Unknown action: {action}")
 

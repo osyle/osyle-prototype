@@ -1621,6 +1621,221 @@ async def handle_finalize_copy(websocket: WebSocket, data: Dict[str, Any], user_
         await send_error(websocket, str(e))
 
 
+async def handle_get_or_build_dtm(websocket: WebSocket, data: Dict[str, Any], user_id: str):
+    """
+    Handle get-or-build-dtm WebSocket action.
+
+    Replaces the HTTP POST /api/dtm/{taste_id}/get-or-build endpoint so that
+    long-running DTM synthesis (which can easily exceed the 29-second API
+    Gateway hard timeout) runs over WebSocket instead.
+
+    Client sends:
+        {
+            "action": "get-or-build-dtm",
+            "data": {
+                "user_id": "...",
+                "taste_id": "...",
+                "resource_ids": ["..."],
+                "mode": "auto"  // optional, defaults to "auto"
+            }
+        }
+
+    Server emits:
+        progress  -> { type: "progress", stage: "dtm_building", message: "..." }
+        complete  -> { type: "complete", result: { status, mode, hash, was_cached,
+                                                    build_time_ms, resource_ids, dtm } }
+        error     -> { type: "error", error: "..." }
+    """
+    taste_id = data.get("taste_id")
+    resource_ids = data.get("resource_ids", [])
+    mode = data.get("mode", "auto")
+
+    if not taste_id:
+        await send_error(websocket, "taste_id is required")
+        return
+
+    if not resource_ids:
+        await send_error(websocket, "resource_ids cannot be empty")
+        return
+
+    # Validate taste ownership
+    taste = db.get_taste(taste_id)
+    if not taste:
+        await send_error(websocket, "Taste not found")
+        return
+
+    if taste.get("owner_id") != user_id:
+        await send_error(websocket, "Access denied")
+        return
+
+    # Validate all resources belong to this taste
+    resources = db.list_resources_for_taste(taste_id)
+    taste_resource_ids = {r["resource_id"] for r in resources}
+    for rid in resource_ids:
+        if rid not in taste_resource_ids:
+            await send_error(websocket, f"Resource {rid} does not belong to taste {taste_id}")
+            return
+
+    # Validate all resources have DTRs
+    for rid in resource_ids:
+        resource = db.get_resource(rid)
+        if not resource:
+            await send_error(websocket, f"Resource {rid} not found")
+            return
+        if not resource.get("metadata", {}).get("has_dtr"):
+            await send_error(websocket, f"Resource {rid} does not have a DTR yet")
+            return
+
+    try:
+        await send_progress(websocket, "dtm_building", f"Building taste model from {len(resource_ids)} resource(s)...")
+
+        result = await dtm_builder.get_or_build_dtm(
+            taste_id=taste_id,
+            resource_ids=resource_ids,
+            mode=mode
+        )
+
+        dtm_model = result["dtm"]
+        dtm_dict = dtm_model.model_dump() if hasattr(dtm_model, "model_dump") else dtm_model.dict()
+
+        await send_complete(websocket, {
+            "status": "success",
+            "mode": result["mode"],
+            "hash": result.get("hash"),
+            "was_cached": result["was_cached"],
+            "build_time_ms": result["build_time_ms"],
+            "resource_ids": result["resource_ids"],
+            "dtm": dtm_dict,
+        })
+
+    except ValueError as e:
+        await send_error(websocket, str(e))
+    except Exception as e:
+        import traceback
+        print(f"❌ Error in handle_get_or_build_dtm: {traceback.format_exc()}")
+        await send_error(websocket, f"Failed to build DTM: {str(e)}")
+
+
+async def handle_rebuild_dtm(websocket: WebSocket, data: Dict[str, Any], user_id: str):
+    """
+    Handle rebuild-dtm WebSocket action.
+
+    Replaces the HTTP POST /api/dtm/{taste_id}/rebuild endpoint for the same
+    API Gateway 29-second timeout reason.  Used from the Home page "Rebuild DTM"
+    button after a user has deleted resources from a taste.
+
+    Client sends:
+        {
+            "action": "rebuild-dtm",
+            "data": {
+                "user_id": "...",
+                "taste_id": "..."
+            }
+        }
+
+    Server emits:
+        progress  -> { type: "progress", stage: "dtm_building", message: "..." }
+        complete  -> { type: "complete", result: { status, dtm_id, resource_count,
+                                                    confidence, duration_seconds } }
+        error     -> { type: "error", error: "..." }
+    """
+    from app.dtm import synthesizer as dtm_synthesizer
+    from app.dtm import storage as dtm_storage_mod
+    from app.dtr import storage as dtr_storage
+    from app.llm import get_llm_service
+    import time
+    from datetime import datetime
+
+    taste_id = data.get("taste_id")
+    if not taste_id:
+        await send_error(websocket, "taste_id is required")
+        return
+
+    # Validate ownership
+    taste = db.get_taste(taste_id)
+    if not taste:
+        await send_error(websocket, "Taste not found")
+        return
+
+    if taste.get("owner_id") != user_id:
+        await send_error(websocket, "Access denied")
+        return
+
+    # Get all resources with DTRs
+    resources = db.list_resources_for_taste(taste_id)
+    resource_ids = [
+        r["resource_id"]
+        for r in resources
+        if r.get("metadata", {}).get("has_dtr")
+    ]
+
+    if len(resource_ids) < 2:
+        await send_error(
+            websocket,
+            f"Need at least 2 resources with DTRs to rebuild, found {len(resource_ids)}"
+        )
+        return
+
+    # Validate all DTRs exist on disk/S3
+    for rid in resource_ids:
+        dtr = dtr_storage.load_complete_dtr(rid)
+        if not dtr:
+            await send_error(websocket, f"No DTR found for resource {rid}")
+            return
+
+    try:
+        await send_progress(
+            websocket,
+            "dtm_building",
+            f"Rebuilding taste model from {len(resource_ids)} resource(s)..."
+        )
+
+        print(f"\n{'='*80}")
+        print(f"🔄 DTM REBUILD via WebSocket")
+        print(f"Taste ID: {taste_id}  |  Resources: {len(resource_ids)}")
+        print(f"{'='*80}\n")
+
+        start_time = time.time()
+        llm = get_llm_service()
+
+        dtm = await dtm_synthesizer.synthesize_dtm(
+            taste_id=taste_id,
+            resource_ids=resource_ids,
+            llm=llm,
+            priority_mode=False
+        )
+
+        # Persist the rebuilt DTM
+        dtm_storage_mod.save_dtm(taste_id, dtm, resource_ids)
+
+        # Update database metadata
+        metadata = taste.get("metadata", {})
+        metadata["has_dtm"] = True
+        metadata["dtm_resource_count"] = len(resource_ids)
+        metadata["dtm_last_updated"] = datetime.utcnow().isoformat()
+        metadata["needs_dtm_rebuild"] = False
+        metadata.pop("last_deleted_at", None)
+        db.update_taste(taste_id, metadata=metadata)
+
+        duration = time.time() - start_time
+        confidence = dtm.generation_guidance.confidence_by_domain.get("overall", 0.75)
+
+        print(f"✅ DTM Rebuild complete — {duration:.2f}s, confidence {confidence}")
+
+        await send_complete(websocket, {
+            "status": "success",
+            "dtm_id": taste_id,
+            "resource_count": len(resource_ids),
+            "confidence": confidence,
+            "duration_seconds": duration,
+        })
+
+    except Exception as e:
+        import traceback
+        print(f"❌ Error in handle_rebuild_dtm: {traceback.format_exc()}")
+        await send_error(websocket, f"DTM rebuild failed: {str(e)}")
+
+
 async def handle_websocket(websocket: WebSocket, user_id: str):
     """Main WebSocket handler"""
     await websocket.accept()
@@ -1644,6 +1859,10 @@ async def handle_websocket(websocket: WebSocket, user_id: str):
                 await handle_copy_message(websocket, data, user_id)
             elif action == "finalize-copy":
                 await handle_finalize_copy(websocket, data, user_id)
+            elif action == "get-or-build-dtm":
+                await handle_get_or_build_dtm(websocket, data, user_id)
+            elif action == "rebuild-dtm":
+                await handle_rebuild_dtm(websocket, data, user_id)
             else:
                 await send_error(websocket, f"Unknown action: {action}")
                 

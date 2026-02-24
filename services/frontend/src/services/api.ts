@@ -8,6 +8,8 @@ import type { FlowGraph } from '../types/home.types'
 import {
   buildDTRWebSocket,
   generateUIWebSocket,
+  getOrBuildDTMWebSocket,
+  rebuildDTMWebSocket,
   type WSCallbacks,
 } from './websocketClient'
 
@@ -1035,7 +1037,10 @@ export interface GetOrBuildDTMResponse {
 
 export const dtmAPI = {
   /**
-   * Build DTM for a taste (entire taste or subset of resources)
+   * Build DTM for a taste (entire taste or subset of resources).
+   *
+   * NOTE: This HTTP endpoint is effectively unused by the frontend.
+   * Use getOrBuild (WebSocket) instead to avoid the API Gateway 29s timeout.
    */
   build: async (payload: DTMBuildRequest): Promise<DTMBuildResponse> => {
     return apiRequest<DTMBuildResponse>('/api/dtm/build', {
@@ -1045,39 +1050,55 @@ export const dtmAPI = {
   },
 
   /**
-   * Get DTM status for a taste
+   * Get DTM status for a taste (fast, no LLM calls).
    */
   getStatus: async (tasteId: string): Promise<DTMStatusResponse> => {
     return apiRequest<DTMStatusResponse>(`/api/dtm/${tasteId}/status`)
   },
 
   /**
-   * Get or build DTM for specific resources (smart caching)
+   * Get or build DTM for specific resources.
+   *
+   * Uses WebSocket instead of HTTP to avoid the API Gateway 29-second hard
+   * timeout.  DTM synthesis regularly takes 30-120 seconds, which causes a
+   * 503 on the old HTTP endpoint in production.
    */
   getOrBuild: async (
     tasteId: string,
     payload: GetOrBuildDTMRequest,
+    callbacks?: WSCallbacks,
   ): Promise<GetOrBuildDTMResponse> => {
-    return apiRequest<GetOrBuildDTMResponse>(
-      `/api/dtm/${tasteId}/get-or-build`,
-      {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      },
+    const result = await getOrBuildDTMWebSocket(
+      tasteId,
+      payload.resource_ids,
+      payload.mode ?? 'auto',
+      callbacks ?? {},
     )
+    return result as GetOrBuildDTMResponse
   },
 
   /**
-   * Rebuild DTM for entire taste (after resource deletions)
+   * Rebuild DTM for entire taste (after resource deletions).
+   *
+   * Uses WebSocket for the same timeout reason as getOrBuild.
    */
-  rebuild: async (tasteId: string): Promise<DTMBuildResponse> => {
-    return apiRequest<DTMBuildResponse>(`/api/dtm/${tasteId}/rebuild`, {
-      method: 'POST',
-    })
+  rebuild: async (
+    tasteId: string,
+    callbacks?: WSCallbacks,
+  ): Promise<DTMBuildResponse> => {
+    const result = await rebuildDTMWebSocket(tasteId, callbacks ?? {})
+    // Map the WS result shape onto the existing DTMBuildResponse interface
+    return {
+      status: result.status,
+      dtm_id: result.dtm_id,
+      resource_count: result.resource_count,
+      confidence: result.confidence,
+      duration_seconds: result.duration_seconds,
+    }
   },
 
   /**
-   * Delete DTM for a taste
+   * Delete DTM for a taste (fast, no LLM calls).
    */
   delete: async (tasteId: string): Promise<{ message: string }> => {
     return apiRequest<{ message: string }>(`/api/dtm/${tasteId}`, {
