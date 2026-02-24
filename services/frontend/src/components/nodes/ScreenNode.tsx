@@ -306,7 +306,7 @@ export default function App() {
         <div
           style={{
             position: 'absolute',
-            top: '-110px', // More gap from device frame
+            top: '-82px', // Gap from device frame (width slider only)
             left: '0',
             right: '0',
             backgroundColor: 'rgba(0, 0, 0, 0.95)',
@@ -357,7 +357,7 @@ export default function App() {
                     detail: {
                       screenId: screen.screen_id,
                       width: deviceInfo.screen.width,
-                      height: deviceInfo.screen.height,
+                      height: actualScreenSize.height, // preserve current content height
                     },
                   }),
                 )
@@ -447,76 +447,6 @@ export default function App() {
                 height: '8px',
                 borderRadius: '4px',
                 background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${((actualScreenSize.width - 280) / (2560 - 280)) * 100}%, rgba(255, 255, 255, 0.15) ${((actualScreenSize.width - 280) / (2560 - 280)) * 100}%, rgba(255, 255, 255, 0.15) 100%)`,
-                outline: 'none',
-                cursor: 'pointer',
-                appearance: 'none',
-                WebkitAppearance: 'none',
-              }}
-            />
-          </div>
-
-          {/* Height Slider */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <label
-                style={{
-                  fontSize: '11px',
-                  fontWeight: 500,
-                  color: 'rgba(255, 255, 255, 0.7)',
-                }}
-              >
-                Height
-              </label>
-              <span
-                style={{
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: '#3B82F6',
-                  fontFamily: 'monospace',
-                }}
-              >
-                {actualScreenSize.height}px
-              </span>
-            </div>
-            <input
-              type="range"
-              min="400"
-              max="1600"
-              step="10"
-              value={actualScreenSize.height}
-              onChange={e => {
-                e.stopPropagation()
-                const newHeight = parseInt(e.target.value)
-                window.dispatchEvent(
-                  new CustomEvent('screenResize', {
-                    detail: {
-                      screenId: screen.screen_id,
-                      width: actualScreenSize.width,
-                      height: newHeight,
-                    },
-                  }),
-                )
-              }}
-              onPointerDown={e => {
-                e.stopPropagation()
-              }}
-              onPointerUp={e => {
-                e.stopPropagation()
-              }}
-              onClick={e => {
-                e.stopPropagation()
-              }}
-              style={{
-                width: '100%',
-                height: '8px',
-                borderRadius: '4px',
-                background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${((actualScreenSize.height - 400) / (1600 - 400)) * 100}%, rgba(255, 255, 255, 0.15) ${((actualScreenSize.height - 400) / (1600 - 400)) * 100}%, rgba(255, 255, 255, 0.15) 100%)`,
                 outline: 'none',
                 cursor: 'pointer',
                 appearance: 'none',
