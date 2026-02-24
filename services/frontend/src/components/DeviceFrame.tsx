@@ -31,11 +31,14 @@ export default function DeviceFrame({
           position: 'relative',
           backgroundColor: '#ffffff',
           borderRadius: '12px',
-          overflow: 'visible',
+          overflow: 'hidden',
           boxShadow: '0 0 0 1px rgba(0,0,0,0.08), 0 4px 24px rgba(0,0,0,0.12)',
+          // Creates a new stacking/containing block so position:fixed children
+          // are clipped to this frame instead of escaping to the viewport
+          transform: 'translateZ(0)',
         }}
       >
-        <div style={{ width: '100%', minHeight: '100%', overflow: 'visible' }}>
+        <div style={{ width: '100%', minHeight: '100%', overflow: 'hidden' }}>
           {children}
         </div>
       </div>
@@ -52,6 +55,8 @@ export default function DeviceFrame({
         borderRadius: '16px',
         overflow: 'hidden',
         backgroundColor: '#ffffff',
+        // Traps position:fixed children within this frame
+        transform: 'translateZ(0)',
         boxShadow: [
           '0 0 0 1px rgba(0,0,0,0.12)',
           '0 0 0 3px rgba(255,255,255,0.06)',
