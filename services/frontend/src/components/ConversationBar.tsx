@@ -1,4 +1,4 @@
-import { Send, ChevronUp, Loader2, Eye, Pen, XCircle, Move } from 'lucide-react'
+import { Send, Loader2, Eye, Pen, XCircle, Move, ChevronUp } from 'lucide-react'
 import React, { useState, useEffect, useRef } from 'react'
 import { useAgentatorGlobal } from '../lib/Agentator'
 import type { Annotation, CodeAnnotation } from '../lib/Agentator'
@@ -89,7 +89,6 @@ export default function ConversationBar({
         setIsExpanded(false)
         setWasAutoExpanded(false) // Reset the flag
       }, 1500) // 1.5 second delay after processing completes
-
       return () => clearTimeout(timer)
     }
   }, [isProcessing, isExpanded, wasAutoExpanded])
@@ -193,6 +192,11 @@ export default function ConversationBar({
     }
   }
 
+  const handleToggleExpanded = () => {
+    setIsExpanded(v => !v)
+    setWasAutoExpanded(false)
+  }
+
   return (
     <>
       {/* Expanded Overlay */}
@@ -203,39 +207,40 @@ export default function ConversationBar({
         />
       )}
 
-      {/* Conversation Bar */}
+      {/* Conversation Bar — anchored to centre of available canvas, slides up via transform */}
       <div
-        className={`fixed transition-all duration-500 ease-out z-50 ${
-          isExpanded ? 'bottom-1/2 translate-y-1/2' : 'bottom-6'
-        }`}
+        className="fixed z-50"
         style={{
-          left: '80px',
-          right: isRightPanelCollapsed ? '80px' : 'calc(28% + 40px)',
-          display: 'flex',
-          justifyContent: 'center',
+          left: isRightPanelCollapsed
+            ? 'calc(80px + (100vw - 80px) / 2)'
+            : 'calc(80px + (100vw - 80px - (28% + 40px)) / 2)',
+          bottom: '24px',
+          width: '800px',
+          maxWidth: isRightPanelCollapsed
+            ? 'calc(100vw - 160px)'
+            : 'calc(72% - 120px)',
+          transform: isExpanded
+            ? 'translate(-50%, calc(-50vh + 50% + 24px))'
+            : 'translateX(-50%)',
+          transition: 'transform 400ms cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       >
         <div
-          className={`rounded-2xl transition-all duration-500 ease-out ${
-            isExpanded ? 'w-[800px] max-w-[90%]' : 'w-[800px] max-w-[90%]'
-          }`}
+          className="rounded-2xl overflow-hidden"
           style={{
             backgroundColor: '#FFFFFF',
             boxShadow: isExpanded
               ? '0 20px 60px rgba(0,0,0,0.2)'
               : '0 4px 16px rgba(0,0,0,0.06)',
+            transition: 'box-shadow 400ms ease-out',
           }}
         >
           {/* Expanded Message History */}
           {isExpanded && (
-            <div
-              style={{
-                borderBottom: '1px solid #E8E1DD',
-              }}
-            >
-              {/* Fixed Header */}
+            <div style={{ borderBottom: '1px solid #E8E1DD' }}>
+              {/* Header */}
               <div
-                className="px-6 pt-6 pb-3 flex items-center justify-between"
+                className="px-6 pt-4 pb-3"
                 style={{
                   backgroundColor: '#FFFFFF',
                   borderBottom: '1px solid #F7F5F3',
@@ -247,18 +252,6 @@ export default function ConversationBar({
                 >
                   Conversation
                 </div>
-                {!isProcessing && (
-                  <button
-                    onClick={() => {
-                      setIsExpanded(false)
-                      setWasAutoExpanded(false) // Reset flag when manually collapsed
-                    }}
-                    className="text-xs hover:underline"
-                    style={{ color: '#929397' }}
-                  >
-                    Collapse
-                  </button>
-                )}
               </div>
 
               {/* Scrollable Messages */}
@@ -366,28 +359,6 @@ export default function ConversationBar({
                   className="w-full bg-transparent border-none outline-none text-sm pr-10 disabled:opacity-50"
                   style={{ color: '#3B3B3B' }}
                 />
-                {!isExpanded && messages.length > 0 && !isProcessing && (
-                  <button
-                    onClick={() => {
-                      setIsExpanded(true)
-                      // Don't set wasAutoExpanded - this is a manual action
-                    }}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-all hover:scale-110"
-                    style={{
-                      backgroundColor: '#F7F5F3',
-                      border: '1px solid #E8E1DD',
-                    }}
-                    title="Show conversation history"
-                    onMouseEnter={e => {
-                      e.currentTarget.style.backgroundColor = '#F0EDE8'
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.backgroundColor = '#F7F5F3'
-                    }}
-                  >
-                    <ChevronUp size={16} style={{ color: '#667EEA' }} />
-                  </button>
-                )}
               </div>
 
               {/* Agentator Control Buttons */}
@@ -541,6 +512,30 @@ export default function ConversationBar({
                   )}
                   Send
                 </button>
+
+                {/* Expand / Collapse toggle — always visible at end of row */}
+                {!isProcessing && (
+                  <button
+                    onClick={handleToggleExpanded}
+                    className="p-2 rounded-lg transition-all"
+                    title={isExpanded ? 'Collapse' : 'Expand conversation'}
+                    style={{
+                      backgroundColor: isExpanded ? '#EEF2FF' : '#EEF2FF',
+                      color: '#667EEA',
+                    }}
+                  >
+                    <ChevronUp
+                      size={16}
+                      style={{
+                        color: '#667EEA',
+                        transition: 'transform 300ms',
+                        transform: isExpanded
+                          ? 'rotate(180deg)'
+                          : 'rotate(0deg)',
+                      }}
+                    />
+                  </button>
+                )}
               </div>
             </div>
 
