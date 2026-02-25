@@ -119,3 +119,24 @@ async def delete_dtm(
         print(f"Warning: Failed to update database after DTM delete: {e}")
 
     return {"message": "DTM deleted successfully"}
+
+@router.get("/{taste_id}/data")
+async def get_dtm_data(
+    taste_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Get full DTM data for a taste.
+    Used by Taste Studio to render the taste profile visualization.
+    """
+    taste = db.get_taste(taste_id)
+    if not taste:
+        raise HTTPException(status_code=404, detail="Taste not found")
+    if taste.get("owner_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    dtm = dtm_storage.load_dtm(taste_id)
+    if not dtm:
+        raise HTTPException(status_code=404, detail="DTM not found. Build the taste model first.")
+
+    return dtm.model_dump()

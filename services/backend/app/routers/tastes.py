@@ -2,7 +2,7 @@
 Tastes and Resources API endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from app.core.auth import get_current_user
 from app.core import db, storage
@@ -377,3 +377,51 @@ async def delete_resource(
         print(f"⚠️  Warning: Could not find taste {taste_id} after resource deletion")
     
     return {"message": "Resource deleted successfully"}
+
+# ============================================================================
+# DTR DATA ENDPOINT
+# ============================================================================
+
+@router.get("/{taste_id}/resources/{resource_id}/dtr")
+async def get_resource_dtr(
+    taste_id: str,
+    resource_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Get full DTR data (all passes) for a resource.
+    Used by Taste Studio to display per-resource design taste representation.
+    """
+    resource = db.get_resource(resource_id)
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    if resource.get("owner_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if resource.get("taste_id") != taste_id:
+        raise HTTPException(status_code=400, detail="Resource does not belong to this taste")
+
+    pass_names = [
+        "pass_1_structure",
+        "pass_2_surface",
+        "pass_3_typography",
+        "pass_4_image_usage",
+        "pass_5_components",
+        "pass_6_complete_dtr",
+    ]
+
+    passes = {}
+    for pass_name in pass_names:
+        data = dtr_storage.load_pass_result(resource_id, pass_name)
+        if data:
+            passes[pass_name] = data
+
+    status = dtr_storage.load_extraction_status(resource_id)
+
+    return {
+        "resource_id": resource_id,
+        "taste_id": taste_id,
+        "resource_name": resource.get("name", ""),
+        "has_dtr": len(passes) > 0,
+        "passes": passes,
+        "status": status,
+    }

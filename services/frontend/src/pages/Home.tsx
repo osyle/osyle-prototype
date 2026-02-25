@@ -11,6 +11,7 @@ import {
   X,
   FileJson,
   Trash2,
+  FlaskConical,
 } from 'lucide-react'
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -32,6 +33,7 @@ import ProfileDropdown from '../components/ProfileDropdown'
 import ProjectCardPreview from '../components/ProjectCardPreview'
 import StyleCard from '../components/StyleCard'
 import TasteCard from '../components/TasteCard'
+import TasteStudioTab from '../components/TasteStudioTab'
 
 import { useDeviceContext } from '../hooks/useDeviceContext'
 import api from '../services/api'
@@ -71,20 +73,21 @@ export default function Home() {
 
   // UI state
   // const [toggleOn, setToggleOn] = useState(false)
-  const [activeTab, setActiveTab] = useState<'left' | 'middle' | 'right'>(
-    () => {
-      // Restore last active tab from localStorage
-      const savedTab = localStorage.getItem('home_active_tab')
-      if (
-        savedTab === 'left' ||
-        savedTab === 'middle' ||
-        savedTab === 'right'
-      ) {
-        return savedTab
-      }
-      return 'left'
-    },
-  )
+  const [activeTab, setActiveTab] = useState<
+    'left' | 'studio' | 'middle' | 'right'
+  >(() => {
+    // Restore last active tab from localStorage
+    const savedTab = localStorage.getItem('home_active_tab')
+    if (
+      savedTab === 'left' ||
+      savedTab === 'studio' ||
+      savedTab === 'middle' ||
+      savedTab === 'right'
+    ) {
+      return savedTab
+    }
+    return 'left'
+  })
 
   // Data state
   const [tastes, setTastes] = useState<TasteDisplay[]>([])
@@ -2235,8 +2238,8 @@ export default function Home() {
 
   const tabs = [
     { id: 'left' as const, icon: <Sprout size={18} /> },
-    // Temporarily block styles tab on Home screen
-    // { id: 'middle' as const, icon: <Layers size={18} /> },
+    { id: 'studio' as const, icon: <FlaskConical size={18} /> },
+    // { id: 'middle' as const, icon: <Layers size={18} /> },  // Styles gallery — coming back later
     { id: 'right' as const, icon: <Eye size={18} /> },
   ]
 
@@ -2359,6 +2362,15 @@ export default function Home() {
             ))}
           </div>
         </div>
+      )
+    } else if (activeTab === 'studio') {
+      return (
+        <TasteStudioTab
+          tastes={tastes}
+          loading={loading}
+          onCreateTaste={() => setIsCreateTasteModalOpen(true)}
+          onDeleteTaste={handleDeleteTaste}
+        />
       )
     } else if (activeTab === 'middle') {
       return (
@@ -2669,7 +2681,7 @@ export default function Home() {
 
   return (
     <div
-      className="min-h-screen min-w-screen flex flex-col"
+      className="h-screen min-w-screen flex flex-col"
       style={{ backgroundColor: '#EDEBE9' }}
     >
       {/* Create Taste Modal */}
@@ -2876,7 +2888,7 @@ export default function Home() {
       {/* Main Content - Changes based on active tab */}
       <div className="flex-1 overflow-hidden">
         <div
-          className="h-full transition-all duration-500 ease-in-out"
+          className="h-full flex flex-col transition-all duration-500 ease-in-out"
           style={{
             opacity: 1,
             transform: 'translateY(0)',

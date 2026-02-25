@@ -1105,6 +1105,53 @@ export const dtmAPI = {
       method: 'DELETE',
     })
   },
+
+  /**
+   * Get full DTM data for a taste (for Taste Studio visualization).
+   */
+  getData: async (tasteId: string): Promise<Record<string, unknown>> => {
+    return apiRequest<Record<string, unknown>>(`/api/dtm/${tasteId}/data`)
+  },
+}
+
+// ============================================================================
+// DTR READ API (Taste Studio)
+// ============================================================================
+
+export interface DTRPassData {
+  resource_id: string
+  taste_id: string
+  resource_name: string
+  has_dtr: boolean
+  passes: {
+    pass_1_structure?: Record<string, unknown>
+    pass_2_surface?: Record<string, unknown>
+    pass_3_typography?: Record<string, unknown>
+    pass_4_image_usage?: Record<string, unknown>
+    pass_5_components?: Record<string, unknown>
+    pass_6_complete_dtr?: Record<string, unknown>
+  }
+  status?: {
+    status: string
+    current_pass?: string
+    error?: string
+    quality_tier?: string
+    updated_at?: string
+  }
+}
+
+export const dtrAPI = {
+  /**
+   * Get full DTR data for a specific resource (all passes).
+   */
+  getData: async (
+    tasteId: string,
+    resourceId: string,
+  ): Promise<DTRPassData> => {
+    return apiRequest<DTRPassData>(
+      `/api/tastes/${tasteId}/resources/${resourceId}/dtr`,
+    )
+  },
 }
 
 /**
@@ -1414,6 +1461,7 @@ const api = {
   projects: projectsAPI,
   llm: llmAPI,
   dtm: dtmAPI,
+  dtr: dtrAPI,
   mobbin: mobbinAPI,
 }
 
