@@ -162,6 +162,19 @@ export default function MultiFileReactRenderer({
           .replace(/\n?```$/, '')
           .trim()
 
+        // Fix deprecated source.unsplash.com URLs → picsum.photos
+        // source.unsplash.com was shut down; replace with reliable picsum URLs
+        code = code.replace(
+          /https:\/\/source\.unsplash\.com\/(\d+)x(\d+)\/\?([^"'\s]+)/g,
+          (_match, w, h, keywords) => {
+            const seed = keywords
+              .replace(/[,+&]/g, '-')
+              .replace(/[^a-zA-Z0-9-]/g, '')
+              .slice(0, 40)
+            return `https://picsum.photos/seed/${seed}/${w}/${h}`
+          },
+        )
+
         try {
           const result = Babel.transform(code, {
             presets: [

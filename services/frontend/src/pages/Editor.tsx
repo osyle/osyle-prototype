@@ -141,6 +141,11 @@ export default function Editor() {
   // Project state (for persistence)
   const [project, setProject] = useState<Project | null>(null)
 
+  // Image generation mode
+  const [imageGenerationMode, setImageGenerationMode] = useState<
+    'ai' | 'image_url'
+  >('image_url')
+
   // Progressive UI checkpoint state
   const [screenCheckpoints, setScreenCheckpoints] = useState<
     Record<string, string>
@@ -477,6 +482,21 @@ export default function Editor() {
     }
   }
 
+  // Handle image generation mode toggle
+  const handleToggleImageMode = async () => {
+    if (!project) return
+    const newMode = imageGenerationMode === 'ai' ? 'image_url' : 'ai'
+    setImageGenerationMode(newMode)
+    try {
+      await api.projects.update(project.project_id, {
+        image_generation_mode: newMode,
+      })
+    } catch (err) {
+      console.error('Failed to update image generation mode:', err)
+      setImageGenerationMode(imageGenerationMode) // revert on failure
+    }
+  }
+
   // Handle screen resize
   const handleScreenResize = (
     screenId: string,
@@ -561,6 +581,9 @@ export default function Editor() {
 
       // Set project to state for persistence
       setProject(project)
+
+      // Load image generation mode
+      setImageGenerationMode(project.image_generation_mode || 'image_url')
 
       // Apply project's device settings if they exist
       if (project.device_info) {
@@ -1825,6 +1848,52 @@ export default function Editor() {
             </button>
 
             */}
+
+            {/* Image Generation Mode Toggle */}
+            {generationStage === 'complete' && (
+              <div className="mt-4">
+                <button
+                  onClick={handleToggleImageMode}
+                  title={
+                    imageGenerationMode === 'ai'
+                      ? 'AI Image Generation (click to switch to URL mode)'
+                      : 'URL Image Mode (click to switch to AI generation)'
+                  }
+                  className="flex flex-col items-center gap-1 rounded-xl transition-all hover:scale-105"
+                  style={{
+                    width: '56px',
+                    padding: '8px 4px',
+                    backgroundColor:
+                      imageGenerationMode === 'ai' ? '#EEF2FF' : '#FFFFFF',
+                    boxShadow:
+                      imageGenerationMode === 'ai'
+                        ? '0 2px 8px rgba(99, 102, 241, 0.25)'
+                        : '0 2px 8px rgba(0,0,0,0.08)',
+                    border:
+                      imageGenerationMode === 'ai'
+                        ? '1.5px solid #6366F1'
+                        : '1.5px solid #E5E7EB',
+                  }}
+                >
+                  <span style={{ fontSize: '18px', lineHeight: 1 }}>
+                    {imageGenerationMode === 'ai' ? '✨' : '🔗'}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '9px',
+                      fontWeight: 600,
+                      color:
+                        imageGenerationMode === 'ai' ? '#6366F1' : '#9CA3AF',
+                      letterSpacing: '0.02em',
+                      lineHeight: 1.2,
+                      textAlign: 'center',
+                    }}
+                  >
+                    {imageGenerationMode === 'ai' ? 'AI\nIMG' : 'URL\nIMG'}
+                  </span>
+                </button>
+              </div>
+            )}
 
             {/* Version History - RESTORED! */}
             {generationStage === 'complete' && currentFlowVersion > 0 && (

@@ -21,10 +21,13 @@ class ImageGenerationService:
             model: fal.ai model to use (schnell, dev, or pro)
         """
         self.model = model
-        self.api_key = os.getenv("FALAI_API_KEY")
-        
+        # fal_client reads FAL_KEY natively; also support FALAI_API_KEY as alias
+        self.api_key = os.getenv("FAL_KEY") or os.getenv("FALAI_API_KEY")
         if not self.api_key:
-            print("⚠️  WARNING: FALAI_API_KEY not set. Image generation will fail.")
+            print("⚠️  WARNING: Neither FAL_KEY nor FALAI_API_KEY is set. Image generation will fail.")
+        else:
+            # Ensure fal_client can find it
+            os.environ.setdefault("FAL_KEY", self.api_key)
     
     def generate_image(
         self, 
@@ -46,7 +49,7 @@ class ImageGenerationService:
             Image URL or None if generation fails
         """
         if not self.api_key:
-            print("❌ FALAI_API_KEY not set, cannot generate image")
+            print("❌ FAL_KEY not set, cannot generate image")
             return None
         
         try:
@@ -83,44 +86,57 @@ class ImageGenerationService:
         """
         Extract image placeholder descriptions from code
         
-        Pattern: src="GENERATE:description here"
+        Patterns:
+          src="GENERATE:description here"       (JSX attribute, double quotes)
+          src='GENERATE:description here'       (JSX attribute, single quotes)
+          'GENERATE:description here'           (JS string value, single quotes)
+          "GENERATE:description here"           (JS string value, double quotes)
         
         Returns:
             List of dicts with 'match', 'description', 'width', 'height'
         """
-        # Pattern: src="GENERATE:description|WIDTHxHEIGHT" or src="GENERATE:description"
-        pattern = r'src="GENERATE:([^"]+)"'
-        matches = re.finditer(pattern, code)
+        # Match all quote variants + backticks, deduplicate by match string
+        patterns = [
+            r'src="(GENERATE:[^"]+)"',    # JSX double-quote
+            r"src='(GENERATE:[^']+)'",    # JSX single-quote
+            r'src=`(GENERATE:[^`]+)`',     # JSX backtick
+            r'"(GENERATE:[^"]+)"',        # JS string double-quote
+            r"'(GENERATE:[^']+)'",        # JS string single-quote
+            r'`(GENERATE:[^`]+)`',         # JS template literal
+        ]
         
+        seen = set()
         placeholders = []
-        for match in matches:
-            full_match = match.group(0)
-            content = match.group(1)
-            
-            # Check for dimension hint: "description|WIDTHxHEIGHT"
-            if "|" in content:
-                description, dimensions = content.split("|", 1)
-                description = description.strip()
+        for pat in patterns:
+            for match in re.finditer(pat, code):
+                full_match = match.group(0)
+                if full_match in seen:
+                    continue
+                seen.add(full_match)
+                content = match.group(1)[len("GENERATE:"):]  # strip "GENERATE:" prefix
                 
-                # Parse dimensions
-                if "x" in dimensions:
-                    try:
-                        w, h = dimensions.split("x")
-                        width, height = int(w.strip()), int(h.strip())
-                    except:
+                # Check for dimension hint: "description|WIDTHxHEIGHT"
+                if "|" in content:
+                    description, dimensions = content.split("|", 1)
+                    description = description.strip()
+                    if "x" in dimensions:
+                        try:
+                            w, h = dimensions.split("x")
+                            width, height = int(w.strip()), int(h.strip())
+                        except:
+                            width, height = 1024, 768
+                    else:
                         width, height = 1024, 768
                 else:
+                    description = content.strip()
                     width, height = 1024, 768
-            else:
-                description = content.strip()
-                width, height = 1024, 768
-            
-            placeholders.append({
-                "match": full_match,
-                "description": description,
-                "width": width,
-                "height": height
-            })
+                
+                placeholders.append({
+                    "match": full_match,
+                    "description": description,
+                    "width": width,
+                    "height": height
+                })
         
         return placeholders
     
@@ -155,6 +171,11 @@ class ImageGenerationService:
             description = placeholder["description"]
             width = placeholder["width"]
             height = placeholder["height"]
+            match_str = placeholder["match"]
+            
+            if match_str not in modified_code:
+                print(f"⚠️  Image placeholder not found in code: {repr(match_str[:80])}")
+                continue
             
             # Create cache key
             cache_key = self._get_cache_key(description, width, height)
@@ -168,20 +189,21 @@ class ImageGenerationService:
                 image_url = self.generate_image(description, width, height)
                 
                 if image_url:
-                    # Add to cache
                     cache[cache_key] = image_url
                 else:
-                    # Fallback to Unsplash if generation fails
-                    print(f"⚠️  Falling back to Unsplash for: '{description}'")
-                    keywords = description.replace(" ", ",")[:100]
-                    image_url = f"https://source.unsplash.com/{width}x{height}/?{keywords}"
+                    # Fallback to picsum if generation fails
+                    print(f"⚠️  Falling back to picsum for: '{description[:50]}'")
+                    seed = abs(hash(description)) % 1000
+                    image_url = f"https://picsum.photos/seed/{seed}/{width}/{height}"
                     cache[cache_key] = image_url
             
-            # Replace placeholder with actual URL
-            modified_code = modified_code.replace(
-                placeholder["match"],
-                f'src="{image_url}"'
-            )
+            # Determine replacement — src= attributes vs bare JS string values
+            if match_str.startswith("src="):
+                replacement = f'src="{image_url}"'
+            else:
+                replacement = f'"{image_url}"'
+            
+            modified_code = modified_code.replace(match_str, replacement)
         
         return modified_code, cache
     

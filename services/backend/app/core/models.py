@@ -222,6 +222,7 @@ class ProjectUpdate(BaseModel):
     selected_taste_id: Optional[str] = None
     selected_resource_ids: Optional[List[str]] = None
     metadata: Optional[dict] = None
+    image_generation_mode: Optional[str] = None
 
 
 # ============================================================================

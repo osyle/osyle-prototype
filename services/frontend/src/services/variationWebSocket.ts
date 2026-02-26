@@ -102,16 +102,16 @@ export function generateVariationWebSocket(
         ws.onmessage = event => {
           try {
             const message = JSON.parse(event.data) as Record<string, unknown>
-            const type = message.type as string
+            const type = message['type'] as string
 
             if (type === 'progress') {
               callbacks.onProgress?.(
-                message.stage as string,
-                message.message as string,
+                message['stage'] as string,
+                message['message'] as string,
               )
             } else if (type === 'screen_variation_start') {
               callbacks.onVariationStart?.(
-                message.data as {
+                message['data'] as {
                   screen_id: string
                   screen_name: string
                   element_path: string
@@ -120,11 +120,11 @@ export function generateVariationWebSocket(
               )
             } else if (type === 'screen_conversation_chunk') {
               callbacks.onConversationChunk?.(
-                message.data as { screen_id: string; chunk: string },
+                message['data'] as { screen_id: string; chunk: string },
               )
             } else if (type === 'screen_generating') {
               callbacks.onGenerating?.(
-                message.data as {
+                message['data'] as {
                   screen_id: string
                   screen_name: string
                   message: string
@@ -132,7 +132,7 @@ export function generateVariationWebSocket(
               )
             } else if (type === 'screen_updated') {
               callbacks.onScreenUpdated?.(
-                message.data as {
+                message['data'] as {
                   screen_id: string
                   ui_code: string
                   component_path?: string
@@ -140,7 +140,7 @@ export function generateVariationWebSocket(
                 },
               )
             } else if (type === 'complete') {
-              const result = message.result as Record<string, unknown>
+              const result = message['result'] as Record<string, unknown>
               callbacks.onComplete?.(
                 result as {
                   status: string
@@ -151,7 +151,7 @@ export function generateVariationWebSocket(
               ws.close()
               resolve(result)
             } else if (type === 'error') {
-              const errorMsg = message.error as string
+              const errorMsg = message['error'] as string
               callbacks.onError?.(errorMsg)
               ws.close()
               reject(new Error(errorMsg))

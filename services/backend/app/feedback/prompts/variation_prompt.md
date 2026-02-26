@@ -14,7 +14,7 @@ When the target is a **leaf element** (image, text node, heading, button, icon):
 
 **Your ONLY job is to replace the content of that specific element.** Do not touch layout, containers, siblings, or anything else.
 
-- **Image** → Choose a different image (different url/subject/mood) that serves the same visual purpose but offers a fresh perspective
+- **Image** → Choose a different image with a fresh subject/mood that fits the context. **Follow the image rules in the Image Handling section below** — in AI mode this means you MUST use a `GENERATE:` src; in URL mode use a `picsum.photos/seed/...` URL. Never reuse the existing src.
 - **Text / Heading** → Rewrite with a different voice, angle, emotional tone, or emphasis — same meaning, different expression
 - **Button** → Alternative label or micro-copy that could be more compelling
 - **Icon** → A different icon that conveys the same action

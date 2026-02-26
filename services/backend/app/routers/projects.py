@@ -347,7 +347,8 @@ async def update_project(
         task_description=payload.task_description,
         selected_taste_id=payload.selected_taste_id,
         selected_resource_ids=payload.selected_resource_ids,  # ✅ CHANGED
-        metadata=payload.metadata
+        metadata=payload.metadata,
+        image_generation_mode=payload.image_generation_mode
     )
     
     return updated

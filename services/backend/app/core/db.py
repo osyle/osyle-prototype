@@ -443,7 +443,8 @@ def update_project(
     task_description: str = None,
     selected_taste_id: str = None,
     selected_resource_ids: List[str] = None,  # ✅ CHANGED: Now a list
-    metadata: dict = None
+    metadata: dict = None,
+    image_generation_mode: str = None
 ) -> Dict[str, Any]:
     """Update a project"""
     now = get_timestamp()
@@ -469,6 +470,10 @@ def update_project(
     if metadata is not None:
         update_expr_parts.append("metadata = :metadata")
         expr_attr_values[":metadata"] = metadata
+
+    if image_generation_mode is not None:
+        update_expr_parts.append("image_generation_mode = :img_mode")
+        expr_attr_values[":img_mode"] = image_generation_mode
     
     update_expr = "SET " + ", ".join(update_expr_parts)
     

@@ -486,6 +486,7 @@ export const projectsAPI = {
       selected_taste_id?: string
       selected_resource_ids?: string[] // ✅ CHANGED: Now an array
       metadata?: Record<string, unknown>
+      image_generation_mode?: 'ai' | 'image_url'
     },
   ): Promise<Project> => {
     return apiRequest<Project>(`/api/projects/${projectId}`, {

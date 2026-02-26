@@ -48,6 +48,7 @@ class VariationGenerator:
         element_type: str,
         screen_name: str,
         taste_context: Optional[str],
+        image_generation_mode: str = "image_url",
     ) -> str:
         parts = []
 
@@ -65,10 +66,19 @@ class VariationGenerator:
             parts.append(f"**Visible text/content**: \"{preview}\"")
 
         if element_type == "leaf":
+            is_image = "img" in element_path.lower() or "image" in element_name.lower() or element_name.lower().startswith("image")
+            image_hint = (
+                " Since this is an image: use a `GENERATE:` src with a detailed description (see image rules above)."
+                if is_image and image_generation_mode == "ai"
+                else " Since this is an image: use a `picsum.photos/seed/[descriptive-seed]/[width]/[height]` URL — never reuse the existing src."
+                if is_image
+                else ""
+            )
             parts.append(
-                "\n**This is a leaf element** (a single image, text, icon, or button). "
+                f"\n**This is a leaf element** (a single image, text, icon, or button). "
                 "Your job is to **replace its content** — not redesign its surroundings. "
-                "For an image: choose a different image that serves the same purpose better. "
+                "For an image: choose a different image that serves the same purpose but with a fresh perspective."
+                f"{image_hint} "
                 "For a text node: rewrite the copy with a different voice, angle, or emphasis. "
                 "For a button: try a different label, icon, or micro-copy. "
                 "Do NOT change any layout, container, or sibling elements. "
@@ -130,6 +140,7 @@ class VariationGenerator:
             element_type=element_type,
             screen_name=screen_name,
             taste_context=taste_context,
+            image_generation_mode=image_generation_mode,
         )
 
         messages = [

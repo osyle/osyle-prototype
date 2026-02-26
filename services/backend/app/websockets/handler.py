@@ -1660,6 +1660,8 @@ async def handle_generate_variation(websocket: WebSocket, data: Dict[str, Any], 
                 full_code, _ = image_service.replace_placeholders_with_images(full_code)
             except Exception as e:
                 print(f"⚠️  Image generation failed for variation: {e}")
+                import traceback
+                traceback.print_exc()
 
         # Persist the variation into the project (overwrites current screen code)
         current_version = project.get("metadata", {}).get("flow_version", 1)
