@@ -245,7 +245,7 @@ export default function ConversationBar({
         }}
       >
         <div
-          className="rounded-2xl overflow-hidden"
+          className="rounded-2xl"
           style={{
             backgroundColor: '#FFFFFF',
             boxShadow: isExpanded
