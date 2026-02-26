@@ -20,6 +20,7 @@ import {
   hasTextSelection,
 } from '../utils/textSelection'
 import { AnnotationPopup } from './AnnotationPopup'
+import { VariationPopup } from './VariationPopup'
 
 interface AnnotationCanvasProps {
   screenId: string
@@ -38,6 +39,13 @@ interface AnnotationCanvasProps {
   // eslint-disable-next-line no-unused-vars
   onInspect?: (element: InspectedElement | null) => void
   isConceptMode?: boolean // NEW: Whether this is in Concept tab (non-interactive) vs Prototype tab
+  // eslint-disable-next-line no-unused-vars
+  onVariationRequest?: (data: {
+    element: string
+    elementPath: string
+    screenId: string
+    screenName: string
+  }) => void
 }
 
 /**
@@ -91,10 +99,13 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   annotationColor = '#3c82f7',
   onInspect,
   isConceptMode = false,
+  onVariationRequest,
 }) => {
   const canvasRef = useRef<HTMLDivElement>(null)
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null)
   const [pendingAnnotation, setPendingAnnotation] =
+    useState<PendingAnnotation | null>(null)
+  const [pendingVariation, setPendingVariation] =
     useState<PendingAnnotation | null>(null)
   const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(
     null,
@@ -262,7 +273,13 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   // Handle click
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
-      if (!isActive || isDragging || pendingAnnotation || !canvasRef.current)
+      if (
+        !isActive ||
+        isDragging ||
+        pendingAnnotation ||
+        pendingVariation ||
+        !canvasRef.current
+      )
         return
 
       const canvas = canvasRef.current
@@ -457,6 +474,41 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
         return
       }
 
+      // Variation mode - show variation popup
+      if (mode === 'variation') {
+        if (target.closest('[data-annotation-ui]') || target === canvas) return
+        if (!canvas.contains(target)) return
+
+        e.preventDefault()
+        e.stopPropagation()
+
+        const identified = identifyElement(target)
+        const canvasRect = canvas.getBoundingClientRect()
+        const boundingBox = getRelativeBoundingBox(target, canvas)
+        const transform = getElementTransform(canvas)
+
+        const clickX = (e.clientX - canvasRect.left) / transform.scale
+        const clickY = (e.clientY - canvasRect.top) / transform.scale
+
+        const pending: PendingAnnotation = {
+          id: `temp-${Date.now()}`,
+          screenId,
+          screenName,
+          x: (clickX / (canvasRect.width / transform.scale)) * 100,
+          y: clickY,
+          clientY: clickY,
+          comment: '',
+          element: identified.name,
+          elementPath: identified.path,
+          timestamp: Date.now(),
+          boundingBox,
+        }
+
+        setPendingVariation(pending)
+        setHoverInfo(null)
+        return
+      }
+
       // Annotate mode - existing logic
       if (hasTextSelection()) {
         handleTextSelection()
@@ -509,6 +561,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       isActive,
       isDragging,
       pendingAnnotation,
+      pendingVariation,
       screenId,
       screenName,
       mode,
@@ -678,6 +731,10 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
     setPendingAnnotation(null)
   }, [])
 
+  const cancelVariation = useCallback(() => {
+    setPendingVariation(null)
+  }, [])
+
   const deleteAnnotation = useCallback(
     (id: string) => {
       const annotation = annotations.find(a => a.id === id)
@@ -717,6 +774,8 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       if (e.key === 'Escape') {
         if (pendingAnnotation) {
           cancelAnnotation()
+        } else if (pendingVariation) {
+          cancelVariation()
         } else if (editingAnnotation) {
           cancelEdit()
         } else if (mode === 'inspect' && selectedInspectElement) {
@@ -731,8 +790,10 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
     return () => window.removeEventListener('keydown', handleEscape)
   }, [
     pendingAnnotation,
+    pendingVariation,
     editingAnnotation,
     cancelAnnotation,
+    cancelVariation,
     cancelEdit,
     mode,
     selectedInspectElement,
@@ -1108,6 +1169,29 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
             y: editingAnnotation.y,
             canvasWidth: canvasRef.current.clientWidth,
           }}
+        />
+      )}
+
+      {/* Variation popup */}
+      {pendingVariation && canvasRef.current && (
+        <VariationPopup
+          element={pendingVariation.element}
+          elementPath={pendingVariation.elementPath}
+          position={{
+            x: pendingVariation.x,
+            y: pendingVariation.clientY,
+            canvasWidth: canvasRef.current.clientWidth,
+          }}
+          onConfirm={() => {
+            onVariationRequest?.({
+              element: pendingVariation.element,
+              elementPath: pendingVariation.elementPath,
+              screenId,
+              screenName,
+            })
+            cancelVariation()
+          }}
+          onCancel={cancelVariation}
         />
       )}
     </div>
