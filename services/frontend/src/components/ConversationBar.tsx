@@ -6,7 +6,7 @@ import {
   XCircle,
   Move,
   ChevronUp,
-  Layers,
+  Shuffle,
 } from 'lucide-react'
 import React, { useState, useEffect, useRef } from 'react'
 import { useAgentatorGlobal } from '../lib/Agentator'
@@ -490,7 +490,7 @@ export default function ConversationBar({
                   }
                   disabled={isProcessing}
                 >
-                  <Layers
+                  <Shuffle
                     size={16}
                     style={{
                       color:
