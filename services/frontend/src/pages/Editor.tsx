@@ -491,6 +491,13 @@ export default function Editor() {
       await api.projects.update(project.project_id, {
         image_generation_mode: newMode,
       })
+      // Keep localStorage in sync so the toggle survives a page reload
+      const stored = localStorage.getItem('current_project')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        parsed.image_generation_mode = newMode
+        localStorage.setItem('current_project', JSON.stringify(parsed))
+      }
     } catch (err) {
       console.error('Failed to update image generation mode:', err)
       setImageGenerationMode(imageGenerationMode) // revert on failure

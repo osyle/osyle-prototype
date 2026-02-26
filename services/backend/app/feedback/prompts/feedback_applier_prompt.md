@@ -10,6 +10,12 @@ The user has provided feedback about a specific screen in their flow. You will:
 2. Then, output a special delimiter: `$GENERATING`
 3. Finally, generate the complete updated React component code
 
+## Image Handling
+
+{IMAGE_MODE_INSTRUCTIONS}
+
+**Critical**: Only apply these image rules to images you are explicitly adding or changing as part of the feedback. Images you are NOT touching must remain exactly as-is — do not alter their `src` values.
+
 ## Input Data
 
 You receive:

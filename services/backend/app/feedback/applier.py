@@ -28,7 +28,22 @@ class FeedbackApplier:
                 prompt_file = legacy_file
         
         with open(prompt_file, 'r', encoding='utf-8') as f:
-            self.system_prompt = f.read()
+            self._system_template = f.read()
+
+        # Load image mode fragments (reused from generation/prompts)
+        generation_prompts_dir = Path(__file__).parent.parent / "generation" / "prompts"
+        with open(generation_prompts_dir / "images" / "ai_mode.md", "r", encoding="utf-8") as f:
+            self._ai_mode_instructions = f.read()
+        with open(generation_prompts_dir / "images" / "image_url_mode.md", "r", encoding="utf-8") as f:
+            self._url_mode_instructions = f.read()
+
+    def _build_system_prompt(self, image_generation_mode: str) -> str:
+        instructions = (
+            self._ai_mode_instructions
+            if image_generation_mode == "ai"
+            else self._url_mode_instructions
+        )
+        return self._system_template.replace("{IMAGE_MODE_INSTRUCTIONS}", instructions)
     
     async def apply_feedback(
         self,
@@ -37,7 +52,8 @@ class FeedbackApplier:
         dtm: Dict[str, Any],
         flow_context: Dict[str, Any],
         device_info: Dict[str, Any],
-        annotations: List[Dict[str, Any]] = None
+        annotations: List[Dict[str, Any]] = None,
+        image_generation_mode: str = "image_url",
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Apply feedback to screen code and generate updates (streaming)
@@ -59,12 +75,13 @@ class FeedbackApplier:
                 dtm=dtm,
                 flow_context=flow_context,
                 device_info=device_info,
-                annotations=annotations
+                annotations=annotations,
+                image_generation_mode=image_generation_mode,
             )
             
             # Build messages for LLM service
             messages = [
-                Message(role=MessageRole.SYSTEM, content=self.system_prompt),
+                Message(role=MessageRole.SYSTEM, content=self._build_system_prompt(image_generation_mode)),
                 Message(role=MessageRole.USER, content=user_message)
             ]
             
@@ -187,7 +204,8 @@ class FeedbackApplier:
         dtm: Dict[str, Any],
         flow_context: Dict[str, Any],
         device_info: Dict[str, Any],
-        annotations: List[Dict[str, Any]] = None
+        annotations: List[Dict[str, Any]] = None,
+        image_generation_mode: str = "image_url",
     ) -> str:
         """Build the user message with all context"""
         
@@ -288,6 +306,19 @@ class FeedbackApplier:
         screen = device_info.get('screen', {})
         parts.append(f"**Viewport:** {screen.get('width', 375)}x{screen.get('height', 812)}px\n\n")
         
+        # Image format reminder — placed right before the task so the model sees it last
+        parts.append("## ⚠️ IMAGE FORMAT — FINAL REMINDER\n")
+        if image_generation_mode == "ai":
+            parts.append("You are in **AI IMAGE GENERATION MODE**.\n")
+            parts.append("Any image you add or change MUST use `src=\"GENERATE:detailed description\"`.\n")
+            parts.append("❌ FORBIDDEN: unsplash.com, picsum.photos, or any real URL for new/changed images.\n")
+            parts.append("✅ Images you are NOT changing must remain exactly as-is (keep their existing src).\n\n")
+        else:
+            parts.append("You are in **URL IMAGE MODE**.\n")
+            parts.append("Any image you add or change MUST use `https://picsum.photos/seed/[topic]/[w]/[h]`.\n")
+            parts.append("❌ FORBIDDEN: `GENERATE:` prefixes or unsplash URLs.\n")
+            parts.append("✅ Images you are NOT changing must remain exactly as-is (keep their existing src).\n\n")
+
         # Instruction
         parts.append("## Your Task\n")
         parts.append("1. First, write a brief explanation (1-3 sentences) of what you're changing\n")

@@ -1196,6 +1196,7 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
         
         # Get current version
         current_version = project.get("metadata", {}).get("flow_version", 1)
+        image_generation_mode = project.get("image_generation_mode", "image_url")
         
         # Initialize services
         llm = get_llm_service()
@@ -1374,7 +1375,8 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
                 dtm=dtm,
                 flow_context=flow_context,
                 device_info=device_info,
-                annotations=screen_annotations  # NEW: Pass annotations
+                annotations=screen_annotations,
+                image_generation_mode=image_generation_mode,
             ):
                 chunk_type = chunk_data.get("type")
                 
@@ -1412,6 +1414,15 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
                     # Final complete response
                     full_conversation = chunk_data.get("conversation", "")
                     full_code = chunk_data.get("code", "")
+
+                    # AI image generation: replace GENERATE: placeholders with fal.ai URLs
+                    if image_generation_mode == "ai" and full_code:
+                        try:
+                            from app.generation.image_generation import get_image_service
+                            image_service = get_image_service()
+                            full_code, _ = image_service.replace_placeholders_with_images(full_code)
+                        except Exception as img_err:
+                            print(f"⚠️  Image generation failed for feedback: {img_err}")
                     
                     # Update screen in flow graph - NEW format: write to project.files
                     if "project" not in flow_graph:

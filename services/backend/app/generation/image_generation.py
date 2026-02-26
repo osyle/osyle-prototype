@@ -105,15 +105,16 @@ class ImageGenerationService:
             r'`(GENERATE:[^`]+)`',         # JS template literal
         ]
         
-        seen = set()
+        seen = set()  # dedup by GENERATE: content, not by full match string
         placeholders = []
         for pat in patterns:
             for match in re.finditer(pat, code):
                 full_match = match.group(0)
-                if full_match in seen:
+                generate_content = match.group(1)  # e.g. "GENERATE:a mountain..."
+                if generate_content in seen:
                     continue
-                seen.add(full_match)
-                content = match.group(1)[len("GENERATE:"):]  # strip "GENERATE:" prefix
+                seen.add(generate_content)
+                content = generate_content[len("GENERATE:"):]  # strip "GENERATE:" prefix
                 
                 # Check for dimension hint: "description|WIDTHxHEIGHT"
                 if "|" in content:
