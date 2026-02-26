@@ -264,6 +264,8 @@ def handle_message(
                 await ws_handler.handle_generate_flow(adapter, data, user_id)
             elif action == "iterate-ui":
                 await ws_handler.handle_iterate_ui(adapter, data, user_id)
+            elif action == "generate-variation":
+                await ws_handler.handle_generate_variation(adapter, data, user_id)
             elif action == "copy-message":
                 await ws_handler.handle_copy_message(adapter, data, user_id)
             elif action == "finalize-copy":
