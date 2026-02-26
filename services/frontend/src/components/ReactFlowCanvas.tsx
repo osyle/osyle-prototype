@@ -40,6 +40,15 @@ interface ReactFlowCanvasProps {
     screen: { width: number; height: number }
   }
   project: Project
+  // eslint-disable-next-line no-unused-vars
+  onVariationRequest?: (data: {
+    element: string
+    elementPath: string
+    elementText: string
+    elementType: 'leaf' | 'container'
+    screenId: string
+    screenName: string
+  }) => void
 }
 
 const nodeTypes = {
@@ -86,6 +95,7 @@ export default function ReactFlowCanvas({
   currentIteratingScreenId,
   deviceInfo,
   project,
+  onVariationRequest,
 }: ReactFlowCanvasProps) {
   // Track annotation mode via global flag
   const [isAnnotationMode, setIsAnnotationMode] = useState(false)
@@ -131,6 +141,7 @@ export default function ReactFlowCanvas({
           project,
           flowGraph, // NEW: Pass flowGraph for unified project access
           actualScreenSize: size, // Pass the actual screen size for this node
+          onVariationRequest,
         }
 
         return {
@@ -156,6 +167,7 @@ export default function ReactFlowCanvas({
       deviceInfo,
       project,
       isAnnotationMode,
+      onVariationRequest,
     ],
   )
 

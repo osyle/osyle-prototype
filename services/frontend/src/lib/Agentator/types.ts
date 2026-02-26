@@ -42,6 +42,8 @@ export interface CodeAnnotation {
 export interface PendingAnnotation extends Annotation {
   clientY: number
   computedStylesObj?: Record<string, string>
+  elementText?: string
+  elementType?: 'leaf' | 'container'
 }
 
 export interface HoverInfo {

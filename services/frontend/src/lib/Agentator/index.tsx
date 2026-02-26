@@ -17,6 +17,15 @@ export interface AgentatorProps {
   screenName: string
   disabled?: boolean
   isConceptMode?: boolean // NEW: Pass through to AnnotationCanvas
+  // eslint-disable-next-line no-unused-vars
+  onVariationRequest?: (data: {
+    element: string
+    elementPath: string
+    elementText: string
+    elementType: 'leaf' | 'container'
+    screenId: string
+    screenName: string
+  }) => void
 }
 
 export const Agentator: React.FC<AgentatorProps> = ({
@@ -25,6 +34,7 @@ export const Agentator: React.FC<AgentatorProps> = ({
   screenName,
   disabled = false,
   isConceptMode = false,
+  onVariationRequest,
 }) => {
   const {
     mode,
@@ -79,6 +89,7 @@ export const Agentator: React.FC<AgentatorProps> = ({
       mode={mode}
       annotationColor={annotationColor}
       isConceptMode={isConceptMode}
+      onVariationRequest={onVariationRequest}
     >
       {children}
     </AnnotationCanvas>

@@ -44,31 +44,36 @@ export function getElementPath(target: HTMLElement, maxDepth = 4): string {
 }
 
 /**
- * Identifies an element and returns a human-readable name + path
+ * Identifies an element and returns a human-readable name + path + type
+ * elementType 'leaf' = single content element (img, text, button, input, icon)
+ * elementType 'container' = wraps multiple children, appropriate for layout redesign
  */
 export function identifyElement(target: HTMLElement): {
   name: string
   path: string
+  elementType: 'leaf' | 'container'
 } {
   const path = getElementPath(target)
+  const L = 'leaf' as const
+  const C = 'container' as const
 
   if (target.dataset['element']) {
-    return { name: target.dataset['element'], path }
+    return { name: target.dataset['element'], path, elementType: C }
   }
 
   const tag = target.tagName.toLowerCase()
 
-  // SVG elements
+  // SVG elements — leaf
   if (['path', 'circle', 'rect', 'line', 'g'].includes(tag)) {
     const svg = target.closest('svg')
     if (svg) {
       const parent = svg.parentElement
       if (parent) {
         const parentName = identifyElement(parent).name
-        return { name: `graphic in ${parentName}`, path }
+        return { name: `graphic in ${parentName}`, path, elementType: L }
       }
     }
-    return { name: 'graphic element', path }
+    return { name: 'graphic element', path, elementType: L }
   }
   if (tag === 'svg') {
     const parent = target.parentElement
@@ -77,35 +82,43 @@ export function identifyElement(target: HTMLElement): {
       return {
         name: btnText ? `icon in "${btnText}" button` : 'button icon',
         path,
+        elementType: L,
       }
     }
-    return { name: 'icon', path }
+    return { name: 'icon', path, elementType: L }
   }
 
-  // Interactive elements
+  // Interactive elements — leaf (atomic actions)
   if (tag === 'button') {
     const text = target.textContent?.trim()
     const ariaLabel = target.getAttribute('aria-label')
-    if (ariaLabel) return { name: `${ariaLabel} Button`, path }
-    return { name: text ? `"${text.slice(0, 25)}" Button` : 'Button', path }
+    if (ariaLabel) return { name: `${ariaLabel} Button`, path, elementType: L }
+    return {
+      name: text ? `"${text.slice(0, 25)}" Button` : 'Button',
+      path,
+      elementType: L,
+    }
   }
   if (tag === 'a') {
     const text = target.textContent?.trim()
     const href = target.getAttribute('href')
-    if (text) return { name: `"${text.slice(0, 25)}" Link`, path }
-    if (href) return { name: `Link to ${href.slice(0, 30)}`, path }
-    return { name: 'Link', path }
+    if (text)
+      return { name: `"${text.slice(0, 25)}" Link`, path, elementType: L }
+    if (href)
+      return { name: `Link to ${href.slice(0, 30)}`, path, elementType: L }
+    return { name: 'Link', path, elementType: L }
   }
   if (tag === 'input') {
     const type = target.getAttribute('type') || 'text'
     const placeholder = target.getAttribute('placeholder')
     const name = target.getAttribute('name')
-    if (placeholder) return { name: `"${placeholder}" Input`, path }
-    if (name) return { name: `${name} Input`, path }
-    return { name: `${type} Input`, path }
+    if (placeholder)
+      return { name: `"${placeholder}" Input`, path, elementType: L }
+    if (name) return { name: `${name} Input`, path, elementType: L }
+    return { name: `${type} Input`, path, elementType: L }
   }
 
-  // Headings
+  // Headings — leaf
   if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tag)) {
     const text = target.textContent?.trim()
     return {
@@ -113,39 +126,46 @@ export function identifyElement(target: HTMLElement): {
         ? `${tag.toUpperCase()} "${text.slice(0, 35)}"`
         : tag.toUpperCase(),
       path,
+      elementType: L,
     }
   }
 
-  // Text elements
+  // Text elements — leaf
   if (tag === 'p') {
     const text = target.textContent?.trim()
     if (text)
       return {
         name: `Paragraph: "${text.slice(0, 40)}${text.length > 40 ? '...' : ''}"`,
         path,
+        elementType: L,
       }
-    return { name: 'Paragraph', path }
+    return { name: 'Paragraph', path, elementType: L }
   }
   if (tag === 'span' || tag === 'label') {
     const text = target.textContent?.trim()
-    if (text && text.length < 40) return { name: `"${text}"`, path }
-    return { name: tag, path }
+    if (text && text.length < 40)
+      return { name: `"${text}"`, path, elementType: L }
+    return { name: tag, path, elementType: L }
   }
   if (tag === 'li') {
     const text = target.textContent?.trim()
     if (text && text.length < 40)
-      return { name: `List item: "${text.slice(0, 35)}"`, path }
-    return { name: 'List item', path }
+      return { name: `List item: "${text.slice(0, 35)}"`, path, elementType: L }
+    return { name: 'List item', path, elementType: L }
   }
 
-  // Media
+  // Media — leaf
   if (tag === 'img') {
     const alt = target.getAttribute('alt')
-    return { name: alt ? `Image "${alt.slice(0, 30)}"` : 'Image', path }
+    return {
+      name: alt ? `Image "${alt.slice(0, 30)}"` : 'Image',
+      path,
+      elementType: L,
+    }
   }
-  if (tag === 'video') return { name: 'Video', path }
+  if (tag === 'video') return { name: 'Video', path, elementType: L }
 
-  // Containers
+  // Containers — check child count to distinguish meaningful sections from thin wrappers
   if (
     [
       'div',
@@ -162,8 +182,26 @@ export function identifyElement(target: HTMLElement): {
     const role = target.getAttribute('role')
     const ariaLabel = target.getAttribute('aria-label')
 
-    if (ariaLabel) return { name: `${tag} [${ariaLabel}]`, path }
-    if (role) return { name: `${role}`, path }
+    // A container with 2+ distinct children is a real section worth redesigning
+    const childCount = target.children.length
+    const effectiveType = childCount >= 2 ? C : L
+
+    if (ariaLabel)
+      return { name: `${tag} [${ariaLabel}]`, path, elementType: effectiveType }
+    if (role) return { name: `${role}`, path, elementType: effectiveType }
+
+    // Derive name from the first heading inside — far more reliable than class parsing
+    const innerHeading = target.querySelector('h1,h2,h3,h4,h5,h6')
+    if (innerHeading) {
+      const headingText = innerHeading.textContent?.trim()
+      if (headingText && headingText.length < 60) {
+        return {
+          name: `${headingText} Section`,
+          path,
+          elementType: effectiveType,
+        }
+      }
+    }
 
     if (typeof className === 'string' && className) {
       const words = className
@@ -171,13 +209,18 @@ export function identifyElement(target: HTMLElement): {
         .map(c => c.replace(/[A-Z0-9]{5,}.*$/, ''))
         .filter(c => c.length > 2 && !/^[a-z]{1,2}$/.test(c))
         .slice(0, 2)
-      if (words.length > 0) return { name: words.join(' '), path }
+      if (words.length > 0)
+        return { name: words.join(' '), path, elementType: effectiveType }
     }
 
-    return { name: tag === 'div' ? 'Container' : tag, path }
+    return {
+      name: tag === 'div' ? 'Container' : tag,
+      path,
+      elementType: effectiveType,
+    }
   }
 
-  return { name: tag, path }
+  return { name: tag, path, elementType: L }
 }
 
 /**

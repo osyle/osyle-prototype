@@ -26,6 +26,15 @@ export interface ScreenNodeData extends Record<string, unknown> {
   project: Project
   flowGraph?: import('../../types/home.types').FlowGraph
   actualScreenSize: { width: number; height: number }
+  // eslint-disable-next-line no-unused-vars
+  onVariationRequest?: (data: {
+    element: string
+    elementPath: string
+    elementText: string
+    elementType: 'leaf' | 'container'
+    screenId: string
+    screenName: string
+  }) => void
 }
 
 function ScreenNode({ data, selected }: NodeProps) {
@@ -49,11 +58,16 @@ function ScreenNode({ data, selected }: NodeProps) {
     project,
     flowGraph,
     actualScreenSize,
+    onVariationRequest,
   } = typedData
 
   // Calculate if annotation mode is active
   const isAnnotationModeActive =
-    isActive && (mode === 'annotate' || mode === 'inspect' || mode === 'drag')
+    isActive &&
+    (mode === 'annotate' ||
+      mode === 'inspect' ||
+      mode === 'drag' ||
+      mode === 'variation')
 
   // Set global flag for ReactFlowCanvas to check
   useEffect(() => {
@@ -569,7 +583,11 @@ export default function App() {
               pointerEvents: 'auto', // Always enabled for content and annotations
             }}
           >
-            <Agentator screenId={screen.screen_id} screenName={screen.name}>
+            <Agentator
+              screenId={screen.screen_id}
+              screenName={screen.name}
+              onVariationRequest={onVariationRequest}
+            >
               <>
                 <StyleOverlayApplicator
                   overrides={styleOverrides}

@@ -8,7 +8,7 @@ import {
   //Plus,
   List,
 } from 'lucide-react'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AddInspirationModal from '../components/AddInspirationModal'
 import CodeViewer from '../components/CodeViewer'
@@ -28,6 +28,7 @@ import {
   type Message,
   type ConversationAnnotation,
 } from '../services/iterationWebSocket'
+import { generateVariationWebSocket } from '../services/variationWebSocket'
 import type { FlowGraph, FlowScreen, Project } from '../types/home.types'
 import type {
   ParameterValues,
@@ -1212,6 +1213,136 @@ export default function Editor() {
   }
 
   /**
+   * Handle variation request from Agentator variation mode
+   */
+  const handleVariationRequest = useCallback(
+    async (varData: {
+      element: string
+      elementPath: string
+      elementText: string
+      elementType: 'leaf' | 'container'
+      screenId: string
+      screenName: string
+    }) => {
+      if (!project || !flowGraph) return
+
+      setIsIterating(true)
+      setIterationStatus(`Creating variation for ${varData.element}...`)
+
+      try {
+        await generateVariationWebSocket(
+          project.project_id,
+          varData.screenId,
+          varData.elementPath,
+          varData.element,
+          varData.elementText,
+          varData.elementType,
+          {
+            onProgress: (_stage, message) => setIterationStatus(message),
+
+            onVariationStart: d => {
+              setIterationStatus(
+                `Generating variation for "${d.element_name}"...`,
+              )
+              setCurrentIteratingScreenId(d.screen_id)
+            },
+
+            onConversationChunk: d => {
+              // Build up rationale in conversation as it streams
+              setConversationMessages(prev => {
+                const last = prev[prev.length - 1]
+                if (last && last.id === 'variation-rationale') {
+                  return [
+                    ...prev.slice(0, -1),
+                    { ...last, content: last.content + d.chunk },
+                  ]
+                }
+                return [
+                  ...prev,
+                  {
+                    id: 'variation-rationale',
+                    type: 'ai' as const,
+                    content: d.chunk,
+                    timestamp: new Date(),
+                    screen: varData.screenName,
+                  },
+                ]
+              })
+            },
+
+            onGenerating: d =>
+              setIterationStatus(`Making variation for ${d.screen_name}...`),
+
+            onScreenUpdated: d => {
+              setFlowGraph(prev => {
+                if (!prev) return prev
+                const screen = prev.screens.find(
+                  s => s.screen_id === d.screen_id,
+                )
+                const componentPath =
+                  d.component_path ||
+                  (screen?.component_path as string | undefined)
+                // Strip any markdown fences before storing
+                const cleanCode = (d.ui_code || '')
+                  .trim()
+                  .replace(/^```[a-zA-Z]*\n?/, '')
+                  .replace(/\n?```$/, '')
+                  .trim()
+                const updatedFiles = componentPath
+                  ? { ...prev.project.files, [componentPath]: cleanCode }
+                  : prev.project.files
+                return {
+                  ...prev,
+                  project: { ...prev.project, files: updatedFiles },
+                }
+              })
+              setCurrentIteratingScreenId(null)
+            },
+
+            onComplete: d => {
+              setCurrentFlowVersion(d.new_version)
+              loadVersionInfo()
+              setIterationStatus('')
+              setIsIterating(false)
+              setCurrentIteratingScreenId(null)
+
+              // ✅ Save conversation (including variation rationale) to backend
+              if (d.new_version && project) {
+                setConversationMessages(prev => {
+                  saveConversationToBackend(
+                    project.project_id,
+                    prev,
+                    d.new_version,
+                  ).catch(err =>
+                    console.error(
+                      'Failed to save variation conversation:',
+                      err,
+                    ),
+                  )
+                  return prev
+                })
+              }
+            },
+
+            onError: err => {
+              console.error('Variation error:', err)
+              setIterationStatus('')
+              setIsIterating(false)
+              setCurrentIteratingScreenId(null)
+            },
+          },
+        )
+      } catch (e) {
+        console.error('Variation request failed:', e)
+        setIterationStatus('')
+        setIsIterating(false)
+        setCurrentIteratingScreenId(null)
+      }
+    },
+    [project, flowGraph, loadVersionInfo],
+  )
+
+  /**
    * Handle sending a message in the conversation
    */
   const handleSendMessage = async (
@@ -1367,10 +1498,17 @@ export default function Editor() {
                 data.component_path ||
                 (screen?.component_path as string | undefined)
 
+              // Strip any markdown fences before storing
+              const cleanCode = (data.ui_code || '')
+                .trim()
+                .replace(/^```[a-zA-Z]*\n?/, '')
+                .replace(/\n?```$/, '')
+                .trim()
+
               const updatedFiles = componentPath
                 ? {
                     ...prevFlow.project.files,
-                    [componentPath]: data.ui_code,
+                    [componentPath]: cleanCode,
                   }
                 : prevFlow.project.files
 
@@ -1864,6 +2002,7 @@ export default function Editor() {
               currentIteratingScreenId={currentIteratingScreenId}
               deviceInfo={device_info}
               project={project!}
+              onVariationRequest={handleVariationRequest}
             />
           ) : null}
 

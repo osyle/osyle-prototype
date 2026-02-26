@@ -154,7 +154,14 @@ export default function MultiFileReactRenderer({
 
       const transformedModules: Record<string, string> = {}
 
-      Object.entries(files).forEach(([path, code]) => {
+      Object.entries(files).forEach(([path, rawCode]) => {
+        // Strip markdown fences that may have been stored alongside the code
+        let code = rawCode.trim()
+        code = code
+          .replace(/^```[a-zA-Z]*\n?/, '')
+          .replace(/\n?```$/, '')
+          .trim()
+
         try {
           const result = Babel.transform(code, {
             presets: [

@@ -43,6 +43,8 @@ interface AnnotationCanvasProps {
   onVariationRequest?: (data: {
     element: string
     elementPath: string
+    elementText: string
+    elementType: 'leaf' | 'container'
     screenId: string
     screenName: string
   }) => void
@@ -500,6 +502,8 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
           comment: '',
           element: identified.name,
           elementPath: identified.path,
+          elementText: target.textContent?.trim().slice(0, 200) ?? '',
+          elementType: identified.elementType,
           timestamp: Date.now(),
           boundingBox,
         }
@@ -1186,6 +1190,8 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
             onVariationRequest?.({
               element: pendingVariation.element,
               elementPath: pendingVariation.elementPath,
+              elementText: pendingVariation.elementText ?? '',
+              elementType: pendingVariation.elementType ?? 'container',
               screenId,
               screenName,
             })

@@ -34,6 +34,7 @@ from app.generation.streaming import generate_screen_ui_progressive
 
 from app.feedback.router import FeedbackRouter
 from app.feedback.applier import FeedbackApplier
+from app.feedback.variation import VariationGenerator
 
 # Copy generation imports
 from app.copygen import generate_copy_response, extract_final_copy
@@ -46,6 +47,21 @@ async def send_progress(websocket: WebSocket, stage: str, message: str, data: Di
         "message": message,
         "data": data or {}
     })
+
+
+def strip_code_fences(code: str) -> str:
+    """
+    Remove markdown code fences that sometimes get stored alongside the code.
+    Handles ```tsx, ```ts, ```jsx, ```js, ``` openings and ``` closings.
+    """
+    if not code:
+        return code
+    code = code.strip()
+    # Remove opening fence (```tsx, ```ts, ```jsx, ```js, or plain ```)
+    code = re.sub(r'^```[a-zA-Z]*\n?', '', code)
+    # Remove closing fence
+    code = re.sub(r'\n?```$', '', code)
+    return code.strip()
 
 
 async def send_error(websocket: WebSocket, error: str):
@@ -1317,8 +1333,10 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
 
             component_path = screen.get("component_path", f"/screens/{screen.get('name', 'Screen').replace(' ', '').replace('-', '')}Screen.tsx")
             project_files = flow_graph.get("project", {}).get("files", {})
-            current_code = project_files.get(component_path, "") or screen.get("ui_code", "")
-            
+            current_code = strip_code_fences(
+                project_files.get(component_path, "") or screen.get("ui_code", "")
+            )
+
             if not current_code:
                 print(f"Warning: Screen {screen_id} has no code (checked {component_path} and ui_code)")
                 continue
@@ -1479,6 +1497,212 @@ async def handle_iterate_ui(websocket: WebSocket, data: Dict[str, Any], user_id:
         print(f"Error in handle_iterate_ui: {e}")
         traceback.print_exc()
         await send_error(websocket, str(e))
+
+
+async def handle_generate_variation(websocket: WebSocket, data: Dict[str, Any], user_id: str):
+    """
+    Handle generate-variation WebSocket request.
+
+    Client sends:
+    {
+        "action": "generate-variation",
+        "data": {
+            "project_id": "...",
+            "screen_id": "...",
+            "element_path": "...",
+            "element_name": "..."
+        }
+    }
+
+    Server emits progress, then:
+        screen_variation_start   — generation beginning
+        screen_conversation_chunk — rationale text (streaming)
+        screen_generating         — code phase started
+        screen_updated            — final code ready
+        complete                  — done
+    """
+    try:
+        project_id = data.get("project_id")
+        screen_id = data.get("screen_id")
+        element_path = data.get("element_path", "")
+        element_name = data.get("element_name", "")
+        element_text = data.get("element_text", "")  # visible text content for LLM context
+        element_type = data.get("element_type", "container")  # 'leaf' or 'container'
+
+        if not project_id or not screen_id:
+            await send_error(websocket, "Missing project_id or screen_id")
+            return
+
+        # Load project
+        await send_progress(websocket, "init", "Loading project...")
+        project = db.get_project(project_id)
+
+        if not project:
+            await send_error(websocket, "Project not found")
+            return
+
+        if project.get("owner_id") != user_id:
+            await send_error(websocket, "Not authorized")
+            return
+
+        image_generation_mode = project.get("image_generation_mode", "image_url")
+        device_info = project.get("device_info", {})
+        selected_taste_id = project.get("selected_taste_id")
+        selected_resource_ids = project.get("selected_resource_ids", [])
+
+        # Load current flow graph
+        flow_graph = convert_decimals(project.get("flow_graph", {}))
+        if not flow_graph or not flow_graph.get("screens"):
+            await send_error(websocket, "No flow graph found. Generate initial design first.")
+            return
+
+        # Find the target screen
+        screen = next((s for s in flow_graph["screens"] if s["screen_id"] == screen_id), None)
+        if not screen:
+            await send_error(websocket, f"Screen {screen_id} not found in flow graph")
+            return
+
+        screen_name = screen.get("name", screen_id)
+        component_path = screen.get(
+            "component_path",
+            f"/screens/{screen_name.replace(' ', '').replace('-', '')}Screen.tsx"
+        )
+        project_files = flow_graph.get("project", {}).get("files", {})
+        current_code = strip_code_fences(
+            project_files.get(component_path, "") or screen.get("ui_code", "")
+        )
+
+        if not current_code:
+            await send_error(websocket, f"Screen {screen_id} has no code yet")
+            return
+
+        # Optionally load taste context (best-effort, non-blocking)
+        taste_context: Optional[str] = None
+        if selected_taste_id:
+            try:
+                dtm_result = await dtm_builder.get_or_build_dtm(
+                    taste_id=selected_taste_id,
+                    resource_ids=selected_resource_ids,
+                    mode="auto",
+                )
+                dtm_model = dtm_result["dtm"]
+                dtm_dict = dtm_model.model_dump() if hasattr(dtm_model, "model_dump") else dtm_model
+                # Build a compact taste summary for the variation prompt
+                from app.generation.prompt_assembler import PromptAssembler
+                assembler = PromptAssembler()
+                taste_context = assembler._format_taste_context(
+                    taste_data=dtm_dict,
+                    taste_source=dtm_result.get("mode", "full_dtm"),
+                    responsive=project.get("responsive", True),
+                )
+            except Exception as e:
+                print(f"⚠️  Could not load taste context for variation: {e}")
+
+        # Notify frontend
+        await websocket.send_json({
+            "type": "screen_variation_start",
+            "data": {
+                "screen_id": screen_id,
+                "screen_name": screen_name,
+                "element_path": element_path,
+                "element_name": element_name,
+            },
+        })
+
+        # Run variation generator (streaming)
+        llm = get_llm_service()
+        generator = VariationGenerator(llm)
+
+        full_conversation = ""
+        full_code = ""
+
+        async for chunk_data in generator.generate_variation(
+            current_code=current_code,
+            element_path=element_path,
+            element_name=element_name,
+            element_text=element_text,
+            element_type=element_type,
+            screen_name=screen_name,
+            image_generation_mode=image_generation_mode,
+            taste_context=taste_context,
+        ):
+            chunk_type = chunk_data.get("type")
+
+            if chunk_type == "conversation":
+                await websocket.send_json({
+                    "type": "screen_conversation_chunk",
+                    "data": {"screen_id": screen_id, "chunk": chunk_data.get("chunk", "")},
+                })
+
+            elif chunk_type == "delimiter_detected":
+                await websocket.send_json({
+                    "type": "screen_generating",
+                    "data": {
+                        "screen_id": screen_id,
+                        "screen_name": screen_name,
+                        "message": "Generating variation...",
+                    },
+                })
+
+            elif chunk_type == "complete":
+                full_conversation = chunk_data.get("conversation", "")
+                full_code = chunk_data.get("code", "")
+
+        if not full_code:
+            await send_error(websocket, "Variation generation produced no code")
+            return
+
+        # AI image generation (only in ai mode, only for GENERATE: inside new code)
+        if image_generation_mode == "ai" and full_code:
+            try:
+                from app.generation.image_generation import get_image_service
+                image_service = get_image_service()
+                full_code, _ = image_service.replace_placeholders_with_images(full_code)
+            except Exception as e:
+                print(f"⚠️  Image generation failed for variation: {e}")
+
+        # Persist the variation into the project (overwrites current screen code)
+        current_version = project.get("metadata", {}).get("flow_version", 1)
+        new_version = current_version + 1
+
+        if "project" not in flow_graph:
+            flow_graph["project"] = {"files": {}, "entry": "/App.tsx", "dependencies": {}}
+        if "files" not in flow_graph["project"]:
+            flow_graph["project"]["files"] = {}
+
+        flow_graph["project"]["files"][component_path] = full_code
+        screen["ui_code"] = full_code  # backward compat
+
+        # Save to S3 first (needs plain Python types), then DynamoDB (needs Decimals)
+        from app.core import storage as _storage
+        _storage.put_project_flow(user_id, project_id, flow_graph, version=new_version)
+
+        metadata = project.get("metadata", {})
+        metadata["flow_version"] = new_version
+        db.update_project(project_id, metadata=metadata)
+        db.update_project_flow_graph(project_id, convert_floats_to_decimals(flow_graph))
+
+        # Send updated screen to frontend
+        await websocket.send_json({
+            "type": "screen_updated",
+            "data": {
+                "screen_id": screen_id,
+                "component_path": component_path,
+                "ui_code": full_code,
+                "conversation": full_conversation,
+            },
+        })
+
+        await send_complete(websocket, {
+            "status": "success",
+            "screen_id": screen_id,
+            "new_version": new_version,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        await send_error(websocket, f"Variation generation failed: {str(e)}")
 
 
 async def handle_copy_message(websocket: WebSocket, data: Dict[str, Any], user_id: str):
@@ -1855,6 +2079,8 @@ async def handle_websocket(websocket: WebSocket, user_id: str):
                 await handle_generate_flow(websocket, data, user_id)
             elif action == "iterate-ui":
                 await handle_iterate_ui(websocket, data, user_id)
+            elif action == "generate-variation":
+                await handle_generate_variation(websocket, data, user_id)
             elif action == "copy-message":
                 await handle_copy_message(websocket, data, user_id)
             elif action == "finalize-copy":
