@@ -207,6 +207,7 @@ class ProjectOut(BaseModel):
     inspiration_image_keys: List[str] = []  # S3 keys for inspiration images
     device_info: Optional[dict] = None  # Device settings when project was created
     rendering_mode: Optional[str] = None  # 'react' or 'parametric'
+    image_generation_mode: Optional[str] = "image_url"  # 'ai' or 'image_url'
     flow_mode: Optional[bool] = True  # NEW: Flow mode flag
     flow_graph: Optional[dict] = None  # NEW: Flow graph structure
     outputs: List[str] = []  # List of S3 keys

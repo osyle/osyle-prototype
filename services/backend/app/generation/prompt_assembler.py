@@ -126,7 +126,8 @@ class PromptAssembler:
             task_description,
             device_info,
             flow_context,
-            is_responsive=responsive
+            is_responsive=responsive,
+            image_generation_mode=image_generation_mode
         )
         sections.append(task_section)
         
@@ -589,7 +590,8 @@ class PromptAssembler:
         task_description: str,
         device_info: Dict[str, Any],
         flow_context: Optional[Dict[str, Any]],
-        is_responsive: bool = True
+        is_responsive: bool = True,
+        image_generation_mode: str = "image_url"
     ) -> str:
         """Format task description and constraints"""
         
@@ -677,5 +679,33 @@ class PromptAssembler:
                     parts.append(f"- Type: {flow_type}")
                     parts.append(f"- Call: `onTransition('{trans_id}')`")
                     parts.append("")
+        
+        # Image format reminder — repeat at the bottom so the model sees it
+        # immediately before writing code
+        parts.append("\n## ⚠️ IMAGE FORMAT — FINAL REMINDER\n")
+        if image_generation_mode == "ai":
+            parts.append("You are in **AI IMAGE GENERATION MODE**.")
+            parts.append("Every single image in your code MUST use the `GENERATE:` format.")
+            parts.append("")
+            parts.append("✅ REQUIRED FORMAT:")
+            parts.append('```tsx')
+            parts.append('<img src="GENERATE:detailed description of the image" alt="..." />')
+            parts.append('```')
+            parts.append("")
+            parts.append("❌ ABSOLUTELY FORBIDDEN — Do NOT use any of these:")
+            parts.append("- `https://images.unsplash.com/...`")
+            parts.append("- `https://picsum.photos/...`")
+            parts.append("- `https://source.unsplash.com/...`")
+            parts.append("- Any real URL of any kind")
+            parts.append("- `/api/placeholder/...`")
+            parts.append("")
+            parts.append("If you write a real URL instead of `GENERATE:...`, the image pipeline will break.")
+            parts.append("There are NO exceptions. Every `src` attribute for an `<img>` tag MUST start with `GENERATE:`.")
+        else:
+            parts.append("You are in **URL IMAGE MODE**.")
+            parts.append("Use `https://picsum.photos/seed/[descriptive-seed]/[WIDTH]/[HEIGHT]` for all images.")
+            parts.append("")
+            parts.append("❌ FORBIDDEN: `GENERATE:` prefixes, unsplash URLs, placeholder paths.")
+            parts.append("✅ REQUIRED: `https://picsum.photos/seed/topic-name/800/600`")
         
         return "\n".join(parts)

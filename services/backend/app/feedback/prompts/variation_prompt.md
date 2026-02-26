@@ -49,13 +49,11 @@ When the target is a **container/section** with multiple child elements:
 
 Everything **outside** the target element's opening and closing tags must remain **byte-for-byte identical**. No exceptions.
 
-## Image Handling Inside Target Area
-
-For images **within the target element only**:
+## Image Handling
 
 {IMAGE_MODE_INSTRUCTIONS}
 
-Images **outside** the target element must remain exactly as-is.
+**Critical**: Only apply these image rules to images **within the target element**. Images outside the target element must remain exactly as-is — do not touch their `src` values under any circumstances.
 
 ## Output Format
 

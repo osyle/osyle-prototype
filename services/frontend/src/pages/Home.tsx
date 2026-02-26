@@ -878,6 +878,7 @@ export default function Home() {
           device_info: project.device_info,
           rendering_mode: project.rendering_mode,
           responsive_mode: project.responsive_mode,
+          image_generation_mode: project.image_generation_mode ?? 'image_url',
           flow_mode: project.flow_mode, // NEW: Store flow_mode
           max_screens: project.max_screens, // NEW: Store max_screens
         }),
@@ -943,6 +944,8 @@ export default function Home() {
           selected_resource_ids: projectDetails.selected_resource_ids,
           device_info: projectDetails.device_info,
           rendering_mode: projectDetails.rendering_mode,
+          image_generation_mode:
+            projectDetails.image_generation_mode ?? 'image_url',
           flow_mode: projectDetails.flow_mode ?? true, // NEW: Default to true if not set
           max_screens: projectDetails.max_screens ?? 5, // NEW: Default to 5 if not set
           flow_graph: projectDetails.flow_graph, // NEW: Include flow_graph if exists

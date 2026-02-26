@@ -1856,41 +1856,54 @@ export default function Editor() {
                   onClick={handleToggleImageMode}
                   title={
                     imageGenerationMode === 'ai'
-                      ? 'AI Image Generation (click to switch to URL mode)'
-                      : 'URL Image Mode (click to switch to AI generation)'
+                      ? 'AI image generation on — click to disable'
+                      : 'AI image generation off — click to enable'
                   }
-                  className="flex flex-col items-center gap-1 rounded-xl transition-all hover:scale-105"
+                  className="flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
                   style={{
-                    width: '56px',
-                    padding: '8px 4px',
-                    backgroundColor:
-                      imageGenerationMode === 'ai' ? '#EEF2FF' : '#FFFFFF',
-                    boxShadow:
-                      imageGenerationMode === 'ai'
-                        ? '0 2px 8px rgba(99, 102, 241, 0.25)'
-                        : '0 2px 8px rgba(0,0,0,0.08)',
-                    border:
-                      imageGenerationMode === 'ai'
-                        ? '1.5px solid #6366F1'
-                        : '1.5px solid #E5E7EB',
+                    height: '40px',
+                    padding: '0 14px 0 10px',
+                    backgroundColor: '#FFFFFF',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    borderRadius: '12px',
+                    border: 'none',
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  <span style={{ fontSize: '18px', lineHeight: 1 }}>
-                    {imageGenerationMode === 'ai' ? '✨' : '🔗'}
-                  </span>
-                  <span
+                  <Sparkles
+                    size={16}
                     style={{
-                      fontSize: '9px',
-                      fontWeight: 600,
                       color:
                         imageGenerationMode === 'ai' ? '#6366F1' : '#9CA3AF',
-                      letterSpacing: '0.02em',
-                      lineHeight: 1.2,
-                      textAlign: 'center',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      color: '#3B3B3B',
                     }}
                   >
-                    {imageGenerationMode === 'ai' ? 'AI\nIMG' : 'URL\nIMG'}
+                    AI Images
                   </span>
+                  {/* On/off pill */}
+                  <div
+                    style={{
+                      marginLeft: '2px',
+                      padding: '1px 6px',
+                      borderRadius: '6px',
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      letterSpacing: '0.03em',
+                      backgroundColor:
+                        imageGenerationMode === 'ai' ? '#EEF2FF' : '#F3F4F6',
+                      color:
+                        imageGenerationMode === 'ai' ? '#6366F1' : '#9CA3AF',
+                    }}
+                  >
+                    {imageGenerationMode === 'ai' ? 'ON' : 'OFF'}
+                  </div>
                 </button>
               </div>
             )}
