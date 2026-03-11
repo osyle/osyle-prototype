@@ -51,6 +51,7 @@ interface CVAProps {
 interface MultiFileReactRendererProps {
   files: Record<string, string>
   entry?: string
+  entryProps?: Record<string, unknown> // Props to pass to the root component (prototype mode only)
   dependencies?: Record<string, string>
   isConceptMode?: boolean // Use direct DOM render (real lucide-react, annotation support)
   allowInteractions?: boolean // When true, skip click-blocking even in concept/direct mode
@@ -59,6 +60,7 @@ interface MultiFileReactRendererProps {
 export default function MultiFileReactRenderer({
   files,
   entry = '/App.tsx',
+  entryProps = {},
   dependencies = {},
   isConceptMode = false,
   allowInteractions = false,
@@ -245,7 +247,6 @@ export default function MultiFileReactRenderer({
 
         // Register all modules
         Object.entries(resolvedModules).forEach(([path, code]) => {
-          // eslint-disable-next-line no-new-func
           window.__modules![path] = new Function(
             'module',
             'exports',
@@ -509,80 +510,8 @@ export default function MultiFileReactRenderer({
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/react-router-dom@6.20.0/dist/umd/react-router-dom.production.min.js"></script>
   <script src="https://unpkg.com/clsx@2.0.0/dist/clsx.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.1/dist/umd/lucide.min.js"></script>
   <script>
-    // lucide (base package, no React) exports to window.lucide as { IconName: [[tag, attrs], ...] }
-    // Build window.LucideReact by wrapping each icon's node data into React components
-    (function() {
-      var defaultSvgAttrs = {
-        xmlns: 'http://www.w3.org/2000/svg',
-        viewBox: '0 0 24 24',
-        fill: 'none',
-        stroke: 'currentColor',
-        strokeWidth: '2',
-        strokeLinecap: 'round',
-        strokeLinejoin: 'round'
-      };
-
-      function makeIcon(iconName) {
-        return window.React.forwardRef(function(props, ref) {
-          var size = props.size !== undefined ? props.size : 24;
-          var color = props.color !== undefined ? props.color : 'currentColor';
-          var strokeWidth = props.strokeWidth !== undefined ? props.strokeWidth : 2;
-          var className = props.className || '';
-          // pull out known icon props, pass rest to svg
-          var rest = {};
-          for (var k in props) {
-            if (k !== 'size' && k !== 'color' && k !== 'strokeWidth' && k !== 'className' && k !== 'children') {
-              rest[k] = props[k];
-            }
-          }
-
-          var iconData = window.lucide && window.lucide[iconName];
-          var children;
-          if (iconData && Array.isArray(iconData)) {
-            // Each entry is [tagName, attrObject] or [tagName, attrObject, [children]]
-            children = iconData.map(function(node, i) {
-              var tag = node[0];
-              var attrs = Object.assign({}, node[1], { key: i });
-              return window.React.createElement(tag, attrs);
-            });
-          } else {
-            // Fallback: generic icon placeholder (X shape, more recognisable than circle)
-            children = [
-              window.React.createElement('line', { key: 0, x1: 18, y1: 6, x2: 6, y2: 18 }),
-              window.React.createElement('line', { key: 1, x1: 6, y1: 6, x2: 18, y2: 18 })
-            ];
-          }
-
-          return window.React.createElement(
-            'svg',
-            Object.assign({}, defaultSvgAttrs, rest, {
-              ref: ref,
-              width: size,
-              height: size,
-              stroke: color,
-              strokeWidth: strokeWidth,
-              className: ('lucide lucide-' + iconName.charAt(0).toLowerCase() + iconName.slice(1).replace(/([A-Z])/g, function(m) { return '-' + m.toLowerCase(); }) + (className ? ' ' + className : '')).trim()
-            }),
-            children
-          );
-        });
-      }
-
-      window.LucideReact = new Proxy({}, {
-        get: function(target, iconName) {
-          if (iconName === '__esModule') return true;
-          if (iconName === 'default') return window.LucideReact;
-          if (typeof iconName !== 'string') return undefined;
-          if (!target[iconName]) {
-            target[iconName] = makeIcon(iconName);
-          }
-          return target[iconName];
-        }
-      });
-    })();
-    
+    // Suppress all console warnings only (re-declared here for inline scripts)
     window.cva = function(base, config) {
       return function(props) {
         if (!props) return base || '';
@@ -619,28 +548,38 @@ export default function MultiFileReactRenderer({
       return inputs.filter(Boolean).join(' ');
     };
     
+    window.__entryProps = ${JSON.stringify(entryProps)};
+    
     ${moduleLoader}
     
     ${wrappedModules}
     
-    try {
-      const App = window.require('${entry}');
-      if (!App) {
-        throw new Error('App component is undefined');
-      }
-      
-      const root = ReactDOM.createRoot(document.getElementById('root'));
-      root.render(React.createElement(App));
-    } catch (err) {
-      document.body.innerHTML = \`
-        <div style="display: flex; align-items: center; justify-content: center; height: 100vh; background: #1a1a1a; color: white; padding: 20px;">
-          <div style="max-width: 600px;">
-            <h2 style="color: #ef4444; margin-bottom: 16px;">Render Error</h2>
-            <pre style="background: #000; padding: 16px; border-radius: 8px; overflow: auto; font-size: 12px; line-height: 1.5; white-space: pre-wrap;">\${err.stack || err.message}</pre>
+    window.__initApp = function() {
+      try {
+        const App = window.require('${entry}');
+        if (!App) {
+          throw new Error('App component is undefined');
+        }
+        
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(App, window.__entryProps || {}));
+      } catch (err) {
+        document.body.innerHTML = \`
+          <div style="display: flex; align-items: center; justify-content: center; height: 100vh; background: #1a1a1a; color: white; padding: 20px;">
+            <div style="max-width: 600px;">
+              <h2 style="color: #ef4444; margin-bottom: 16px;">Render Error</h2>
+              <pre style="background: #000; padding: 16px; border-radius: 8px; overflow: auto; font-size: 12px; line-height: 1.5; white-space: pre-wrap;">\${err.stack || err.message}</pre>
+            </div>
           </div>
-        </div>
-      \`;
-    }
+        \`;
+      }
+    };
+  </script>
+  <!-- Load lucide-react as ESM (same package concept mode uses) then kick off app init -->
+  <script type="module">
+    import * as LucideReact from 'https://esm.sh/lucide-react@0.263.1?deps=react@18';
+    window.LucideReact = LucideReact;
+    window.__initApp();
   </script>
 </body>
 </html>`
@@ -657,7 +596,15 @@ export default function MultiFileReactRenderer({
       const error = err as Error
       setError(error.message || 'Unknown error')
     }
-  }, [files, entry, dependencies, isReady, isConceptMode, isTailwindReady])
+  }, [
+    files,
+    entry,
+    entryProps,
+    dependencies,
+    isReady,
+    isConceptMode,
+    isTailwindReady,
+  ])
 
   if (error) {
     return (

@@ -25,8 +25,9 @@ export default function PrototypeRunner({
   )
   const tabsRef = useRef<HTMLDivElement>(null)
 
-  const activeScreen = flow.screens.find(s => s.screen_id === activeScreenId)
-  const entry = activeScreen?.component_path ?? projectEntry
+  // Always render the project entry (App.tsx with its router) so onTransition works.
+  // Pass initialScreen so App navigates to the tab-selected screen on mount.
+  const entry = projectEntry
 
   return (
     <div
@@ -120,12 +121,12 @@ export default function PrototypeRunner({
         }}
       >
         <MultiFileReactRenderer
-          key={entry}
+          key={activeScreenId}
           files={projectFiles}
           entry={entry}
+          entryProps={{ initialScreen: activeScreenId }}
           dependencies={projectDependencies}
-          isConceptMode={true}
-          allowInteractions={true}
+          isConceptMode={false}
         />
       </div>
     </div>
