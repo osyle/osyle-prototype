@@ -4,7 +4,7 @@ import type {
   VariationSpace,
   ParameterValues,
   VariationDimension,
-} from '../types/parametric.types'
+} from '../../../../../types/parametric.types'
 
 interface ParametricControlsProps {
   variationSpace: VariationSpace

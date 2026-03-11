@@ -15,25 +15,29 @@ import {
 } from 'lucide-react'
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import ConfigurationMenu from '../components/ConfigurationMenu'
 
-// New component imports
-import CreateNewCard from '../components/CreateNewCard'
-import CreateProjectModal from '../components/CreateProjectModal'
-import CreateResourceModal from '../components/CreateResourceModal'
-import CreateTasteModal from '../components/CreateTasteModal'
+import ProjectPreviewCard from '../components/cards/ProjectPreviewCard'
+import StyleCard from '../components/cards/StyleCard'
+import TasteCard from '../components/cards/TasteCard'
+
+import ConfigurationMenu from '../components/menus/ConfigurationMenu'
+import ProfileDropdown from '../components/menus/ProfileDropdown'
+
+import CreateProjectModal from '../components/modals/CreateProjectModal'
+import CreateResourceModal from '../components/modals/CreateResourceModal'
+import CreateTasteModal from '../components/modals/CreateTasteModal'
+
 import DtmTrainingModal, {
   type DtmTrainingState,
-} from '../components/DtmTrainingModal'
+} from '../components/modals/DtmTrainingModal'
+
 import DtrLearningModal, {
   type DtrLearningState,
-} from '../components/DtrLearningModal'
+} from '../components/modals/DtrLearningModal'
 
-import ProfileDropdown from '../components/ProfileDropdown'
-import ProjectCardPreview from '../components/ProjectCardPreview'
-import StyleCard from '../components/StyleCard'
-import TasteCard from '../components/TasteCard'
-import TasteStudioTab from '../components/TasteStudioTab'
+import CreateNewCard from '../components/modular/CreateNewCard'
+
+import TasteStudioTab from '../components/taste_studio/TasteStudioTab'
 
 import { useDeviceContext } from '../hooks/useDeviceContext'
 import api from '../services/api'
@@ -2608,7 +2612,7 @@ export default function Home() {
                     >
                       {/* Card content area with UI preview */}
                       <div className="flex-1 overflow-hidden">
-                        <ProjectCardPreview
+                        <ProjectPreviewCard
                           project={project}
                           cardHeight={cardHeight}
                         />

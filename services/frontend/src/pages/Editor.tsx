@@ -10,15 +10,21 @@ import {
 } from 'lucide-react'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import AddInspirationModal from '../components/AddInspirationModal'
-import CodeViewer from '../components/CodeViewer'
-import ConversationBar from '../components/ConversationBar'
-import DeviceFrame from '../components/DeviceFrame'
-import PrototypeCanvas from '../components/PrototypeCanvas'
-import PrototypeRunner from '../components/PrototypeRunner'
-import ReactFlowCanvas from '../components/ReactFlowCanvas'
-import RightPanel from '../components/RightPanel'
-import VersionHistory from '../components/VersionHistory'
+
+import CodeViewer from '../components/editor/code/CodeViewer'
+
+import ConversationBar from '../components/editor/concept/areas/ConversationBar'
+import RightPanel from '../components/editor/concept/areas/RightPanel'
+
+import ReactFlowCanvas from '../components/editor/concept/ReactFlowCanvas'
+import VersionHistory from '../components/editor/concept/VersionHistory'
+
+import PrototypeCanvas from '../components/editor/prototype/PrototypeCanvas'
+import PrototypeRunner from '../components/editor/prototype/PrototypeRunner'
+
+import AddInspirationModal from '../components/modals/AddInspirationModal'
+
+import DeviceFrame from '../components/ui/DeviceFrame'
 import { useDeviceContext } from '../hooks/useDeviceContext'
 import { AgentatorGlobalProvider } from '../lib/Agentator'
 

@@ -9,8 +9,8 @@ import {
   Shuffle,
 } from 'lucide-react'
 import React, { useState, useEffect, useRef } from 'react'
-import { useAgentatorGlobal } from '../lib/Agentator'
-import type { Annotation, CodeAnnotation } from '../lib/Agentator'
+import { useAgentatorGlobal } from '../../../../lib/Agentator'
+import type { Annotation, CodeAnnotation } from '../../../../lib/Agentator'
 
 type ConversationAnnotation = Annotation | CodeAnnotation
 

@@ -13,8 +13,8 @@ import {
 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 
-import { SCREEN_PRESETS } from '../contexts/DeviceContextProvider'
-import { useDeviceContext } from '../hooks/useDeviceContext'
+import { SCREEN_PRESETS } from '../../contexts/DeviceContextProvider'
+import { useDeviceContext } from '../../hooks/useDeviceContext'
 
 export default function ConfigurationMenu() {
   const [isOpen, setIsOpen] = useState(false)

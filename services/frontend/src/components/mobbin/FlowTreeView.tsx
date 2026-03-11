@@ -4,7 +4,7 @@ import type {
   NodeScreensResponse,
   NodeScreen,
   FlowTreeViewProps,
-} from '../types/mobbin'
+} from '../../types/mobbin'
 import FlowScreenGrid from './FlowScreenGrid'
 import FlowTree from './FlowTree'
 

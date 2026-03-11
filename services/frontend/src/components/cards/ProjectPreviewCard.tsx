@@ -1,13 +1,13 @@
 import React, { useMemo } from 'react'
-import { type ProjectDisplay } from '../types/home.types'
-import MultiFileReactRenderer from './MultiFileReactRenderer'
+import { type ProjectDisplay } from '../../types/home.types'
+import MultiFileReactRenderer from '../ui/MultiFileReactRenderer'
 
-interface ProjectCardPreviewProps {
+interface ProjectPreviewCardProps {
   project: ProjectDisplay
   cardHeight: number
 }
 
-const ProjectCardPreview: React.FC<ProjectCardPreviewProps> = ({
+const ProjectPreviewCard: React.FC<ProjectPreviewCardProps> = ({
   project,
   cardHeight,
 }) => {
@@ -159,4 +159,4 @@ export default function App() {
   )
 }
 
-export default ProjectCardPreview
+export default ProjectPreviewCard

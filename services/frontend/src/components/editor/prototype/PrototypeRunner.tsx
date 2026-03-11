@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
-import type { FlowGraph } from '../types/home.types'
-import type { ParameterValues } from '../types/parametric.types'
-import MultiFileReactRenderer from './MultiFileReactRenderer'
+import type { FlowGraph } from '../../../types/home.types'
+import type { ParameterValues } from '../../../types/parametric.types'
+import MultiFileReactRenderer from '../../ui/MultiFileReactRenderer'
 
 interface PrototypeRunnerProps {
   flow: FlowGraph

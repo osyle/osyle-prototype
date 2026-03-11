@@ -1,7 +1,7 @@
 import { Trash2 } from 'lucide-react'
 import React, { useState } from 'react'
-import { type TasteDisplay } from '../types/home.types'
-import { getInitials, selectDisplayResources } from '../utils/helpers'
+import { type TasteDisplay } from '../../types/home.types'
+import { getInitials, selectDisplayResources } from '../../utils/helpers'
 
 // ============================================================================
 // TYPES

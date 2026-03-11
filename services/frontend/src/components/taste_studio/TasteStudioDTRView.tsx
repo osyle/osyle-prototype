@@ -12,8 +12,8 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import React, { useState, useEffect } from 'react'
-import api, { type DTRPassData } from '../services/api'
-import { type TasteDisplay } from '../types/home.types'
+import api, { type DTRPassData } from '../../services/api'
+import { type TasteDisplay } from '../../types/home.types'
 
 // ============================================================================
 // TYPES

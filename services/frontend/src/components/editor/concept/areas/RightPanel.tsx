@@ -13,13 +13,16 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useState } from 'react'
-import { useAgentatorGlobal } from '../lib/Agentator'
-import api from '../services/api'
-import type { FlowGraph, FlowScreen } from '../types/home.types'
-import type { ParameterValues, VariationSpace } from '../types/parametric.types'
-import type { StyleOverride } from '../types/styleEditor.types'
-import ParametricControls from './ParametricControls'
-import { StyleEditorPanel } from './StyleEditorPanel'
+import { useAgentatorGlobal } from '../../../../lib/Agentator'
+import api from '../../../../services/api'
+import type { FlowGraph, FlowScreen } from '../../../../types/home.types'
+import type {
+  ParameterValues,
+  VariationSpace,
+} from '../../../../types/parametric.types'
+import type { StyleOverride } from '../../../../types/styleEditor.types'
+import ParametricControls from './rightpanel/ParametricControls'
+import { StyleEditorPanel } from './rightpanel/StyleEditorPanel'
 
 interface RightPanelProps {
   isCollapsed: boolean

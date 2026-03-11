@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { type UserInfo } from '../types/home.types'
+import { type UserInfo } from '../../types/home.types'
 
 // ============================================================================
 // TYPES

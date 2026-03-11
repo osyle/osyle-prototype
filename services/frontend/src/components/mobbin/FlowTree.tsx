@@ -1,4 +1,4 @@
-import type { FlowTreeProps, TreeNodeProps } from '../types/mobbin'
+import type { FlowTreeProps, TreeNodeProps } from '../../types/mobbin'
 
 export default function FlowTree({
   nodes,

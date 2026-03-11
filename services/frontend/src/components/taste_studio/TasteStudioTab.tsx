@@ -17,9 +17,11 @@ import {
 } from 'lucide-react'
 import React, { useState, useEffect, useCallback } from 'react'
 
-import api from '../services/api'
-import { type TasteDisplay } from '../types/home.types'
-import DtmTrainingModal, { type DtmTrainingState } from './DtmTrainingModal'
+import api from '../../services/api'
+import { type TasteDisplay } from '../../types/home.types'
+import DtmTrainingModal, {
+  type DtmTrainingState,
+} from '../modals/DtmTrainingModal'
 import TasteStudioDTRView from './TasteStudioDTRView'
 import TasteStudioProfileView from './TasteStudioProfileView'
 

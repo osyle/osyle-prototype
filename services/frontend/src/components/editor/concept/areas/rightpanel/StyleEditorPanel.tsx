@@ -4,17 +4,17 @@
  */
 
 import React, { useState, useEffect } from 'react'
-import type { InspectedElement } from '../lib/Agentator/types'
+import type { InspectedElement } from '../../../../../lib/Agentator/types'
 import type {
   ExtractedStyles,
   StyleOverride,
   EditableStyleCategory,
-} from '../types/styleEditor.types'
+} from '../../../../../types/styleEditor.types'
 import {
   getStyleCategories,
   parseCSSValue,
   rgbToHex,
-} from '../utils/styleEditorUtils'
+} from '../../../../../utils/styleEditorUtils'
 
 interface StyleEditorPanelProps {
   inspectedElement: InspectedElement | null

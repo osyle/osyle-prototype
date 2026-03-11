@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useRef } from 'react'
-import type { StyleOverride } from '../types/styleEditor.types'
+import type { StyleOverride } from '../../../../../types/styleEditor.types'
 
 interface StyleOverlayApplicatorProps {
   children: React.ReactNode

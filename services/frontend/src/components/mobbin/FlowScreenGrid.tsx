@@ -4,7 +4,7 @@ import type {
   NodeScreen,
   ScreenCardProps,
   ScreenLightboxProps,
-} from '../types/mobbin'
+} from '../../types/mobbin'
 
 export default function FlowScreenGrid({ screens }: FlowScreenGridProps) {
   const [selectedScreen, setSelectedScreen] = useState<NodeScreen | null>(null)

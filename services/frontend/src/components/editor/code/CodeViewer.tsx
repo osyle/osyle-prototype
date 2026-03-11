@@ -10,8 +10,8 @@ import {
 import React, { useState, useMemo } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { CodeAnnotator, useAgentatorGlobal } from '../lib/Agentator'
-import type { FlowGraph } from '../types/home.types'
+import { CodeAnnotator, useAgentatorGlobal } from '../../../lib/Agentator'
+import type { FlowGraph } from '../../../types/home.types'
 
 interface CodeViewerProps {
   flow: FlowGraph | null
