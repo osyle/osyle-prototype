@@ -1,11 +1,11 @@
 import { Handle, Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import { useRef, useEffect, useMemo } from 'react'
-import { Agentator, useAgentatorGlobal } from '../../lib/Agentator'
-import type { FlowScreen, Project } from '../../types/home.types'
-import DeviceFrame from '../DeviceFrame'
-import MultiFileReactRenderer from '../MultiFileReactRenderer'
-import { StyleOverlayApplicator } from '../StyleOverlayApplicator'
+import { Agentator, useAgentatorGlobal } from '../../../lib/Agentator'
+import type { FlowScreen, Project } from '../../../types/home.types'
+import { StyleOverlayApplicator } from '../../editor/concept/areas/rightpanel/StyleOverlayApplicator'
+import DeviceFrame from '../../ui/DeviceFrame'
+import MultiFileReactRenderer from '../../ui/MultiFileReactRenderer'
 
 declare global {
   interface Window {
@@ -24,7 +24,7 @@ export interface ScreenNodeData extends Record<string, unknown> {
     screen: { width: number; height: number }
   }
   project: Project
-  flowGraph?: import('../../types/home.types').FlowGraph
+  flowGraph?: import('../../../types/home.types').FlowGraph
   actualScreenSize: { width: number; height: number }
   // eslint-disable-next-line no-unused-vars
   onVariationRequest?: (data: {
@@ -280,19 +280,10 @@ export default function App() {
         minHeight: actualScreenSize.height, // content can exceed this
       }}
     >
+      {/* Both handles at top — edges route through the highway above all nodes */}
       <Handle
         type="source"
-        position={Position.Right}
-        style={{ opacity: 0, pointerEvents: 'none' }}
-      />
-      <Handle
-        type="target"
-        position={Position.Left}
-        style={{ opacity: 0, pointerEvents: 'none' }}
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
+        position={Position.Top}
         style={{ opacity: 0, pointerEvents: 'none' }}
       />
       <Handle
@@ -320,7 +311,7 @@ export default function App() {
         <div
           style={{
             position: 'absolute',
-            top: '-82px', // Gap from device frame (width slider only)
+            top: '-160px', // Clear screen name label + give breathing room above node
             left: '0',
             right: '0',
             backgroundColor: 'rgba(0, 0, 0, 0.95)',
