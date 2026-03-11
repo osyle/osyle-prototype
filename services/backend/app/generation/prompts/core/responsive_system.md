@@ -30,8 +30,8 @@ The user can resize the viewport freely. Your UI must adapt gracefully from mobi
 **✅ CORRECT - Full Width with Adaptive Layout**:
 
 ```jsx
-// Weather app example - adapts from mobile to desktop
-<div className="w-full h-full min-h-screen bg-gradient-to-br from-blue-400 to-blue-600">
+// App that adapts from mobile to desktop
+<div className="w-full h-full min-h-screen bg-background">
   <div className="p-4 md:p-8 lg:p-12">
     {/* Mobile: Single column */}
     {/* Tablet: 2 columns */}
@@ -48,12 +48,12 @@ The user can resize the viewport freely. Your UI must adapt gracefully from mobi
 ```jsx
 <div className="flex w-full h-full">
   {/* Sidebar hidden on mobile, appears on desktop */}
-  <aside className="hidden lg:block w-64 bg-gray-900 p-6">
+  <aside className="hidden lg:block w-64 bg-card border-r p-6">
     <nav>{/* Navigation */}</nav>
   </aside>
 
   {/* Main content uses all remaining space */}
-  <main className="flex-1 overflow-y-auto">
+  <main className="flex-1 overflow-y-auto bg-background">
     <div className="p-4 md:p-6 lg:p-8">
       {/* Content grid adapts */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -223,11 +223,21 @@ Components should intelligently adapt:
 **Navigation**:
 
 ```jsx
-// Mobile: Bottom bar or hamburger
-<nav className="fixed bottom-0 md:hidden">
+// Mobile: Sticky header (preferred — works in all scroll contexts)
+<header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm">
+  {/* header */}
+</header>
 
-// Desktop: Full horizontal or sidebar
-<nav className="hidden md:flex md:items-center">
+// Mobile: Fixed bottom bar — ALWAYS add padding-bottom to scroll container
+<main className="pb-20">  {/* pb must match bar height */}
+  {/* scrollable content */}
+</main>
+<nav className="fixed bottom-0 w-full flex md:hidden justify-around p-4 bg-background border-t h-20">
+  <button className="min-h-[44px] min-w-[44px]">Nav</button>
+</nav>
+
+// Desktop: Top bar
+<nav className="hidden md:flex items-center justify-between px-8 py-4">
 ```
 
 **Forms**:
@@ -491,17 +501,23 @@ These patterns show HOW LAYOUTS CHANGE, not just scale:
   {products.map((product, i) => (
     <div
       key={i}
-      className="bg-white rounded-lg p-4 shadow-lg hover:shadow-xl transition-shadow"
+      className="bg-card rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow border border-border"
     >
       <img
         src={product.image}
-        className="w-full h-48 object-cover rounded-md mb-4"
+        className="w-full h-48 object-cover rounded-md mb-4 bg-muted"
       />
-      <h3 className="text-lg font-semibold mb-2">{product.name}</h3>
-      <p className="text-gray-600 text-sm mb-4">{product.description}</p>
+      <h3 className="text-lg font-semibold mb-2 text-foreground">
+        {product.name}
+      </h3>
+      <p className="text-muted-foreground text-sm mb-4">
+        {product.description}
+      </p>
       <div className="flex justify-between items-center">
-        <span className="text-xl font-bold">${product.price}</span>
-        <button className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">
+        <span className="text-xl font-bold text-foreground">
+          ${product.price}
+        </span>
+        <button className="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:opacity-90">
           Add to Cart
         </button>
       </div>
@@ -516,17 +532,17 @@ These patterns show HOW LAYOUTS CHANGE, not just scale:
 // ✅ CORRECT - Mobile: stacked, Desktop: sidebar + content
 <div className="flex flex-col lg:flex-row w-full h-full min-h-screen">
   {/* Sidebar - hidden on mobile, fixed on desktop */}
-  <aside className="hidden lg:block w-64 bg-gray-900 text-white">
+  <aside className="hidden lg:block w-64 bg-card border-r text-foreground">
     <div className="p-6">
       <h2 className="text-2xl font-bold mb-6">Dashboard</h2>
       <nav className="space-y-2">
-        <a href="#" className="block px-4 py-2 rounded-md hover:bg-gray-800">
+        <a href="#" className="block px-4 py-2 rounded-md hover:bg-muted">
           Overview
         </a>
-        <a href="#" className="block px-4 py-2 rounded-md hover:bg-gray-800">
+        <a href="#" className="block px-4 py-2 rounded-md hover:bg-muted">
           Analytics
         </a>
-        <a href="#" className="block px-4 py-2 rounded-md hover:bg-gray-800">
+        <a href="#" className="block px-4 py-2 rounded-md hover:bg-muted">
           Reports
         </a>
       </nav>
@@ -534,15 +550,15 @@ These patterns show HOW LAYOUTS CHANGE, not just scale:
   </aside>
 
   {/* Main content - full width mobile, beside sidebar desktop */}
-  <main className="flex-1 bg-gray-50 overflow-y-auto">
+  <main className="flex-1 bg-background overflow-y-auto">
     <div className="p-4 md:p-6 lg:p-8">
       {/* Metrics grid adapts */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-xl p-6 shadow-md">
-          <h3 className="text-gray-600 text-sm font-medium mb-2">
+        <div className="bg-card rounded-xl p-6 shadow-sm border border-border">
+          <h3 className="text-muted-foreground text-sm font-medium mb-2">
             Total Revenue
           </h3>
-          <p className="text-3xl font-bold">$54,239</p>
+          <p className="text-3xl font-bold text-foreground">$54,239</p>
         </div>
         {/* More metrics... */}
       </div>
@@ -577,7 +593,7 @@ These patterns show HOW LAYOUTS CHANGE, not just scale:
   </div>
 
   {/* Button changes size */}
-  <button className="w-full md:w-auto md:px-12 py-3 bg-blue-500 text-white rounded-lg font-semibold">
+  <button className="w-full md:w-auto md:px-12 py-3 bg-primary text-primary-foreground rounded-lg font-semibold">
     Complete Purchase
   </button>
 </form>
@@ -587,22 +603,22 @@ These patterns show HOW LAYOUTS CHANGE, not just scale:
 
 ```jsx
 // ✅ CORRECT - Mobile: stacked, Desktop: side-by-side
-<section className="w-full min-h-screen flex items-center bg-gradient-to-br from-purple-600 to-blue-600">
+<section className="w-full min-h-screen flex items-center bg-primary">
   <div className="container mx-auto px-4 md:px-8 lg:px-12">
     <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-16">
       {/* Text content */}
-      <div className="flex-1 text-white text-center lg:text-left">
-        <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 md:mb-6">
+      <div className="flex-1 text-primary-foreground text-center lg:text-left">
+        <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold mb-4 md:mb-6 leading-tight">
           Welcome to the Future
         </h1>
-        <p className="text-lg md:text-xl mb-6 md:mb-8 opacity-90">
+        <p className="text-base md:text-lg mb-6 md:mb-8 opacity-90">
           Build amazing products with our platform
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-          <button className="px-8 py-3 bg-white text-purple-600 rounded-lg font-semibold">
+          <button className="px-8 py-3 bg-background text-foreground rounded-lg font-semibold">
             Get Started
           </button>
-          <button className="px-8 py-3 border-2 border-white text-white rounded-lg font-semibold">
+          <button className="px-8 py-3 border-2 border-primary-foreground text-primary-foreground rounded-lg font-semibold">
             Learn More
           </button>
         </div>
@@ -624,10 +640,10 @@ These patterns show HOW LAYOUTS CHANGE, not just scale:
 ```jsx
 <section className="w-full min-h-screen flex items-center justify-center px-4 md:px-8 lg:px-12">
   <div className="max-w-4xl text-center">
-    <h1 className="text-4xl md:text-5xl lg:text-6xl mb-4 md:mb-6 lg:mb-8">
+    <h1 className="text-2xl md:text-4xl lg:text-5xl mb-4 md:mb-6 lg:mb-8 leading-tight">
       Hero Title
     </h1>
-    <p className="text-lg md:text-xl lg:text-2xl">Subtitle</p>
+    <p className="text-base md:text-lg lg:text-xl">Subtitle</p>
   </div>
 </section>
 ```
@@ -647,19 +663,18 @@ These patterns show HOW LAYOUTS CHANGE, not just scale:
 ### Navigation
 
 ```jsx
-{
-  /* Mobile: Bottom bar */
-}
-<nav className="fixed bottom-0 w-full flex md:hidden justify-around p-4">
+{/* Mobile: Fixed bottom bar — scroll container MUST have pb equal to bar height */}
+<main className="pb-20 overflow-y-auto">
+  {/* all scrollable content */}
+</main>
+<nav className="fixed bottom-0 w-full flex md:hidden justify-around p-4 bg-background border-t h-20">
   <button className="min-h-[44px] min-w-[44px]">Nav</button>
-</nav>;
+</nav>
 
-{
-  /* Desktop: Top bar */
-}
+{/* Desktop: Top bar */}
 <nav className="hidden md:flex items-center justify-between px-8 py-4">
   <button className="px-4 py-2 hover:opacity-80">Nav</button>
-</nav>;
+</nav>
 ```
 
 ### Form Layout

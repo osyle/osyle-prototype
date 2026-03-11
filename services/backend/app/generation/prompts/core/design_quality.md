@@ -33,9 +33,9 @@ Apply contemporary UI techniques while respecting taste:
 
 ```jsx
 // Use the designer's colors but add depth
-<div className="bg-white rounded-xl shadow-2xl">
-  <div className="bg-gradient-to-br from-purple-50 to-blue-50 p-8">
-    {/* Subtle gradients using designer's palette */}
+<div className="bg-card rounded-xl shadow-2xl">
+  <div className="bg-muted/50 p-8">
+    {/* Subtle tinted backgrounds using semantic tokens */}
   </div>
 </div>
 ```
@@ -105,7 +105,7 @@ Create **strong, unmistakable hierarchy**:
 **Typography Scale**:
 
 - Dramatic size differences between levels (not subtle)
-- Hero headlines: 2.5-4x body text size
+- Hero headlines: mobile-first, scale up — start at `text-2xl`, grow to `text-4xl`/`text-5xl` on desktop
 - Clear distinction: H1 → H2 → H3 → Body
 
 **Color Contrast**:
@@ -132,7 +132,7 @@ className = "transition-all duration-300 hover:scale-105 hover:shadow-2xl";
 **Focus States**:
 
 ```jsx
-className = "focus:ring-4 focus:ring-blue-500/50 focus:outline-none";
+className = "focus:ring-4 focus:ring-ring focus:outline-none";
 ```
 
 **Loading States**:

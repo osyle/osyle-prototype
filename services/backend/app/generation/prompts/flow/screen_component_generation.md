@@ -224,93 +224,7 @@ export default function ProductListScreen({ onTransition }: Props) {
 
 **Import UI components from the shared component library:**
 
-CRITICAL: The full shadcn/ui library (50+ components) is available. Import what you need.
-
-```typescript
-// Core Input
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Select } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Slider } from "@/components/ui/slider";
-
-// Data Display
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-
-// Feedback
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Toast } from "@/components/ui/toast";
-
-// Layout
-import { Separator } from "@/components/ui/separator";
-import { AspectRatio } from "@/components/ui/aspect-ratio";
-import { ScrollArea } from "@/components/ui/scroll-area";
-
-// Navigation
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Breadcrumb } from "@/components/ui/breadcrumb";
-import { Pagination } from "@/components/ui/pagination";
-
-// Overlays
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
-import { Tooltip } from "@/components/ui/tooltip";
-
-// Interactive
-import {
-  Accordion,
-  AccordionItem,
-  AccordionTrigger,
-  AccordionContent,
-} from "@/components/ui/accordion";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
-import { Command } from "@/components/ui/command";
-import { Calendar } from "@/components/ui/calendar";
-```
-
-**Available: 50+ components across all categories.**
-
-See documentation for complete list. Use any component that fits your design needs.
-
-**NEVER define these components inline.** Always import from `@/components/ui/*`.
+The full shadcn/ui library (50+ components) is available. Import what you need from `@/components/ui/*`. The complete list is in your base design system reference.
 
 ---
 
@@ -526,61 +440,6 @@ Implement them using the `onTransition` prop:
 
 ---
 
-## Image Sources - MANDATORY
-
-Every `<img src=...>`, `AvatarImage src=...`, and CSS `backgroundImage` must use a **real, publicly accessible URL**.
-
-### ✅ REQUIRED: Unsplash URLs
-
-Use contextually appropriate Unsplash photos. Always include width and quality params:
-
-```typescript
-// Hero / banner images
-<img src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&q=80" />
-
-// Card thumbnails
-<img src="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&q=80" />
-
-// Avatars (AvatarImage)
-<AvatarImage src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&q=80" />
-
-// CSS background
-style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1519904981063-b0cf448d479e?w=800&q=80)' }}
-```
-
-Pick a photo ID that fits the content (nature, food, people, tech, etc). The photo ID is the long number after `/photo-`.
-
-### ❌ FORBIDDEN: These patterns WILL break rendering
-
-```typescript
-// ❌ BROKEN - endpoint does not exist
-src = "/api/placeholder/300/200";
-src = "/api/placeholder/64/64";
-
-// ❌ BROKEN - relative paths serve nothing
-src = "/hero-image.png";
-src = "/avatar.png";
-src = "/images/product.jpg";
-
-// ❌ BROKEN - service is unreliable / blocked
-src = "https://via.placeholder.com/300";
-src = "https://placehold.co/300x200";
-src = "https://picsum.photos/200";
-```
-
-**Rule**: If you cannot think of a real Unsplash URL for the content, use one of these known-good fallbacks:
-
-| Use case              | URL                                                                       |
-| --------------------- | ------------------------------------------------------------------------- |
-| Person / avatar       | `https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&q=80` |
-| Nature / landscape    | `https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80` |
-| City / architecture   | `https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=800&q=80` |
-| Food                  | `https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&q=80` |
-| Technology            | `https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80` |
-| Abstract / background | `https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&q=80`    |
-
----
-
 ## Styling Rules
 
 ### Use Semantic Color Tokens
@@ -752,61 +611,219 @@ export default function LoginScreen({ onTransition }: LoginScreenProps) {
 
 ---
 
-## Key Takeaways
+## Essential Patterns
 
-1. **Always import UI components** from `@/components/ui/*`
-2. **ALWAYS define helper components inline** - inside the screen function, NOT as separate imports
-3. **NEVER import from relative paths** - no `./components/*` or `../components/*` imports
-4. **Keep everything in ONE single file** - all helper components must be defined inline
-5. **Use semantic color tokens** (`bg-primary`, not `bg-blue-500`)
-6. **Create responsive layouts** with Tailwind breakpoints
-7. **Implement transitions** using the `onTransition` prop
-8. **Output pure TypeScript** - no markdown, no explanations
-9. **ALL images must use real Unsplash URLs** - never `/api/placeholder/...` or relative paths
+These patterns must be applied consistently. They are the difference between a screen that renders correctly and one that breaks.
 
-Following these rules ensures:
+### 1. Rendering Icons from Object Properties
 
-- ✅ Zero "component not found" errors
-- ✅ Single file per screen (no scattered component files)
-- ✅ Consistent component behavior
-- ✅ High-quality, professional UIs
-- ✅ Smaller file sizes
-- ✅ Matches v0/Lovable architecture
+When an icon is stored as a property on a data object, always assign it to a capitalized variable before using it as a JSX component. React treats lowercase JSX tags as HTML elements — they will silently not render.
+
+```typescript
+// Data with icon references
+const features = [
+  { icon: Star, label: "Top Rated" },
+  { icon: Shield, label: "Secure" },
+];
+
+// Correct rendering pattern
+{
+  features.map((feature, index) => {
+    const Icon = feature.icon; // ← capital I, must be uppercase
+    return (
+      <div key={index} className="flex items-center gap-2">
+        <Icon className="h-5 w-5" />
+        <span>{feature.label}</span>
+      </div>
+    );
+  });
+}
+```
+
+### 2. Map Rendering — Always Use Item Data, Never Index as Content
+
+The `index` parameter in `.map()` is for `key` only — never render it as visible content. Every value displayed inside a `.map()` must come from the item object itself.
+
+```typescript
+// ❌ WRONG — renders bare numbers: 0, 1, 2...
+{
+  order.items.map((item, index) => <div key={index}>{index}</div>);
+}
+
+// ❌ WRONG — even when trying to show a count, index ≠ quantity
+{
+  items.map((item, i) => (
+    <span key={i}>{i}</span> // shows 0 1 2, not actual data
+  ));
+}
+
+// ✅ Correct: always render a property of the item
+{
+  items.map((item, index) => <Badge key={index}>{item.label}</Badge>);
+}
+
+// ✅ Correct: order history with real item data
+{
+  order.items.map((item) => (
+    <div key={item.id} className="flex justify-between">
+      <span>{item.name}</span>
+      <span>x{item.quantity}</span>
+    </div>
+  ));
+}
+```
+
+This applies especially to **nested maps** — for example, order cards showing item lists, or gallery grids showing tag pills. Every level of `.map()` must render item properties, not the loop counter.
+
+### 3. Mobile-First Headline Sizing
+
+Start from a size that fits on the smallest viewport, then scale up. A headline that starts at `text-4xl` will clip or wrap badly on mobile.
+
+```typescript
+// Headlines — start small, scale up
+<h1 className="text-2xl md:text-4xl lg:text-5xl font-bold leading-tight">
+  Your Headline
+</h1>
+
+// Sub-headlines
+<h2 className="text-lg md:text-2xl font-semibold">
+  Section Title
+</h2>
+```
+
+### 4. Sticky Headers (Preferred Over Fixed)
+
+For screen headers that stay visible during scroll, use `sticky` instead of `fixed`. Sticky respects the scroll container and works correctly in preview iframes. Only use `fixed` when you explicitly need viewport-level anchoring.
+
+```typescript
+// Preferred: sticky header
+<header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b">
+  {/* header content */}
+</header>
+
+// When fixed bottom bar is needed, compensate with padding on the scroll container
+<main className="pb-20 overflow-y-auto">  {/* pb matches bar height */}
+  {/* scrollable content */}
+</main>
+<nav className="fixed bottom-0 left-0 right-0 h-20 bg-background border-t">
+  {/* bottom nav */}
+</nav>
+```
+
+### 5. Equal Heights in Horizontal Scroll Lists
+
+Items in a `flex overflow-x-auto` row need explicit equal heights so all cards are the same size. Without this, the first card often renders shorter than the rest.
+
+```typescript
+<div className="flex gap-3 overflow-x-auto pb-2">
+  {items.map((item, index) => (
+    <div key={index} className="flex-shrink-0 w-28 h-36">
+      {" "}
+      {/* explicit height */}
+      <Card className="h-full">
+        <CardContent className="h-full flex flex-col items-center justify-center gap-2 p-3">
+          <span className="text-2xl">{item.icon}</span>
+          <span className="text-sm font-medium">{item.label}</span>
+        </CardContent>
+      </Card>
+    </div>
+  ))}
+</div>
+```
+
+### 6. Stat/Metric Cards — Centered Content
+
+When displaying metric cards in a grid (weather stats, nutrition facts, etc.), give cards consistent height and center content both horizontally and vertically.
+
+```typescript
+<div className="grid grid-cols-2 gap-3 items-stretch">
+  {metrics.map((metric, index) => {
+    const Icon = metric.icon;
+    return (
+      <Card key={index} className="h-full">
+        <CardContent className="h-full flex flex-col items-center justify-center gap-2 p-4">
+          <Icon className="h-5 w-5 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground uppercase tracking-wide">
+            {metric.label}
+          </span>
+          <span className="text-xl font-semibold">{metric.value}</span>
+        </CardContent>
+      </Card>
+    );
+  })}
+</div>
+```
+
+### 7. Image Containers Always Need a Background Fallback
+
+When rendering images, always give the container a fallback background color. This ensures the layout holds its shape while the image loads or if it fails to load. Also wrap images in their container element with proper sizing classes so the image slot is always visible.
+
+```typescript
+// Give every image container a fallback background
+<div className="w-full h-48 bg-muted rounded-lg overflow-hidden">
+  <img
+    src={imageUrl}
+    alt={altText}
+    className="w-full h-full object-cover"
+  />
+</div>
+
+// Avatar with fallback
+<div className="w-10 h-10 rounded-full bg-muted overflow-hidden flex-shrink-0">
+  <img src={avatarUrl} alt={name} className="w-full h-full object-cover" />
+</div>
+```
+
+### 8. Scroll Events — Attach to Window, Not a Div
+
+`onScroll` on a regular `<div>` only fires when that div is the scroll container. If the page itself scrolls, use `window.addEventListener` inside `useEffect`. For parallax or scroll-driven effects, always make the element a real scroll container with `h-screen overflow-y-auto`.
+
+```typescript
+// Correct: listen on window for page-level scroll
+useEffect(() => {
+  const handleScroll = () => {
+    setScrollY(window.scrollY)
+  }
+  window.addEventListener('scroll', handleScroll, { passive: true })
+  return () => window.removeEventListener('scroll', handleScroll)
+}, [])
+
+// Correct: make a div the actual scroll container
+<div
+  className="h-screen overflow-y-auto"
+  onScroll={(e) => setScrollY(e.currentTarget.scrollTop)}
+>
+  {/* scrollable content */}
+</div>
+```
 
 ---
 
-## CRITICAL FINAL REMINDERS
+## Key Takeaways
 
-🚨 **SINGLE FILE ONLY** 🚨
+1. **Always import UI components** from `@/components/ui/*`
+2. **Define helper components inline** - inside the screen function, not as separate imports
+3. **Keep everything in ONE single file** - all helper components defined inline
+4. **Use semantic color tokens** (`bg-primary`, not `bg-blue-500`)
+5. **Create responsive layouts** with Tailwind breakpoints — start mobile-first
+6. **Implement transitions** using the `onTransition` prop
+7. **Output pure TypeScript** - no markdown, no explanations
+8. **Images**: follow the image format instructions in your prompt (picsum URL or GENERATE: format)
 
-- Your output is ONLY the TypeScript code for ONE file
-- Do NOT create a JSON structure with multiple files
-- Do NOT import custom components from relative paths
-- Define ALL helper components inside the main screen function
+---
 
-🚨 **VALID COMPONENT NAMES ONLY** 🚨
+## Final Checklist
 
-- Component name: `LoginScreen`, `DashboardScreen`, `RecipeDetailsScreen`
-- NO hyphens: ❌ `Weather-Card` → ✅ `WeatherCard`
-- NO starting with numbers: ❌ `7DayCalendar` → ✅ `SevenDayCalendar`
-- NO special characters: ❌ `Product&Info` → ✅ `ProductInfo`
-- Remove ALL non-alphanumeric characters, use PascalCase, add "Screen" suffix
+Before submitting, verify:
 
-🚨 **ALLOWED IMPORTS ONLY** 🚨
-
-- ✅ `@/components/ui/*` (shadcn components)
-- ✅ `lucide-react` (icons)
-- ✅ `react` (hooks)
-- ❌ `./components/*` NEVER
-- ❌ `../components/*` NEVER
-- ❌ Any relative path imports NEVER
-
-🚨 **REAL IMAGE URLS ONLY** 🚨
-
-- ✅ `https://images.unsplash.com/photo-XXXXX?w=800&q=80`
-- ❌ `/api/placeholder/300/200` NEVER — this endpoint does not exist
-- ❌ `/avatar.png` or any relative path NEVER
-- ❌ `https://via.placeholder.com/...` NEVER
-- ❌ `https://picsum.photos/...` NEVER — unreliable
-
-Every `<img>`, `<AvatarImage>`, and `backgroundImage` must point to a real Unsplash URL.
+- Single `.tsx` file with one default export named `{ScreenName}Screen`
+- All imports from `@/components/ui/*`, `lucide-react`, or `react` only
+- All icons from data objects assigned to uppercase variable before use (`const Icon = item.icon`)
+- All `.map()` (at every nesting level) renders item properties — `{item.name}`, `{item.quantity}`, etc. — never the loop index `{i}` or `{index}`
+- Headlines use mobile-first sizing (`text-2xl md:text-4xl`)
+- Sticky headers; fixed bottom bars paired with matching `pb-{n}` on scroll container
+- Horizontal scroll lists have explicit equal heights on each item
+- Stat/metric card grids use `items-stretch` with `h-full justify-center` on content
+- All image containers have a `bg-muted` fallback background color
+- Scroll events use `window.addEventListener` unless the div is an explicit `h-screen overflow-y-auto` container
+- Images follow the image format specified in the prompt (picsum or GENERATE: format)
