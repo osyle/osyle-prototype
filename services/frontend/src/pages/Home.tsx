@@ -317,10 +317,8 @@ export default function Home() {
             p =>
               p.flow_mode === true &&
               p.flow_graph &&
-              p.flow_graph.screens &&
-              Array.isArray(p.flow_graph.screens) &&
-              p.flow_graph.screens.length > 0,
-          ) // Only show flow projects with generated flow graphs and screens
+              Array.isArray(p.flow_graph.screens),
+          ) // Show all flow projects — including in-progress ones without completed screens
           .map(p => ({
             project_id: p.project_id,
             name: p.name,

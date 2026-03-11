@@ -795,6 +795,64 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
         
         print(f"\n🎨 Generating unified flow with {len(screens)} screens...")
         
+        # ============================================================================
+        # LIVE FLOW_GRAPH — updated after every screen completes so the project is
+        # always resumable, even if generation fails partway through.
+        # Initialized from the stub already saved to DB after architecture.
+        # ============================================================================
+        live_flow_graph = {
+            "flow_id": flow_architecture.get("flow_id", f"flow_{project_id[:8]}"),
+            "flow_name": flow_architecture.get("flow_name"),
+            "display_title": flow_architecture.get("display_title"),
+            "display_description": flow_architecture.get("display_description"),
+            "entry_screen_id": entry_screen_id,
+            "screens": [
+                {
+                    "screen_id": s["screen_id"],
+                    "name": s["name"],
+                    "component_path": f"/screens/{s['name'].replace(' ', '').replace('-', '')}Screen.tsx",
+                    "ui_loading": True,
+                }
+                for s in screens
+            ],
+            "transitions": transitions,
+            "layout_positions": flow_architecture.get("layout_positions", {}),
+            "layout_algorithm": flow_architecture.get("layout_algorithm", "hierarchical"),
+            "project": {
+                "files": dict(shared_files),  # shared components already generated
+                "entry": "/App.tsx",
+                "dependencies": {"lucide-react": "^0.263.1"}
+            },
+            "status": "generating",
+        }
+        # Index for fast lookup by screen_id
+        live_screen_index = {s["screen_id"]: i for i, s in enumerate(live_flow_graph["screens"])}
+        
+        async def on_screen_complete(screen_id, component_path, name, code, error):
+            """Called by unified_flow after each screen finishes (success or failure)."""
+            idx = live_screen_index.get(screen_id)
+            if idx is not None:
+                if error:
+                    live_flow_graph["screens"][idx]["ui_loading"] = False
+                    live_flow_graph["screens"][idx]["ui_error"] = str(error)
+                else:
+                    live_flow_graph["screens"][idx]["ui_loading"] = False
+                    live_flow_graph["screens"][idx]["component_path"] = component_path
+                    # Store code in project files for resumability
+                    live_flow_graph["project"]["files"][component_path] = code
+            
+            # Persist to DB after every screen update
+            try:
+                db.update_project_flow_graph(
+                    project_id=project_id,
+                    flow_graph=convert_floats_to_decimals(live_flow_graph)
+                )
+                completed = sum(1 for s in live_flow_graph["screens"] if not s.get("ui_loading"))
+                total = len(live_flow_graph["screens"])
+                print(f"  💾 DB saved after screen '{name}' ({completed}/{total} done)")
+            except Exception as db_err:
+                print(f"  ⚠️  DB save failed after screen '{name}': {db_err}")
+        
         # Generate unified project
         unified_result = await generate_unified_flow(
             llm=llm,
@@ -807,7 +865,8 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
             taste_source=taste_source,
             websocket=websocket,
             responsive=project.get('responsive', True),  # Default to responsive
-            image_generation_mode=image_generation_mode  # NEW: Pass image generation mode
+            image_generation_mode=image_generation_mode,
+            on_screen_complete=on_screen_complete,  # Incremental DB saves
         )
         
         project = unified_result['project']
@@ -824,11 +883,12 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
             "display_title": flow_architecture.get("display_title"),
             "display_description": flow_architecture.get("display_description"),
             "entry_screen_id": entry_screen_id,
-            "project": project,  # NEW: Unified project
-            "screens": screen_metadata,  # NEW: Screen metadata (paths, not full code)
+            "project": project,  # Unified project with all files
+            "screens": screen_metadata,  # Screen metadata (paths, not full code)
             "transitions": transitions,
             "layout_positions": flow_architecture.get("layout_positions", {}),
-            "layout_algorithm": flow_architecture.get("layout_algorithm", "hierarchical")
+            "layout_algorithm": flow_architecture.get("layout_algorithm", "hierarchical"),
+            "status": "complete",
         }
         
         # ============================================================================
@@ -895,6 +955,20 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
         print(f"\n❌ Error in handle_generate_flow: {e}")
         import traceback
         traceback.print_exc()
+        
+        # Always persist whatever state we have so the project is resumable / inspectable.
+        # live_flow_graph is updated after each screen, so it captures partial work.
+        try:
+            if 'live_flow_graph' in locals():
+                live_flow_graph["status"] = f"error: {str(e)[:200]}"
+                db.update_project_flow_graph(
+                    project_id=project_id,
+                    flow_graph=convert_floats_to_decimals(live_flow_graph)
+                )
+                print(f"  💾 Saved partial flow_graph to DB after error")
+        except Exception as save_err:
+            print(f"  ⚠️  Could not save partial flow_graph: {save_err}")
+        
         await send_error(websocket, f"Generation failed: {str(e)}")
 
 

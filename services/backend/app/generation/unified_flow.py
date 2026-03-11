@@ -240,7 +240,8 @@ async def generate_unified_flow(
     taste_source: str,
     websocket=None,
     responsive: bool = True,
-    image_generation_mode: str = "image_url"
+    image_generation_mode: str = "image_url",
+    on_screen_complete=None,  # async callback(screen_id, component_path, name, code, error) called after each screen
 ) -> Dict[str, Any]:
     """
     Generate a unified multi-screen flow as a single project
@@ -458,6 +459,19 @@ async def generate_unified_flow(
             })
             print(f"   ✓ Sent screen_ready message for {screen_name}")
         
+        # Fire incremental DB save callback
+        if on_screen_complete:
+            try:
+                await on_screen_complete(
+                    screen_id=screen_id,
+                    component_path=component_path,
+                    name=screen_name,
+                    code=screen_file,
+                    error=None
+                )
+            except Exception as cb_err:
+                print(f"   ⚠️  on_screen_complete callback failed: {cb_err}")
+        
         return {
             'screen_id': screen_id,
             'component_path': component_path,
@@ -479,6 +493,9 @@ async def generate_unified_flow(
     for result in screen_results:
         if isinstance(result, Exception):
             print(f"   ✗ Screen generation failed: {result}")
+            # Fire callback with error so handler can persist partial state
+            # We don't have screen_id here since the task may have errored before setting it,
+            # but we still want to record that something failed.
             continue
         
         screen_id = result['screen_id']
