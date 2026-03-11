@@ -16,6 +16,7 @@ import CodeViewer from '../components/editor/code/CodeViewer'
 import ConversationBar from '../components/editor/concept/areas/ConversationBar'
 import RightPanel from '../components/editor/concept/areas/RightPanel'
 
+import GenerationProgressBar from '../components/editor/concept/GenerationProgressBar'
 import ReactFlowCanvas from '../components/editor/concept/ReactFlowCanvas'
 import VersionHistory from '../components/editor/concept/VersionHistory'
 
@@ -750,9 +751,6 @@ export default function Editor() {
         onFlowArchitecture: flowArch => {
           console.log('✅ Flow architecture ready!')
 
-          // Keep modal visible and show "Generating screens" stage
-          setRethinkStage('screens')
-
           // Initialize project structure with router and empty screen files
           // Screens will be populated as they're generated
           const initialProject = {
@@ -782,10 +780,9 @@ export default function Editor() {
           }
           setFlowGraph(flowWithLoading)
 
-          // Dismiss modal after 1 second minimum (allows "Generating screens" to show)
-          setTimeout(() => {
-            setGenerationStage('complete')
-          }, 1000)
+          // Dismiss the generation overlay immediately — the progress bar
+          // now handles screen generation feedback
+          setGenerationStage('complete')
         },
         onSharedComponents: (files, dependencies) => {
           console.log('📦 Shared components received!')
@@ -1984,6 +1981,18 @@ export default function Editor() {
             </div>
           </div>
 
+          {/* Generation Progress Bar — visible while screens are loading */}
+          {flowGraph && flowGraph.screens.length > 0 && (
+            <GenerationProgressBar
+              totalScreens={flowGraph.screens.length}
+              completedScreens={
+                flowGraph.screens.filter(s => !s.ui_loading).length
+              }
+              isVisible={flowGraph.screens.some(s => s.ui_loading)}
+              isRightPanelCollapsed={isRightPanelCollapsed}
+            />
+          )}
+
           {/* Canvas Container - Different for Concept vs Code vs Prototype */}
           {activeTab === 'Code' ? (
             // Code mode - styled container matching Prototype tab
@@ -2778,10 +2787,8 @@ export default function Editor() {
                 </div>
               )}
 
-              {/* Stage 5: Flow & Screens (Combined) */}
-              {(rethinkStage === 'flow' ||
-                rethinkStage === 'screens' ||
-                rethinkStage === null) && (
+              {/* Stage 5: Flow Architecture */}
+              {rethinkStage === 'flow' && (
                 <div
                   key="flow"
                   className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
@@ -2857,17 +2864,13 @@ export default function Editor() {
                       className="text-xl font-semibold mb-2"
                       style={{ color: '#1F1F20' }}
                     >
-                      {rethinkStage === 'flow'
-                        ? 'Architecting flow'
-                        : 'Generating screens'}
+                      Architecting flow
                     </h3>
                     <p
                       className="text-sm leading-relaxed"
                       style={{ color: '#929397' }}
                     >
-                      {rethinkStage === 'flow'
-                        ? 'Creating flow structure and screen transitions...'
-                        : 'Bringing your design to life with beautiful UI...'}
+                      Creating flow structure and screen transitions...
                     </p>
                   </div>
 
