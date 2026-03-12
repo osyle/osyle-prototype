@@ -713,11 +713,8 @@ export default function Editor() {
       }
 
       const project = JSON.parse(currentProject)
-      setGenerationStage('generating')
-      // Set initial stage immediately so the overlay always shows a card —
-      // never a blank blurred background. The 'analyzing' card is generic enough
-      // to cover the WS connection delay + early BE stages (init, loading_dtm).
-      setRethinkStage('analyzing')
+      // Stay 'idle' (init modal visible) until BE sends a real stage —
+      // this covers the WS connect + early init/loading_dtm phases with no blank gap.
 
       console.log('🚀 Starting progressive flow generation...')
 
@@ -728,6 +725,7 @@ export default function Editor() {
 
           // Track rethink substages based on progress messages
           if (stage === 'rethinking') {
+            setGenerationStage('generating')
             if (message.includes('Analyzing') || message.includes('intent')) {
               setRethinkStage('analyzing')
             } else if (
@@ -746,15 +744,14 @@ export default function Editor() {
             ) {
               setRethinkStage('synthesizing')
             }
-          } else if (stage === 'init' || stage === 'loading_dtm') {
-            // Early BE stages before flow generation — keep analyzing card visible
-            setRethinkStage('analyzing')
           } else if (stage === 'generating_design_brief') {
+            setGenerationStage('generating')
             setRethinkStage('design_brief')
           } else if (stage === 'design_brief_ready') {
             // Brief is done — dismiss overlay and hand off to progress bar
             setGenerationStage('complete')
           } else if (stage === 'generating_flow') {
+            setGenerationStage('generating')
             setRethinkStage('flow')
           } else if (stage === 'generating_screen') {
             setRethinkStage('screens')
