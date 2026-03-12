@@ -233,8 +233,8 @@ export default function Editor() {
   // 5 tabs - Video pitch and Presentation disabled for now
   const tabs = [
     { name: 'Concept', enabled: true },
-    { name: 'Code', enabled: true },
     { name: 'Prototype', enabled: true },
+    { name: 'Code', enabled: true },
     { name: 'Video pitch', enabled: false },
     { name: 'Presentation', enabled: false },
   ]
@@ -273,7 +273,11 @@ export default function Editor() {
     if (hasInitialized.current) return
     hasInitialized.current = true
 
-    checkAndStartGeneration()
+    // Defer by one animation frame so the idle/init modal paints visibly
+    // before the async S3 check (and subsequent generation start) kicks off.
+    requestAnimationFrame(() => {
+      checkAndStartGeneration()
+    })
     loadInspirationImages()
   }, [])
 
@@ -710,6 +714,10 @@ export default function Editor() {
 
       const project = JSON.parse(currentProject)
       setGenerationStage('generating')
+      // Set initial stage immediately so the overlay always shows a card —
+      // never a blank blurred background. The 'analyzing' card is generic enough
+      // to cover the WS connection delay + early BE stages (init, loading_dtm).
+      setRethinkStage('analyzing')
 
       console.log('🚀 Starting progressive flow generation...')
 
@@ -738,6 +746,9 @@ export default function Editor() {
             ) {
               setRethinkStage('synthesizing')
             }
+          } else if (stage === 'init' || stage === 'loading_dtm') {
+            // Early BE stages before flow generation — keep analyzing card visible
+            setRethinkStage('analyzing')
           } else if (stage === 'generating_design_brief') {
             setRethinkStage('design_brief')
           } else if (stage === 'design_brief_ready') {
