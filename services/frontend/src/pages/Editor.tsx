@@ -2894,10 +2894,10 @@ export default function Editor() {
                       Shaping a visual direction
                     </h3>
                     <p
-                      className="text-xs leading-relaxed"
+                      className="text-sm leading-relaxed"
                       style={{ color: '#929397' }}
                     >
-                      Studying your taste to define mood, palette, and layout
+                      Studying your taste to define mood, palette, and
                       personality...
                     </p>
                   </div>

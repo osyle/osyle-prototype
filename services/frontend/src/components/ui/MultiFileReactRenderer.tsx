@@ -364,7 +364,8 @@ export default function MultiFileReactRenderer({
           if (
             msg.includes('Each child in a list should have a unique "key"') ||
             msg.includes('Warning: Failed prop type') ||
-            msg.includes('Warning: React does not recognize')
+            msg.includes('Warning: React does not recognize') ||
+            msg.includes('non-boolean attribute') // e.g. jsx={true} from generated code
           ) {
             return
           }
@@ -376,7 +377,8 @@ export default function MultiFileReactRenderer({
           if (
             msg.includes('Each child in a list should have a unique "key"') ||
             msg.includes('Warning: Failed prop type') ||
-            msg.includes('Warning: React does not recognize')
+            msg.includes('Warning: React does not recognize') ||
+            msg.includes('non-boolean attribute') // e.g. jsx={true} from generated code
           ) {
             return
           }
@@ -468,8 +470,19 @@ export default function MultiFileReactRenderer({
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script>
-    // Suppress all console warnings only
+    // Suppress noisy React warnings from generated code in the preview
     console.warn = function() {};
+    const __origError = console.error.bind(console);
+    console.error = function(...args) {
+      const msg = (args[0] || '').toString();
+      if (
+        msg.includes('non-boolean attribute') ||
+        msg.includes('React does not recognize') ||
+        msg.includes('Each child in a list should have a unique') ||
+        msg.includes('Warning: Failed prop type')
+      ) return;
+      __origError(...args);
+    };
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -690,7 +703,11 @@ export default function MultiFileReactRenderer({
         border: 'none',
         background: 'white',
       }}
-      sandbox="allow-scripts allow-same-origin"
+      // allow-same-origin is required for document.write() to work.
+      // The browser will warn about allow-scripts + allow-same-origin together,
+      // but that's unavoidable for a live React preview — the sandbox still prevents
+      // top-frame navigation and popups. allow-forms enables form elements in previews.
+      sandbox="allow-scripts allow-same-origin allow-forms"
       title="Preview"
     />
   )

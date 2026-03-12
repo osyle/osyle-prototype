@@ -112,6 +112,7 @@ async def generate_design_brief(
     dtm: Dict[str, Any],
     app_description: str,
     model: str = "claude-sonnet-4.5",
+    reference_images: List[Dict[str, Any]] = None,
 ) -> Optional[str]:
     """
     Generate a flow-level visual design brief.
@@ -125,6 +126,7 @@ async def generate_design_brief(
         dtm: Designer taste model
         app_description: Original user prompt / app description
         model: Model to use (Sonnet is fine here — brief is fast)
+        reference_images: Up to 3 base64-encoded resource images for visual style transfer
     
     Returns:
         Brief string, or None if generation fails (screens fall back gracefully)
@@ -141,7 +143,7 @@ async def generate_design_brief(
         flow_summary = _format_flow_summary(screens, app_description)
         taste_context = _format_dtm_personality(dtm)
         
-        user_message = f"""## Flow to Design
+        text_content = f"""## Flow to Design
 
 {flow_summary}
 
@@ -152,10 +154,34 @@ async def generate_design_brief(
 ---
 
 Generate a concise, opinionated design brief for this flow. Be specific — name exact choices (treatments, font pairings, color assignments, layout approach). The brief must give every screen a coherent creative direction."""
+
+        # Build multimodal message content
+        # Images come first so Claude sees them as the primary style reference
+        from app.llm.types import TextContent, ImageContent, Message, MessageRole
+        
+        if reference_images:
+            content_blocks = []
+            # Prefix text explaining the images
+            content_blocks.append(TextContent(
+                text=f"These are {len(reference_images)} actual design screenshot(s) from the designer's portfolio. "
+                     "Study them carefully — they are the ground truth of this designer's aesthetic. "
+                     "Your brief must produce UI that a viewer would immediately recognize as being from the same design hand.\n\n"
+            ))
+            for img in reference_images:
+                content_blocks.append(ImageContent(
+                    data=img["data"],
+                    media_type=img.get("media_type", "image/png"),
+                ))
+            content_blocks.append(TextContent(text="\n\n" + text_content))
+            
+            user_msg = Message(role=MessageRole.USER, content=content_blocks)
+            print(f"  📸 Including {len(reference_images)} reference image(s) in brief generation")
+        else:
+            user_msg = Message(role=MessageRole.USER, content=text_content)
         
         messages = [
             Message(role=MessageRole.SYSTEM, content=system_prompt),
-            Message(role=MessageRole.USER, content=user_message),
+            user_msg,
         ]
         
         response = await llm.generate(

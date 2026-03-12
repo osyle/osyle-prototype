@@ -703,6 +703,41 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
                 # Continue without DTM (will generate generic UI)
         
         # ============================================================================
+        # STEP 2.5: Load Reference Images for Visual Style Transfer
+        # Up to 3 resource images are sent alongside DTM/DTR in LLM calls so
+        # Claude can see the actual designs, not just textual token descriptions.
+        # ============================================================================
+        
+        reference_images = []
+        if selected_taste_id:
+            try:
+                import base64
+                import random
+                from app.core.storage import get_resource_image
+                
+                all_resources = db.list_resources_for_taste(selected_taste_id)
+                # Prefer selected resources; fall back to all resources
+                candidate_ids = (
+                    selected_resource_ids
+                    if selected_resource_ids
+                    else [r["resource_id"] for r in all_resources if "resource_id" in r]
+                )
+                # Pick up to 3 at random so we don't always bias toward the first resource
+                sample_ids = random.sample(candidate_ids, min(3, len(candidate_ids)))
+                
+                for resource_id in sample_ids:
+                    img_bytes = get_resource_image(user_id, selected_taste_id, resource_id)
+                    if img_bytes:
+                        reference_images.append({
+                            "data": base64.b64encode(img_bytes).decode("utf-8"),
+                            "media_type": "image/png",
+                        })
+                
+                print(f"  📸 Loaded {len(reference_images)}/{len(sample_ids)} reference images for style transfer")
+            except Exception as e:
+                print(f"  ⚠️  Could not load reference images (non-fatal): {e}")
+
+        # ============================================================================
         # STEP 3: Generate Flow Architecture
         # ============================================================================
         
@@ -867,6 +902,7 @@ async def handle_generate_flow(websocket: WebSocket, data: Dict[str, Any], user_
             responsive=project.get('responsive', True),  # Default to responsive
             image_generation_mode=image_generation_mode,
             on_screen_complete=on_screen_complete,  # Incremental DB saves
+            reference_images=reference_images,  # Visual style reference images
         )
         
         project = unified_result['project']

@@ -242,6 +242,7 @@ async def generate_unified_flow(
     responsive: bool = True,
     image_generation_mode: str = "image_url",
     on_screen_complete=None,  # async callback(screen_id, component_path, name, code, error) called after each screen
+    reference_images: List[Dict[str, Any]] = None,  # Up to 3 base64 resource images for visual style transfer
 ) -> Dict[str, Any]:
     """
     Generate a unified multi-screen flow as a single project
@@ -319,6 +320,7 @@ async def generate_unified_flow(
         dtm=dtm,
         app_description=description_for_brief,
         model='claude-sonnet-4.5',
+        reference_images=reference_images or [],
     )
     
     if websocket:
@@ -419,6 +421,7 @@ async def generate_unified_flow(
             image_generation_mode=image_generation_mode,
             design_brief=design_brief,    # Flow-level creative direction
             thinking_budget=8000,          # Extended thinking for design quality
+            reference_images=reference_images or [],  # Visual style reference
         )
         
         # Extract the screen component code

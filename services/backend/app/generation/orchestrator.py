@@ -11,7 +11,7 @@ from typing import Dict, Any, List, Optional
 import json
 import re
 
-from app.llm.types import Message, MessageRole, GenerationConfig
+from app.llm.types import Message, MessageRole, GenerationConfig, TextContent, ImageContent
 from app.llm.config import get_config
 from app.generation.parametric import ParametricGenerator
 from app.generation.prompt_assembler import PromptAssembler
@@ -55,6 +55,7 @@ class GenerationOrchestrator:
         image_generation_mode: str = "image_url",
         design_brief: Optional[str] = None,       # NEW: pre-generated flow design brief
         thinking_budget: int = 8000,               # NEW: extended thinking token budget (0 = disabled)
+        reference_images: List[Dict[str, Any]] = None,  # NEW: up to 3 base64 resource images
     ) -> Dict[str, Any]:
         """
         Generate UI with PROGRESSIVE STREAMING and 4-layer taste constraints.
@@ -124,9 +125,28 @@ class GenerationOrchestrator:
         print(f"Responsive: {responsive}")
         print(f"Design brief: {'✓ injected' if design_brief else '✗ none'}")
         print(f"Extended thinking: {'✓ ' + str(thinking_budget) + ' tokens' if thinking_budget > 0 else '✗ disabled'}")
+        print(f"Reference images: {'✓ ' + str(len(reference_images)) + ' image(s)' if reference_images else '✗ none'}")
         print(f"Prompt length: {len(prompt)} chars")
         print(f"Streaming: {websocket is not None}")
         print(f"{'='*70}\n")
+        
+        # Build LLM message — multimodal if reference images provided
+        if reference_images:
+            content_blocks = []
+            content_blocks.append(TextContent(
+                text=f"STYLE REFERENCE: The following {len(reference_images)} screenshot(s) are from the designer's "
+                     "actual portfolio. Your code must produce UI that visually matches this aesthetic — "
+                     "same color temperature, density, surface treatment, and typographic personality.\n\n"
+            ))
+            for img in reference_images:
+                content_blocks.append(ImageContent(
+                    data=img["data"],
+                    media_type=img.get("media_type", "image/png"),
+                ))
+            content_blocks.append(TextContent(text="\n\n" + prompt))
+            user_message = Message(role=MessageRole.USER, content=content_blocks)
+        else:
+            user_message = Message(role=MessageRole.USER, content=prompt)
         
         # Single generation attempt - no retries
         buffer = ""
@@ -138,7 +158,7 @@ class GenerationOrchestrator:
             # Extended thinking: requires temperature=1, yields only text chunks (thinking blocks are filtered)
             stream = self.llm.generate_stream(
                 model=model,
-                messages=[Message(role=MessageRole.USER, content=prompt)],
+                messages=[user_message],
                 max_tokens=16000,
                 temperature=1.0 if thinking_budget > 0 else 0.7,
                 thinking_budget=thinking_budget,

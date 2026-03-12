@@ -199,9 +199,17 @@ export default function ReactFlowCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(visibleEdges)
 
+  // Track the last nodes we synced so we don't call setNodes on every render.
+  // useMemo stabilizes initialNodes by value, but React Flow's internal setState
+  // can trigger re-renders that would otherwise loop back through this effect.
+  const prevInitialNodesRef = React.useRef<Node[]>(initialNodes)
+
   // Update nodes when flowGraph or other props change
   useEffect(() => {
-    setNodes(initialNodes)
+    if (prevInitialNodesRef.current !== initialNodes) {
+      prevInitialNodesRef.current = initialNodes
+      setNodes(initialNodes)
+    }
   }, [initialNodes, setNodes])
 
   // Swap visible edges whenever selection or transitions change
