@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import * as LucideReact from 'lucide-react'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import * as ReactRouterDOM from 'react-router-dom'
 
 declare global {
@@ -72,6 +72,13 @@ export default function MultiFileReactRenderer({
   const [isTailwindReady, setIsTailwindReady] = useState(false)
   const [DirectComponent, setDirectComponent] =
     useState<React.ComponentType | null>(null)
+
+  // Stabilize entryProps: a new `{}` literal on every render would cause the
+  // heavy compilation useEffect to re-run on every render cycle, triggering
+  // "Maximum update depth exceeded" via setDirectComponent -> re-render -> new {} -> repeat.
+  const entryPropsKey = JSON.stringify(entryProps)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stableEntryProps = useMemo(() => entryProps, [entryPropsKey])
 
   // Suppress all console warnings only
   useEffect(() => {
@@ -561,7 +568,7 @@ export default function MultiFileReactRenderer({
       return inputs.filter(Boolean).join(' ');
     };
     
-    window.__entryProps = ${JSON.stringify(entryProps)};
+    window.__entryProps = ${JSON.stringify(stableEntryProps)};
     
     ${moduleLoader}
     
@@ -612,7 +619,7 @@ export default function MultiFileReactRenderer({
   }, [
     files,
     entry,
-    entryProps,
+    stableEntryProps,
     dependencies,
     isReady,
     isConceptMode,
