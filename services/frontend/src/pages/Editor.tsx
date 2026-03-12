@@ -51,6 +51,7 @@ type RethinkStage =
   | 'exploring'
   | 'synthesizing'
   | 'flow'
+  | 'design_brief'
   | 'screens'
   | null
 
@@ -737,6 +738,11 @@ export default function Editor() {
             ) {
               setRethinkStage('synthesizing')
             }
+          } else if (stage === 'generating_design_brief') {
+            setRethinkStage('design_brief')
+          } else if (stage === 'design_brief_ready') {
+            // Brief is done — dismiss overlay and hand off to progress bar
+            setGenerationStage('complete')
           } else if (stage === 'generating_flow') {
             setRethinkStage('flow')
           } else if (stage === 'generating_screen') {
@@ -780,9 +786,10 @@ export default function Editor() {
           }
           setFlowGraph(flowWithLoading)
 
-          // Dismiss the generation overlay immediately — the progress bar
-          // now handles screen generation feedback
-          setGenerationStage('complete')
+          // Keep overlay alive — design brief generation runs next.
+          // The overlay will be dismissed when 'design_brief_ready' arrives.
+          // (If USE_SLIM_PROMPTS is off, it dismisses on first ui_checkpoint instead)
+          setRethinkStage('design_brief')
         },
         onSharedComponents: (files, dependencies) => {
           console.log('📦 Shared components received!')
@@ -815,6 +822,12 @@ export default function Editor() {
         },
         onUICheckpoint: (screenId, uiCode, checkpointNumber) => {
           console.log(`📍 Checkpoint ${checkpointNumber} for ${screenId}`)
+
+          // Safety fallback: if overlay is still up (design_brief_ready never fired,
+          // e.g. slim prompts disabled), dismiss it now that screens are streaming in
+          setGenerationStage(prev =>
+            prev === 'generating' ? 'complete' : prev,
+          )
 
           // Validate checkpoint before storing
           const isValid = validateCheckpointCode(uiCode)
@@ -2784,6 +2797,132 @@ export default function Editor() {
                       />
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Stage: Design Brief */}
+              {rethinkStage === 'design_brief' && (
+                <div
+                  key="design_brief"
+                  className="rounded-3xl p-8 flex flex-col items-center gap-6 animate-modal-in"
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+                    maxWidth: '420px',
+                    width: '90%',
+                  }}
+                >
+                  <div className="relative w-32 h-32 flex items-center justify-center">
+                    {/* Center palette icon */}
+                    <div
+                      className="absolute inset-0 flex items-center justify-center"
+                      style={{
+                        animation: 'pulse-slow 3s ease-in-out infinite',
+                      }}
+                    >
+                      <div
+                        className="w-20 h-20 rounded-full flex items-center justify-center"
+                        style={{
+                          background:
+                            'linear-gradient(135deg, #FF9A56 0%, #FF6B35 100%)',
+                          boxShadow: '0 8px 32px rgba(255, 107, 53, 0.4)',
+                        }}
+                      >
+                        <svg
+                          width="38"
+                          height="38"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="white"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <circle cx="13.5" cy="6.5" r=".5" fill="white" />
+                          <circle cx="17.5" cy="10.5" r=".5" fill="white" />
+                          <circle cx="8.5" cy="7.5" r=".5" fill="white" />
+                          <circle cx="6.5" cy="12.5" r=".5" fill="white" />
+                          <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    {/* Floating color swatches orbiting the center */}
+                    {[
+                      { color: '#FF6B35', delay: '0s', angle: 0 },
+                      { color: '#4FACFE', delay: '0.4s', angle: 72 },
+                      { color: '#10B981', delay: '0.8s', angle: 144 },
+                      { color: '#A18AFF', delay: '1.2s', angle: 216 },
+                      { color: '#FFD700', delay: '1.6s', angle: 288 },
+                    ].map((swatch, i) => {
+                      const rad = swatch.angle * (Math.PI / 180)
+                      const x = Math.cos(rad) * 52
+                      const y = Math.sin(rad) * 52
+                      return (
+                        <div
+                          key={i}
+                          className="absolute w-4 h-4 rounded-full"
+                          style={{
+                            background: swatch.color,
+                            top: `calc(50% + ${y}px)`,
+                            left: `calc(50% + ${x}px)`,
+                            transform: 'translate(-50%, -50%)',
+                            animation: 'swatch-pulse 2.4s ease-in-out infinite',
+                            animationDelay: swatch.delay,
+                            boxShadow: `0 2px 8px ${swatch.color}80`,
+                          }}
+                        />
+                      )
+                    })}
+
+                    {/* Slow outer ring */}
+                    <div
+                      className="absolute inset-2"
+                      style={{
+                        border: '1.5px dashed rgba(255, 107, 53, 0.3)',
+                        borderRadius: '50%',
+                        animation: 'spin 8s linear infinite',
+                      }}
+                    />
+                  </div>
+
+                  <div className="text-center">
+                    <h3
+                      className="text-xl font-semibold mb-2"
+                      style={{ color: '#1F1F20' }}
+                    >
+                      Shaping a visual direction
+                    </h3>
+                    <p
+                      className="text-xs leading-relaxed"
+                      style={{ color: '#929397' }}
+                    >
+                      Studying your taste to define mood, palette, and layout
+                      personality...
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {[0, 1, 2].map(i => (
+                      <div
+                        key={i}
+                        className="w-2 h-2 rounded-full"
+                        style={{
+                          background:
+                            'linear-gradient(135deg, #FF9A56 0%, #FF6B35 100%)',
+                          animation: 'bounce 1.4s ease-in-out infinite',
+                          animationDelay: `${i * 0.2}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  <style>{`
+                    @keyframes swatch-pulse {
+                      0%, 100% { transform: translate(-50%, -50%) scale(0.85); opacity: 0.7; }
+                      50% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+                    }
+                  `}</style>
                 </div>
               )}
 

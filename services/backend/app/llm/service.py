@@ -183,6 +183,7 @@ class LLMService:
         max_tokens: int = 4096,
         temperature: float = 1.0,
         enable_caching: bool = False,
+        thinking_budget: int = 0,  # NEW: extended thinking token budget (0 = disabled)
         **kwargs
     ) -> AsyncGenerator[str, None]:
         """
@@ -194,6 +195,7 @@ class LLMService:
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature
             enable_caching: Enable prompt caching
+            thinking_budget: If > 0, enable extended thinking with this token budget
             **kwargs: Additional parameters
             
         Yields:
@@ -210,6 +212,13 @@ class LLMService:
         
         if enable_caching:
             config.cache_config = CacheConfig(enabled=True)
+        
+        # Wire extended thinking if budget provided
+        if thinking_budget > 0:
+            config.reasoning_config = ReasoningConfig(
+                enabled=True,
+                budget=thinking_budget
+            )
         
         # Get provider
         provider = self.factory.get_provider_for_model(model)

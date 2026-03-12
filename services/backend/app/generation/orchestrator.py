@@ -51,8 +51,10 @@ class GenerationOrchestrator:
         websocket=None,
         screen_id: str = None,
         screen_name: str = None,
-        responsive: bool = True,  # NEW: Enable responsive design (default True)
-        image_generation_mode: str = "image_url"  # NEW: "ai" or "image_url"
+        responsive: bool = True,
+        image_generation_mode: str = "image_url",
+        design_brief: Optional[str] = None,       # NEW: pre-generated flow design brief
+        thinking_budget: int = 8000,               # NEW: extended thinking token budget (0 = disabled)
     ) -> Dict[str, Any]:
         """
         Generate UI with PROGRESSIVE STREAMING and 4-layer taste constraints.
@@ -107,18 +109,21 @@ class GenerationOrchestrator:
             flow_context=flow_context,
             mode="default",
             model=model,
-            responsive=responsive,  # Pass responsive flag
-            image_generation_mode=image_generation_mode  # Pass image generation mode
+            responsive=responsive,
+            image_generation_mode=image_generation_mode,
+            design_brief=design_brief,  # Inject flow-level design brief
         )
         
         print(f"\n{'='*70}")
-        print(f"GENERATING UI - NEW 4-LAYER TASTE SYSTEM")
+        print(f"GENERATING UI - IMPROVED PIPELINE")
         print(f"{'='*70}")
         print(f"Task: {task_description[:100]}...")
         print(f"Taste source: {taste_source}")
         print(f"Device: {device_info.get('screen', {}).get('width')}x{device_info.get('screen', {}).get('height')}px")
         print(f"Model: {model}")
         print(f"Responsive: {responsive}")
+        print(f"Design brief: {'✓ injected' if design_brief else '✗ none'}")
+        print(f"Extended thinking: {'✓ ' + str(thinking_budget) + ' tokens' if thinking_budget > 0 else '✗ disabled'}")
         print(f"Prompt length: {len(prompt)} chars")
         print(f"Streaming: {websocket is not None}")
         print(f"{'='*70}\n")
@@ -130,11 +135,13 @@ class GenerationOrchestrator:
         
         try:
             # Use LLM service with streaming support
+            # Extended thinking: requires temperature=1, yields only text chunks (thinking blocks are filtered)
             stream = self.llm.generate_stream(
                 model=model,
                 messages=[Message(role=MessageRole.USER, content=prompt)],
                 max_tokens=16000,
-                temperature=0.7,
+                temperature=1.0 if thinking_budget > 0 else 0.7,
+                thinking_budget=thinking_budget,
             )
             
             async for chunk in stream:

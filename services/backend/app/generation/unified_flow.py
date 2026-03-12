@@ -284,6 +284,7 @@ async def generate_unified_flow(
     """
     
     from app.generation.orchestrator import GenerationOrchestrator
+    from app.generation.design_brief_generator import generate_design_brief
     
     print("\n" + "="*80)
     print("UNIFIED FLOW GENERATION - FIXED VERSION")
@@ -296,6 +297,36 @@ async def generate_unified_flow(
     print("📦 Step 1: Generating shared components...")
     shared_files = generate_shared_components()
     print(f"   ✓ Generated {len(shared_files)} shared files")
+    
+    # Step 1.5: Generate flow-level design brief (runs ONCE, all screens inherit it)
+    # This is the "WHY" call — establishes creative direction before the "HOW" (code) calls
+    print(f"\n🎨 Step 1.5: Generating flow design brief...")
+    if websocket:
+        await websocket.send_json({
+            "type": "progress",
+            "stage": "generating_design_brief",
+            "message": "Developing a creative direction for your design..."
+        })
+    
+    app_description = screens[0].get('app_description', '') if screens else ''
+    # Try to extract original description from first screen's context, or use flow name
+    flow_name = screens[0].get('flow_name', 'the application') if screens else 'the application'
+    description_for_brief = app_description or flow_name
+    
+    design_brief = await generate_design_brief(
+        llm=llm,
+        screens=screens,
+        dtm=dtm,
+        app_description=description_for_brief,
+        model='claude-sonnet-4.5',
+    )
+    
+    if websocket:
+        await websocket.send_json({
+            "type": "progress",
+            "stage": "design_brief_ready",
+            "message": "Creative direction established"
+        })
     
     # Step 2: Generate screen components in parallel
     print(f"\n🎨 Step 2: Generating {len(screens)} screen components in parallel...")
@@ -384,8 +415,10 @@ async def generate_unified_flow(
             websocket=None,  # Don't send checkpoint updates (causes too many messages)
             screen_id=screen_id,
             screen_name=screen_name,
-            responsive=responsive,  # Pass responsive flag
-            image_generation_mode=image_generation_mode  # Pass image generation mode
+            responsive=responsive,
+            image_generation_mode=image_generation_mode,
+            design_brief=design_brief,    # Flow-level creative direction
+            thinking_budget=8000,          # Extended thinking for design quality
         )
         
         # Extract the screen component code

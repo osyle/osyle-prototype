@@ -199,11 +199,9 @@ class AnthropicProvider(BaseLLMProvider):
                 kwargs["tool_choice"] = config.tool_config.tool_choice
         
         # Extended thinking (reasoning)
+        # Note: Claude 4+ models (claude-sonnet-4.5, claude-opus-4.5, etc.) support
+        # extended thinking natively — no beta header required.
         if config.reasoning_config and config.reasoning_config.enabled:
-            if "extra_headers" not in kwargs:
-                kwargs["extra_headers"] = {}
-            kwargs["extra_headers"]["anthropic-beta"] = "extended-thinking-2025-01-08"
-            
             thinking_config = {"type": "enabled"}
             if config.reasoning_config.budget:
                 thinking_config["budget_tokens"] = config.reasoning_config.budget

@@ -45,6 +45,15 @@ class PromptAssembler:
         # Verify directory exists
         if not self.prompts_dir.exists():
             raise ValueError(f"Prompts directory not found: {self.prompts_dir}")
+        
+        # Read prompt mode from environment
+        # USE_SLIM_PROMPTS=slim -> creativity-first, low token budget, soft constraints
+        # USE_SLIM_PROMPTS=full (default) -> original verbose prompts, hard constraints
+        slim_env = os.environ.get("USE_SLIM_PROMPTS", "full").strip().lower()
+        self.use_slim_prompts = slim_env == "slim"
+        
+        print(f"  📝 PromptAssembler: {'SLIM' if self.use_slim_prompts else 'FULL'} prompt mode "
+              f"(USE_SLIM_PROMPTS={slim_env})")
     
     def assemble(
         self,
@@ -56,7 +65,8 @@ class PromptAssembler:
         mode: str = "default",
         model: str = "claude-sonnet-4.5",
         responsive: bool = True,
-        image_generation_mode: str = "image_url"
+        image_generation_mode: str = "image_url",
+        design_brief: Optional[str] = None,
     ) -> str:
         """
         Assemble complete generation prompt
@@ -84,21 +94,23 @@ class PromptAssembler:
             flow_context.get('mode') == 'screen_component'
         )
         
+        # Helper to pick between slim and full templates
+        def t(slim_path: str, full_path: str) -> str:
+            return slim_path if self.use_slim_prompts else full_path
+        
         # 1. Core role and rules
-        sections.append(self._load_template("core/role_and_rules.md"))
+        sections.append(self._load_template(t("core/role_and_rules_slim.md", "core/role_and_rules.md")))
         
         # 1.5 Screen component generation rules (if in screen component mode)
         if is_screen_component:
-            sections.append(self._load_template("flow/screen_component_generation.md"))
-            print("    📄 Mode: Screen component generation (unified flow)")
+            sections.append(self._load_template("flow/screen_component_generation_slim.md"))
+            print("    📄 Mode: Screen component generation (unified flow) — slim prompt")
         
-        # 2. Base design system (MANDATORY FOUNDATION)
-        # This ensures all UIs use shadcn/ui, Tailwind semantic tokens, etc.
-        # The designer's taste (step 5) will override these defaults where they differ
-        sections.append(self._load_template("core/base_design_system.md"))
+        # 2. Base design system
+        sections.append(self._load_template("core/base_design_system_slim.md"))
         
-        # 3. Design quality standards (ALWAYS included)
-        sections.append(self._load_template("core/design_quality.md"))
+        # 3. Design quality standards
+        sections.append(self._load_template(t("core/design_quality_slim.md", "core/design_quality.md")))
         
         # 3.5 Images & Media (conditional based on image generation mode)
         if image_generation_mode == "ai":
@@ -108,18 +120,23 @@ class PromptAssembler:
             sections.append(self._load_template("images/image_url_mode.md"))
             print("    🖼️  Image mode: Direct URLs (Unsplash Source)")
         
-        # 4. Responsive system (if enabled)
+        # 4. Responsive system — slim version (key principles only)
         if responsive:
-            sections.append(self._load_template("core/responsive_system.md"))
+            sections.append(self._load_template("core/responsive_system_slim.md"))
         
         # 5. Taste context (4-layer system)
-        # This OVERRIDES the base design system where the designer has preferences
+        # This informs the base design system with the designer's aesthetic vocabulary
         taste_context = self._format_taste_context(
             taste_data,
             taste_source,
             responsive=responsive
         )
         sections.append(taste_context)
+        
+        # 5.5 Design brief (if a pre-generated brief exists for this flow)
+        if design_brief:
+            sections.append(f"# FLOW DESIGN BRIEF\n\nThe following creative direction was established for this entire flow. Every screen must feel like it belongs to the same cohesive design:\n\n{design_brief}")
+            print("    🎨 Design brief injected")
         
         # 6. Task and constraints
         task_section = self._format_task(
@@ -132,7 +149,7 @@ class PromptAssembler:
         sections.append(task_section)
         
         # 7. Output structure
-        sections.append(self._load_template("core/output_structure.md"))
+        sections.append(self._load_template(t("core/output_structure_slim.md", "core/output_structure.md")))
         
         # 8. Mode-specific additions (if needed)
         if mode == "parametric":
@@ -222,19 +239,19 @@ class PromptAssembler:
 **EMPHASIS**: This represents the designer's overall aesthetic across all their work. Apply the consensus patterns and unified personality."""
     
     def _format_layer1_exact_tokens(self, exact_tokens: Dict[str, Any], responsive: bool = True) -> str:
-        """Format Layer 1: Hard constraints (exact tokens)"""
+        """Format Layer 1: Aesthetic reference tokens (soft style transfer)"""
         
         sections = []
-        sections.append("# LAYER 1: HARD CONSTRAINTS - ABSOLUTELY NON-NEGOTIABLE\n")
+        sections.append("# LAYER 1: DESIGNER'S AESTHETIC VOCABULARY\n")
         
         if responsive:
-            sections.append("These are EXACT tokens extracted from the designer's work. In **RESPONSIVE MODE**, you must MAINTAIN THE ESSENCE while adapting to viewport:\n")
-            sections.append("- **Colors**: Use exact hex values at ALL viewport sizes")
-            sections.append("- **Fonts**: Use exact families/weights at ALL sizes, scale sizes proportionally with responsive classes")
-            sections.append("- **Spacing**: Maintain quantum multiples, scale quantum with viewport (0.75x mobile, 1x tablet, 1.25x desktop)")
-            sections.append("- **Effects**: Same materials/shadows/radii at all viewport sizes\n")
+            sections.append("These tokens are extracted from the designer's actual work — their palette, typefaces, and spacing system. Treat them as **your starting point and aesthetic anchor**, not a rigid cage. Internalize the vocabulary, then apply it with design judgment:\n")
+            sections.append("- **Colors**: Default to these; deviate only when a specific UI need genuinely requires it")
+            sections.append("- **Fonts**: Use these families and weights; scale sizes fluidly with responsive classes")
+            sections.append("- **Spacing**: The quantum captures their rhythm — maintain multiples, scale with viewport")
+            sections.append("- **Effects**: These materials define the surface character of their work\n")
         else:
-            sections.append("These are EXACT tokens extracted from the designer's work. You are **FORBIDDEN** from using anything not explicitly listed here.\n")
+            sections.append("These tokens are extracted from the designer's actual work. Use them as your default vocabulary — they represent the aesthetic language you've internalized from studying their designs.\n")
         
         # Colors
         if "colors" in exact_tokens:
@@ -255,13 +272,13 @@ class PromptAssembler:
         return "\n\n".join(sections)
     
     def _format_colors(self, colors: Dict[str, Any]) -> str:
-        """Format color constraints"""
+        """Format color reference palette"""
         parts = []
-        parts.append("## Colors - ONLY USE THESE\n")
+        parts.append("## Color Palette — Designer's Reference\n")
         
         # Exact palette
         if "exact_palette" in colors:
-            parts.append("### Approved Color Palette\n")
+            parts.append("### Palette\n")
             for color in colors["exact_palette"]:
                 hex_val = color.get("hex", "")
                 role = color.get("role", "unknown")
@@ -276,26 +293,18 @@ class PromptAssembler:
         
         # Relationships
         if "relationships" in colors:
-            parts.append("### Color Relationships & Usage\n")
+            parts.append("### Color Relationships\n")
             parts.append(colors["relationships"])
             parts.append("")
         
-        # Critical rules
-        parts.append("**CRITICAL RULES**:")
-        parts.append("- ❌ FORBIDDEN: Any hex value not listed above")
-        parts.append("- ❌ FORBIDDEN: CSS color names (blue, red, green, etc.)")
-        parts.append("- ❌ FORBIDDEN: Creating new colors through mixing")
-        parts.append("- ✅ ALLOWED: Exact hex values from list above")
-        parts.append("- ✅ ALLOWED: Opacity variations of listed colors")
-        parts.append("")
-        parts.append("**Before using ANY color**: Verify it's in the approved list. If tempted to use unlisted color, STOP and use closest approved color instead.")
+        parts.append("**Guidance**: Default to this palette. When you reach for a color, start here — these are the designer's actual choices. Unlisted colors are fine when they serve a clear design purpose (e.g., a semantic status color), but the aesthetic anchor is this palette.")
         
         return "\n".join(parts)
     
     def _format_typography(self, typography: Dict[str, Any], responsive: bool = True) -> str:
-        """Format typography constraints"""
+        """Format typography reference"""
         parts = []
-        parts.append("## Typography - ONLY USE THESE\n")
+        parts.append("## Typography — Designer's Reference\n")
         
         # Font families
         if "families" in typography:
@@ -312,84 +321,48 @@ class PromptAssembler:
         # Font sizes
         if "sizes_used" in typography:
             sizes = typography["sizes_used"]
-            parts.append(f"### Font Sizes (px)\n")
+            parts.append(f"### Type Scale (px)\n")
             if responsive:
-                parts.append("**RESPONSIVE MODE**: These are BASE sizes. Scale proportionally:")
-                parts.append("- Mobile (< 640px): ~0.75-0.85x")
-                parts.append("- Desktop (> 1024px): ~1.0-1.15x")
+                parts.append("Scale proportionally across breakpoints:")
+                parts.append("- Mobile: ~0.75–0.85x; Desktop: ~1.0–1.15x")
                 parts.append("- Use responsive classes: `text-xl md:text-2xl lg:text-3xl`\n")
-            parts.append(f"Approved sizes: {', '.join(map(str, sorted(sizes)))}\n")
+            parts.append(f"Reference sizes: {', '.join(map(str, sorted(sizes)))}\n")
         
         # Scale metrics
         if "scale_metrics" in typography:
             metrics = typography["scale_metrics"]
             ratio = metrics.get("ratio_mean", 0)
-            consistency = metrics.get("ratio_consistency", 0)
-            
-            parts.append(f"### Type Scale")
-            parts.append(f"- Scale ratio: {ratio:.2f}")
-            parts.append(f"- Consistency: {consistency:.2f}")
-            if responsive:
-                parts.append("- **CRITICAL**: Maintain this ratio across ALL viewport sizes")
-            else:
-                parts.append("- This ratio MUST be maintained when choosing sizes")
-            parts.append("")
+            parts.append(f"### Type Scale Ratio: {ratio:.2f}")
+            parts.append("Maintain this ratio when choosing sizes for hierarchy.\n")
         
-        # Critical rules
-        parts.append("**CRITICAL RULES**:")
-        parts.append("- ❌ FORBIDDEN: Any font family not listed")
-        parts.append("- ❌ FORBIDDEN: Font weights not in approved list")
-        if responsive:
-            parts.append("- ⚠️  Font sizes: Scale proportionally with responsive classes")
-            parts.append("- ⚠️  Hierarchy ratios: MUST maintain at all viewport sizes")
-        else:
-            parts.append("- ❌ FORBIDDEN: Font sizes not in the scale")
-        parts.append("- ✅ ALLOWED: Only listed fonts, weights, and sizes")
+        parts.append("**Guidance**: These are the fonts and sizes this designer actually uses. Default to them — they carry the aesthetic voice of the design.")
         
         return "\n".join(parts)
     
     def _format_spacing(self, spacing: Dict[str, Any], responsive: bool = True) -> str:
-        """Format spacing constraints"""
+        """Format spacing reference"""
         parts = []
-        parts.append("## Spacing - ONLY USE THESE VALUES\n")
+        parts.append("## Spacing — Designer's Rhythm\n")
         
         # Quantum
         quantum = spacing.get("quantum", "4px")
-        parts.append(f"### Spacing Quantum\n")
-        parts.append(f"**Base quantum**: {quantum}\n")
+        parts.append(f"### Spacing Quantum: {quantum}\n")
         
         if responsive:
-            parts.append("\n**RESPONSIVE MODE - Quantum Scaling**:")
+            parts.append("Scale the quantum with viewport for fluid rhythm:")
             parts.append(f"- Mobile (< 640px): {quantum} × 0.75")
-            parts.append(f"- Tablet (640-1024px): {quantum} × 1.0 (base)")
+            parts.append(f"- Tablet (640–1024px): {quantum} × 1.0 (base)")
             parts.append(f"- Desktop (> 1024px): {quantum} × 1.25")
-            parts.append("\nAll spacing at each breakpoint MUST be multiples of the scaled quantum.")
             parts.append("Use responsive classes: `p-4 md:p-6 lg:p-8`\n")
         else:
-            parts.append("All spacing MUST be a multiple of this quantum.\n")
+            parts.append(f"All spacing should be multiples of this quantum.\n")
         
         # Scale
         if "scale" in spacing:
             scale = spacing["scale"]
-            parts.append(f"### Spacing Scale\n")
-            if responsive:
-                parts.append(f"Base scale (tablet): {', '.join(map(str, scale))} px\n")
-            else:
-                parts.append(f"Approved values (px): {', '.join(map(str, scale))}\n")
+            parts.append(f"### Reference Scale (px): {', '.join(map(str, scale))}\n")
         
-        # Critical rules
-        parts.append("**CRITICAL RULES**:")
-        if responsive:
-            parts.append("- ⚠️  Scale quantum with viewport (0.75x, 1x, 1.25x)")
-            parts.append("- ⚠️  Maintain quantum multiples at each breakpoint")
-            parts.append("- ✅ Use responsive classes: `p-4 md:p-6 lg:p-8`")
-            parts.append("- ❌ FORBIDDEN: Fixed pixel values that don't scale")
-        else:
-            parts.append("- ❌ FORBIDDEN: Values not in the scale (e.g., 10px, 15px if not listed)")
-            parts.append("- ❌ FORBIDDEN: Arbitrary spacing that breaks the quantum")
-            parts.append("- ✅ ALLOWED: Only values from the approved scale")
-        parts.append("")
-        parts.append("**Before using ANY spacing value**: Verify it maintains quantum multiples at each breakpoint.")
+        parts.append("**Guidance**: The quantum is the heartbeat of this designer's layouts — it creates the visual rhythm. Default to multiples of it. Deviating slightly for a specific layout need is fine; deviating freely loses the rhythm.")
         
         return "\n".join(parts)
     
