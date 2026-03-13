@@ -29,30 +29,26 @@ import api, { type ShareInboxItem } from '../../services/api'
 // ---------------------------------------------------------------------------
 
 function renderMarkdown(md: string): string {
-  // Escape HTML first
   const escaped = md
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
 
-  // Process line by line so bullets and paragraphs don't interfere
   const lines = escaped.split('\n')
   const output: string[] = []
   let inList = false
 
   for (const rawLine of lines) {
     const line = rawLine
-      // bold
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      // italic
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      // inline code
       .replace(
         /`([^`]+)`/g,
         '<code style="background:#F0EDEB;padding:1px 5px;border-radius:4px;font-size:0.88em">$1</code>',
       )
 
-    const bulletMatch = line.match(/^[-*]\s+(.+)$/)
+    // • bullets come from the modal's auto-convert (- + space → •)
+    const bulletMatch = line.match(/^•\s+(.+)$/)
 
     if (bulletMatch) {
       if (!inList) {
@@ -66,7 +62,6 @@ function renderMarkdown(md: string): string {
         inList = false
       }
       if (line.trim() === '') {
-        // blank line = paragraph break; skip — spacing comes from CSS margin
         output.push('<div style="height:6px"></div>')
       } else {
         output.push(`<p style="margin:0">${line}</p>`)

@@ -199,6 +199,65 @@ export default function ShareProjectModal({ isOpen, project, onClose }: Props) {
     [previewUrls],
   )
 
+  const handleDescriptionKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      const textarea = e.currentTarget
+      const { selectionStart, selectionEnd, value } = textarea
+
+      // --- Auto-convert "- " or "* " at start of line into a list item ---
+      if (e.key === ' ') {
+        const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1
+        const lineContent = value.slice(lineStart, selectionStart)
+
+        if (lineContent === '-' || lineContent === '*') {
+          e.preventDefault()
+          // Replace the bare "-" or "*" with "• " (visual bullet)
+          const newValue =
+            value.slice(0, lineStart) + '• ' + value.slice(selectionEnd)
+          setDescription(newValue)
+          // Move cursor after "• "
+          requestAnimationFrame(() => {
+            textarea.selectionStart = lineStart + 2
+            textarea.selectionEnd = lineStart + 2
+          })
+        }
+      }
+
+      // --- Press Enter on a bullet line → start next bullet ---
+      if (e.key === 'Enter') {
+        const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1
+        const lineContent = value.slice(lineStart, selectionStart)
+
+        if (lineContent.startsWith('• ')) {
+          // If line is just "• " (empty bullet), break out of list
+          if (lineContent === '• ') {
+            e.preventDefault()
+            const newValue =
+              value.slice(0, lineStart) + '\n' + value.slice(selectionEnd)
+            setDescription(newValue)
+            requestAnimationFrame(() => {
+              textarea.selectionStart = lineStart + 1
+              textarea.selectionEnd = lineStart + 1
+            })
+          } else {
+            // Continue the list on next line
+            e.preventDefault()
+            const newValue =
+              value.slice(0, selectionStart) +
+              '\n• ' +
+              value.slice(selectionEnd)
+            setDescription(newValue)
+            requestAnimationFrame(() => {
+              textarea.selectionStart = selectionStart + 3
+              textarea.selectionEnd = selectionStart + 3
+            })
+          }
+        }
+      }
+    },
+    [],
+  )
+
   const handleSend = async () => {
     if (!project || !recipientId) return
     setSendState('sending')
@@ -516,6 +575,7 @@ export default function ShareProjectModal({ isOpen, project, onClose }: Props) {
               placeholder={`Describe the issue or context…\n\n**Bug:** The button on the Home screen doesn't respond\n- Steps to reproduce\n- Expected vs actual behaviour`}
               value={description}
               onChange={e => setDescription(e.target.value)}
+              onKeyDown={handleDescriptionKeyDown}
               rows={6}
               style={{
                 width: '100%',
@@ -540,7 +600,27 @@ export default function ShareProjectModal({ isOpen, project, onClose }: Props) {
               }}
             />
             <p className="text-xs mt-1.5" style={{ color: '#AAAA9F' }}>
-              Tip: Use **bold**, *italic*, `code`, and - bullet points
+              Tip: Type{' '}
+              <code
+                style={{
+                  background: '#F0EDEB',
+                  padding: '1px 4px',
+                  borderRadius: 3,
+                }}
+              >
+                -
+              </code>{' '}
+              then space to start a bullet · <strong>**bold**</strong> ·{' '}
+              <em>*italic*</em> ·{' '}
+              <code
+                style={{
+                  background: '#F0EDEB',
+                  padding: '1px 4px',
+                  borderRadius: 3,
+                }}
+              >
+                `code`
+              </code>
             </p>
           </div>
 
