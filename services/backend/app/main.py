@@ -75,6 +75,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Relay CORS fix: CORSMiddleware strips headers for unrecognized origins (e.g. Figma's
+# null origin). This middleware runs *outside* CORSMiddleware and re-stamps the wildcard
+# header for /relay/* routes after CORSMiddleware has already processed the response.
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+
+class RelayCORSMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/relay/"):
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        return response
+
+app.add_middleware(RelayCORSMiddleware)
+
 # AWS Cognito configuration from environment
 REGION = os.getenv("AWS_REGION")
 USER_POOL_ID = os.getenv("USER_POOL_ID")
