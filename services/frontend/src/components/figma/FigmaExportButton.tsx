@@ -197,7 +197,7 @@ export default function FigmaExportButton({
           ? 'Sent!'
           : stage === 'error'
             ? 'Failed'
-            : 'Figma'
+            : 'Export'
 
   const showChevron = stage === 'idle' && screenCount > 1 && !!selectedScreenId
 
