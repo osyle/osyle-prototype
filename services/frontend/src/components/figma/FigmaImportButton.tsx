@@ -323,25 +323,6 @@ export default function FigmaImportButton({
         )}
 
         <span style={{ letterSpacing: '-0.01em' }}>{labelText}</span>
-
-        {/* Down arrow hint in idle state */}
-        {stage === 'idle' && (
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 10 10"
-            fill="none"
-            style={{ flexShrink: 0, opacity: 0.4 }}
-          >
-            <path
-              d="M2 3.5L5 6.5L8 3.5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        )}
       </div>
     </>
   )
