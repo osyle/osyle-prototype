@@ -77,7 +77,7 @@ if [ -n "$HTTP_API_ID" ]; then
     aws apigatewayv2 update-api \
         --api-id $HTTP_API_ID \
         --region $REGION \
-        --cors-configuration AllowOrigins="https://app.osyle.com","https://main.d1z1przwpoqpmu.amplifyapp.com","http://localhost:3000","http://localhost:5173",AllowMethods="GET","POST","PUT","PATCH","DELETE","OPTIONS",AllowHeaders="content-type","x-amz-date","authorization","x-api-key","x-amz-security-token",AllowCredentials=false,MaxAge=3600 \
+        --cli-input-json "{\"ApiId\":\"$HTTP_API_ID\",\"CorsConfiguration\":{\"AllowOrigins\":[\"*\"],\"AllowMethods\":[\"GET\",\"POST\",\"PUT\",\"PATCH\",\"DELETE\",\"OPTIONS\"],\"AllowHeaders\":[\"content-type\",\"x-amz-date\",\"authorization\",\"x-api-key\",\"x-amz-security-token\"],\"AllowCredentials\":false,\"MaxAge\":3600}}" \
         --no-cli-pager > /dev/null
     echo -e "${GREEN}✓ HTTP API Gateway CORS updated${NC}"
 else
@@ -105,7 +105,7 @@ echo -e "${BLUE}🔧 Updating Amplify environment variables...${NC}"
 aws amplify update-app \
     --app-id $AMPLIFY_APP_ID \
     --region $REGION \
-    --environment-variables VITE_API_URL=${VITE_API_URL},VITE_WS_URL=${VITE_WS_URL},VITE_AWS_REGION=${VITE_AWS_REGION},VITE_USER_POOL_ID=${VITE_USER_POOL_ID},VITE_USER_POOL_CLIENT_ID=${VITE_USER_POOL_CLIENT_ID},VITE_OAUTH_DOMAIN=${VITE_OAUTH_DOMAIN},VITE_REDIRECT_SIGNIN=${VITE_REDIRECT_SIGNIN},VITE_REDIRECT_SIGNOUT=${VITE_REDIRECT_SIGNOUT} \
+    --environment-variables VITE_API_URL=${VITE_API_URL},VITE_WS_URL=${VITE_WS_URL},VITE_AWS_REGION=${VITE_AWS_REGION},VITE_USER_POOL_ID=${VITE_USER_POOL_ID},VITE_USER_POOL_CLIENT_ID=${VITE_USER_POOL_CLIENT_ID},VITE_OAUTH_DOMAIN=${VITE_OAUTH_DOMAIN},VITE_REDIRECT_SIGNIN=${VITE_REDIRECT_SIGNIN},VITE_REDIRECT_SIGNOUT=${VITE_REDIRECT_SIGNOUT},VITE_RELAY_URL=${VITE_RELAY_URL} \
     --no-cli-pager > /dev/null
 
 echo -e "${GREEN}✓ Amplify environment variables updated${NC}"
