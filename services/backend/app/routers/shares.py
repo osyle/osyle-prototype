@@ -127,8 +127,8 @@ async def create_share(
         owner_id=recipient_id,
         name=project.get("name", "Shared Project"),
         task_description=project.get("task_description", ""),
-        selected_taste_id=None,          # Taste belongs to sender — not copied
-        selected_resource_ids=[],
+        selected_taste_id=project.get("selected_taste_id"),  # Forward from original
+        selected_resource_ids=project.get("selected_resource_ids", []),  # Forward from original
         inspiration_image_keys=[],       # Don't copy inspiration images
         device_info=project.get("device_info"),
         rendering_mode=project.get("rendering_mode", "react"),

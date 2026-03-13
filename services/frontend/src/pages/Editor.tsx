@@ -622,13 +622,6 @@ export default function Editor() {
         setScreenPositions(new Map(project.metadata.screenPositions))
       }
 
-      if (!project.selected_taste_id) {
-        setError('Project missing taste selection')
-        setGenerationStage('error')
-        console.error('Project data:', project)
-        return
-      }
-
       // ✅ FIX: Always try to load from S3 first to get the latest version
       // Don't trust localStorage as it might be stale after revert
       try {
@@ -693,6 +686,15 @@ export default function Editor() {
         const currentVersion = project.metadata?.flow_version || 1
         await loadConversationFromBackend(project.project_id, currentVersion)
 
+        return
+      }
+
+      // No existing flow — need to generate fresh.
+      // selected_taste_id is required for generation but not for loading.
+      if (!project.selected_taste_id) {
+        setError('Project missing taste selection — cannot generate UI')
+        setGenerationStage('error')
+        console.error('Project data:', project)
         return
       }
 
