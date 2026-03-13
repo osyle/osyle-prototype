@@ -15,6 +15,7 @@
  *  5. Plugin finds payload → builds Figma nodes → POSTs ACK → Osyle resolves
  */
 
+import { config } from '../config/env'
 import { type FlowGraph } from '../types/home.types'
 
 // ---------------------------------------------------------------------------
@@ -24,8 +25,8 @@ import { type FlowGraph } from '../types/home.types'
 export const FIGMA_PLUGIN_ID = '1580266048308150079'
 export const FIGMA_COMMUNITY_URL = `https://www.figma.com/community/plugin/${FIGMA_PLUGIN_ID}`
 
-// Relay server — run `node figma-relay.mjs` alongside Vite
-export const RELAY_BASE = 'http://localhost:8765'
+// Relay URL — env-aware: uses production relay in prod, local relay in dev
+export const RELAY_BASE = config.relay.url
 
 // Keep these exports so FigmaBridge.tsx compiles without changes
 export const PAYLOAD_STORAGE_KEY_PREFIX = 'osyle_figma_payload_'
