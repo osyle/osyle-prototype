@@ -10,7 +10,7 @@
  *  error       → red error, auto-resets
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import ReactDOM from 'react-dom'
 import {
   exportScreensToFigma,

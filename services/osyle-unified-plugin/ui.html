@@ -376,7 +376,7 @@
     <div class="relay-bar">
       <div class="relay-dot checking" id="relayDot"></div>
       <span class="relay-label" id="relayLabel">Checking relay…</span>
-      <span class="relay-sub" id="relaySub">localhost:8765</span>
+      <span class="relay-sub" id="relaySub"></span>
     </div>
 
     <!-- Section 1: Osyle → Figma -->
@@ -610,14 +610,12 @@
         relayUp = up;
         relayDot.className = "relay-dot " + (up ? "up" : "down");
         relayLabel.textContent = up ? "Relay connected" : "Relay offline";
-        relaySub.textContent = up
-          ? "localhost:8765"
-          : "Run: node figma-relay.mjs";
+        relaySub.textContent = up ? "" : "Run: node figma-relay.mjs";
       }
       function setRelayChecking() {
         relayDot.className = "relay-dot checking";
         relayLabel.textContent = "Checking relay\u2026";
-        relaySub.textContent = "localhost:8765";
+        relaySub.textContent = "";
       }
 
       // ── Section 1: poll for Osyle → Figma payloads ────────────────────────
@@ -631,8 +629,9 @@
             signal: AbortSignal.timeout(1500),
           });
           setRelayUp(true);
-          if (res.status === 404 || !res.ok) return;
+          if (!res.ok) return;
           var p = await res.json();
+          if (!p || !p.type) return; // empty 200 = nothing pending
           if (!p || p.type !== "OSYLE_FIGMA_EXPORT" || seenTokens[p.token])
             return;
           seenTokens[p.token] = true;

@@ -479,7 +479,7 @@ function buildScreenHTML(
 
       // Fix require paths using the resolved module's own path as base
       var finalPath = resolved;
-      transformed = transformed.replace(/require\(["']([^"']+)["']\)/g, function(match, imp) {
+      transformed = transformed.replace(/require\x28["']([^"']+)["']\x29/g, function(match, imp) {
         var res = __resolvePath(finalPath, imp);
         return "require('" + res + "')";
       });
@@ -665,18 +665,12 @@ export async function launchFigmaPlugin(
   })
 }
 
-// Keep storePayload exported so nothing breaks if it's imported elsewhere,
-// but it's no longer called by launchFigmaPlugin.
-export function storePayload(_payload: FigmaExportPayload): void {
-  // No-op: localStorage bridge replaced by HTTP relay.
-  // Kept for import compatibility.
-}
-
 // ---------------------------------------------------------------------------
 // Main export function
 // ---------------------------------------------------------------------------
 
 export interface ExportOptions {
+  // eslint-disable-next-line no-unused-vars
   onProgress?: (message: string, current: number, total: number) => void
 }
 

@@ -102,7 +102,7 @@ const server = createServer(async (req, res) => {
         `[relay] Stored payload token=${payload.token} screens=${payload.screens?.length}`,
       )
       return json(res, 200, { ok: true, token: payload.token })
-    } catch (e) {
+    } catch {
       return json(res, 400, { error: 'Invalid JSON' })
     }
   }
@@ -128,7 +128,7 @@ const server = createServer(async (req, res) => {
         latestTime = entry.createdAt
       }
     }
-    if (!latest) return json(res, 404, { error: 'No pending payload' })
+    if (!latest) return json(res, 200, {})
     console.log(`[relay] Polling: found payload token=${latest.token}`)
     return json(res, 200, latest)
   }
@@ -163,7 +163,7 @@ const server = createServer(async (req, res) => {
         `[relay] Stored import payload token=${payload.token} frame="${payload.frameName}"`,
       )
       return json(res, 200, { ok: true, token: payload.token })
-    } catch (e) {
+    } catch {
       return json(res, 400, { error: 'Invalid JSON' })
     }
   }

@@ -20,6 +20,8 @@ import ProjectPreviewCard from '../components/cards/ProjectPreviewCard'
 import StyleCard from '../components/cards/StyleCard'
 import TasteCard from '../components/cards/TasteCard'
 
+import FigmaImportButton from '../components/figma/FigmaImportButton'
+
 import ConfigurationMenu from '../components/menus/ConfigurationMenu'
 import ProfileDropdown from '../components/menus/ProfileDropdown'
 
@@ -30,7 +32,6 @@ import CreateTasteModal from '../components/modals/CreateTasteModal'
 import DtmTrainingModal, {
   type DtmTrainingState,
 } from '../components/modals/DtmTrainingModal'
-import FigmaImportButton from '../components/figma/FigmaImportButton'
 
 import DtrLearningModal, {
   type DtrLearningState,
