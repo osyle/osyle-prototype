@@ -93,6 +93,20 @@ aws dynamodb create-table \
     2>&1 | grep -v "ResourceInUseException" || true
 
 # ============================================================================
+# PROJECT SHARES TABLE
+# ============================================================================
+echo "Creating OsyleProjectShares-${ENV}..."
+aws dynamodb create-table \
+    --table-name OsyleProjectShares-${ENV} \
+    --attribute-definitions AttributeName=share_id,AttributeType=S AttributeName=recipient_id,AttributeType=S AttributeName=sender_id,AttributeType=S \
+    --key-schema AttributeName=share_id,KeyType=HASH \
+    --global-secondary-indexes "[{\"IndexName\":\"recipient_id-index\",\"KeySchema\":[{\"AttributeName\":\"recipient_id\",\"KeyType\":\"HASH\"}],\"Projection\":{\"ProjectionType\":\"ALL\"}},{\"IndexName\":\"sender_id-index\",\"KeySchema\":[{\"AttributeName\":\"sender_id\",\"KeyType\":\"HASH\"}],\"Projection\":{\"ProjectionType\":\"ALL\"}}]" \
+    --billing-mode PAY_PER_REQUEST \
+    --region $REGION \
+    --tags Key=Project,Value=Osyle Key=Environment,Value=Production \
+    2>&1 | grep -v "ResourceInUseException" || true
+
+# ============================================================================
 # WAIT FOR ALL TABLES
 # ============================================================================
 echo ""
@@ -103,6 +117,7 @@ aws dynamodb wait table-exists --table-name OsyleResources-${ENV} --region $REGI
 aws dynamodb wait table-exists --table-name OsyleProjects-${ENV} --region $REGION
 aws dynamodb wait table-exists --table-name OsyleDesignMutations-${ENV} --region $REGION
 aws dynamodb wait table-exists --table-name OsyleFigmaRelay-${ENV} --region $REGION
+aws dynamodb wait table-exists --table-name OsyleProjectShares-${ENV} --region $REGION
 
 # Enable TTL on relay table so DynamoDB auto-deletes payloads after 10 minutes
 echo "Enabling TTL on OsyleFigmaRelay-${ENV}..."
@@ -120,3 +135,4 @@ echo "  - OsyleResources-Prod         (taste_id-index)"
 echo "  - OsyleProjects-Prod          (owner_id-index)"
 echo "  - OsyleDesignMutations-Prod   (project_id-screen_id-index)"
 echo "  - OsyleFigmaRelay-Prod        (TTL: 10min, ephemeral)"
+echo "  - OsyleProjectShares-Prod     (recipient_id-index, sender_id-index)"

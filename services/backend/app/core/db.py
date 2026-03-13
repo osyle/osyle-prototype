@@ -654,3 +654,114 @@ def update_project_flow_version(project_id: str, version: int):
     )
     
     return response.get("Attributes", {})
+
+# ============================================================================
+# USER LISTING (for share-to-user feature)
+# ============================================================================
+
+def list_all_users() -> List[Dict[str, Any]]:
+    """List all users (for share-to-user dropdown). Returns minimal info only."""
+    try:
+        response = users_table.scan(
+            ProjectionExpression="user_id, email, #n, picture",
+            ExpressionAttributeNames={"#n": "name"}
+        )
+        return response.get("Items", [])
+    except ClientError as e:
+        print(f"Error listing users: {e}")
+        return []
+
+
+# ============================================================================
+# PROJECT SHARES TABLE OPERATIONS
+# ============================================================================
+
+SHARES_TABLE_NAME = os.getenv("SHARES_TABLE", "OsyleProjectShares")
+shares_table = dynamodb.Table(SHARES_TABLE_NAME)
+
+
+def create_project_share(
+    share_id: str,
+    project_id: str,
+    sender_id: str,
+    recipient_id: str,
+    description: str = "",
+    screenshot_keys: List[str] = None,
+) -> Dict[str, Any]:
+    """Record a project share (metadata only; deep-copy stored separately)."""
+    now = get_timestamp()
+    item = {
+        "share_id": share_id,
+        "original_project_id": project_id,
+        "sender_id": sender_id,
+        "recipient_id": recipient_id,
+        "description": description,
+        "screenshot_keys": screenshot_keys or [],
+        "created_at": now,
+    }
+    shares_table.put_item(Item=item)
+    return item
+
+
+def list_shares_for_recipient(recipient_id: str) -> List[Dict[str, Any]]:
+    """List all shares sent TO a specific user."""
+    try:
+        response = shares_table.query(
+            IndexName="recipient_id-index",
+            KeyConditionExpression=Key("recipient_id").eq(recipient_id),
+        )
+        return response.get("Items", [])
+    except ClientError as e:
+        print(f"Error querying shares: {e}")
+        return []
+
+
+def list_shares_sent_by(sender_id: str) -> List[Dict[str, Any]]:
+    """List all shares sent BY a specific user."""
+    try:
+        response = shares_table.query(
+            IndexName="sender_id-index",
+            KeyConditionExpression=Key("sender_id").eq(sender_id),
+        )
+        return response.get("Items", [])
+    except ClientError as e:
+        print(f"Error querying sent shares: {e}")
+        return []
+
+
+def get_share(share_id: str) -> Optional[Dict[str, Any]]:
+    """Get a single share record."""
+    try:
+        response = shares_table.get_item(Key={"share_id": share_id})
+        return response.get("Item")
+    except ClientError:
+        return None
+
+
+def delete_share(share_id: str) -> bool:
+    """Delete a share record."""
+    try:
+        shares_table.delete_item(Key={"share_id": share_id})
+        return True
+    except ClientError:
+        return False
+
+
+def delete_shares_for_project(project_id: str) -> int:
+    """
+    Delete all share records that reference a given project_id.
+    Called when a project is deleted so orphaned inbox entries are cleaned up.
+    Uses a Scan + filter — acceptable because project deletion is infrequent.
+    Returns the number of share records deleted.
+    """
+    try:
+        response = shares_table.scan(
+            FilterExpression=Attr("original_project_id").eq(project_id)
+        )
+        items = response.get("Items", [])
+        for item in items:
+            shares_table.delete_item(Key={"share_id": item["share_id"]})
+        return len(items)
+    except ClientError as e:
+        print(f"Error cleaning up shares for project {project_id}: {e}")
+        return 0

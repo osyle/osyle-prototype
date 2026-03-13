@@ -135,6 +135,38 @@ aws dynamodb create-table \
 echo "✓ Design Mutations table created with project_id-screen_id index"
 
 # ============================================================================
+# PROJECT SHARES TABLE with recipient_id and sender_id indexes
+# ============================================================================
+
+echo "Creating Project Shares table..."
+aws dynamodb create-table \
+    --table-name OsyleProjectShares \
+    --attribute-definitions \
+        AttributeName=share_id,AttributeType=S \
+        AttributeName=recipient_id,AttributeType=S \
+        AttributeName=sender_id,AttributeType=S \
+    --key-schema \
+        AttributeName=share_id,KeyType=HASH \
+    --global-secondary-indexes \
+        "[
+            {
+                \"IndexName\": \"recipient_id-index\",
+                \"KeySchema\": [{\"AttributeName\":\"recipient_id\",\"KeyType\":\"HASH\"}],
+                \"Projection\":{\"ProjectionType\":\"ALL\"}
+            },
+            {
+                \"IndexName\": \"sender_id-index\",
+                \"KeySchema\": [{\"AttributeName\":\"sender_id\",\"KeyType\":\"HASH\"}],
+                \"Projection\":{\"ProjectionType\":\"ALL\"}
+            }
+        ]" \
+    --billing-mode PAY_PER_REQUEST \
+    --region $REGION \
+    --tags Key=Project,Value=Osyle Key=Environment,Value=Development
+
+echo "✓ Project Shares table created with recipient_id-index and sender_id-index"
+
+# ============================================================================
 # WAIT FOR TABLES TO BE ACTIVE
 # ============================================================================
 
@@ -145,6 +177,7 @@ aws dynamodb wait table-exists --table-name OsyleTastes --region $REGION
 aws dynamodb wait table-exists --table-name OsyleResources --region $REGION
 aws dynamodb wait table-exists --table-name OsyleProjects --region $REGION
 aws dynamodb wait table-exists --table-name OsyleDesignMutations --region $REGION
+aws dynamodb wait table-exists --table-name OsyleProjectShares --region $REGION
 
 echo ""
 echo "✓ All tables are active!"
@@ -155,6 +188,7 @@ echo "  - OsyleTastes (with owner_id-index)"
 echo "  - OsyleResources (with taste_id-index)"
 echo "  - OsyleProjects (with owner_id-index)"
 echo "  - OsyleDesignMutations (with project_id-screen_id-index)"
+echo "  - OsyleProjectShares (with recipient_id-index, sender_id-index)"
 echo ""
 echo "Next steps:"
 echo "  1. Update your backend .env file with table names"

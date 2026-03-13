@@ -231,6 +231,7 @@ aws-delete-tables: ## Delete DEV DynamoDB tables (DESTRUCTIVE)
 	aws dynamodb delete-table --table-name OsyleResources --region us-east-1 2>/dev/null || true
 	aws dynamodb delete-table --table-name OsyleProjects --region us-east-1 2>/dev/null || true
 	aws dynamodb delete-table --table-name OsyleDesignMutations --region us-east-1 2>/dev/null || true
+	aws dynamodb delete-table --table-name OsyleProjectShares --region us-east-1 2>/dev/null || true
 	@echo "✅ All DEV tables deleted"
 	@echo "Note: No relay table exists for dev (figma-relay.mjs is in-memory)."
 
@@ -246,6 +247,29 @@ aws-create-relay-table: ## Create Figma relay DynamoDB table — prod only (idem
 	@echo "Creating Figma relay DynamoDB table..."
 	@chmod +x infra/scripts/create_relay_table.sh
 	@./infra/scripts/create_relay_table.sh
+
+aws-create-shares-table: ## Create ProjectShares DynamoDB table — both dev and prod (idempotent)
+	@echo "Creating OsyleProjectShares (dev)..."
+	@aws dynamodb create-table \
+		--table-name OsyleProjectShares \
+		--attribute-definitions AttributeName=share_id,AttributeType=S AttributeName=recipient_id,AttributeType=S AttributeName=sender_id,AttributeType=S \
+		--key-schema AttributeName=share_id,KeyType=HASH \
+		--global-secondary-indexes "[{\"IndexName\":\"recipient_id-index\",\"KeySchema\":[{\"AttributeName\":\"recipient_id\",\"KeyType\":\"HASH\"}],\"Projection\":{\"ProjectionType\":\"ALL\"}},{\"IndexName\":\"sender_id-index\",\"KeySchema\":[{\"AttributeName\":\"sender_id\",\"KeyType\":\"HASH\"}],\"Projection\":{\"ProjectionType\":\"ALL\"}}]" \
+		--billing-mode PAY_PER_REQUEST \
+		--region us-east-1 \
+		2>&1 | grep -v "ResourceInUseException" || true
+	@echo "Creating OsyleProjectShares-Prod..."
+	@aws dynamodb create-table \
+		--table-name OsyleProjectShares-Prod \
+		--attribute-definitions AttributeName=share_id,AttributeType=S AttributeName=recipient_id,AttributeType=S AttributeName=sender_id,AttributeType=S \
+		--key-schema AttributeName=share_id,KeyType=HASH \
+		--global-secondary-indexes "[{\"IndexName\":\"recipient_id-index\",\"KeySchema\":[{\"AttributeName\":\"recipient_id\",\"KeyType\":\"HASH\"}],\"Projection\":{\"ProjectionType\":\"ALL\"}},{\"IndexName\":\"sender_id-index\",\"KeySchema\":[{\"AttributeName\":\"sender_id\",\"KeyType\":\"HASH\"}],\"Projection\":{\"ProjectionType\":\"ALL\"}}]" \
+		--billing-mode PAY_PER_REQUEST \
+		--region us-east-1 \
+		2>&1 | grep -v "ResourceInUseException" || true
+	@aws dynamodb wait table-exists --table-name OsyleProjectShares --region us-east-1 2>/dev/null || true
+	@aws dynamodb wait table-exists --table-name OsyleProjectShares-Prod --region us-east-1 2>/dev/null || true
+	@echo "✅ OsyleProjectShares tables ready (dev + prod)"
 
 aws-create-tables-prod: ## Create PRODUCTION DynamoDB tables (run ONCE, includes relay table)
 	@echo "Creating PRODUCTION DynamoDB tables in AWS..."
@@ -279,6 +303,8 @@ aws-db-status-prod: ## Check PRODUCTION DynamoDB tables status
 		--query 'Table.[TableName,TableStatus,ItemCount]' --output table 2>/dev/null || echo "  OsyleDesignMutations-Prod: Not found"
 	@aws dynamodb describe-table --table-name OsyleFigmaRelay-Prod --region us-east-1 \
 		--query 'Table.[TableName,TableStatus,ItemCount]' --output table 2>/dev/null || echo "  OsyleFigmaRelay-Prod: Not found (run: make aws-create-relay-table)"
+	@aws dynamodb describe-table --table-name OsyleProjectShares-Prod --region us-east-1 \
+		--query 'Table.[TableName,TableStatus,ItemCount]' --output table 2>/dev/null || echo "  OsyleProjectShares-Prod: Not found (run: make aws-create-shares-table)"
 
 aws-relay-status: ## Show active Figma relay payloads in PRODUCTION (debugging)
 	@echo "Checking OsyleFigmaRelay-Prod (active payloads)..."
@@ -337,6 +363,7 @@ aws-delete-tables-prod: ## Delete PRODUCTION DynamoDB tables (DESTRUCTIVE)
 	aws dynamodb delete-table --table-name OsyleProjects-Prod --region us-east-1 2>/dev/null || true
 	aws dynamodb delete-table --table-name OsyleDesignMutations-Prod --region us-east-1 2>/dev/null || true
 	aws dynamodb delete-table --table-name OsyleFigmaRelay-Prod --region us-east-1 2>/dev/null || true
+	aws dynamodb delete-table --table-name OsyleProjectShares-Prod --region us-east-1 2>/dev/null || true
 	@echo "✅ All production tables deleted"
 
 aws-empty-bucket-prod: ## Empty PRODUCTION S3 bucket (DESTRUCTIVE)
@@ -361,6 +388,8 @@ aws-backup-tables: ## Backup DEV DynamoDB tables to local JSON files
 	aws dynamodb scan --table-name OsyleResources --region us-east-1 > $$BACKUP_DIR/OsyleResources.json && \
 	echo "Exporting OsyleProjects..." && \
 	aws dynamodb scan --table-name OsyleProjects --region us-east-1 > $$BACKUP_DIR/OsyleProjects.json && \
+	echo "Exporting OsyleProjectShares..." && \
+	aws dynamodb scan --table-name OsyleProjectShares --region us-east-1 > $$BACKUP_DIR/OsyleProjectShares.json && \
 	echo "✅ DEV tables backed up to $$BACKUP_DIR/"
 
 aws-backup-bucket: ## Backup DEV S3 bucket to local files
@@ -394,6 +423,8 @@ aws-backup-tables-prod: ## Backup PRODUCTION DynamoDB tables to local JSON files
 	aws dynamodb scan --table-name OsyleResources-Prod --region us-east-1 > $$BACKUP_DIR/OsyleResources-Prod.json && \
 	echo "Exporting OsyleProjects-Prod..." && \
 	aws dynamodb scan --table-name OsyleProjects-Prod --region us-east-1 > $$BACKUP_DIR/OsyleProjects-Prod.json && \
+	echo "Exporting OsyleProjectShares-Prod..." && \
+	aws dynamodb scan --table-name OsyleProjectShares-Prod --region us-east-1 > $$BACKUP_DIR/OsyleProjectShares-Prod.json && \
 	echo "✅ PRODUCTION tables backed up to $$BACKUP_DIR/"
 
 aws-backup-bucket-prod: ## Backup PRODUCTION S3 bucket to local files

@@ -1453,6 +1453,122 @@ export const mobbinAPI = {
 }
 
 // ============================================================================
+// USERS API (for share recipient dropdown)
+// ============================================================================
+
+export interface UserSummary {
+  user_id: string
+  email: string
+  name: string
+  picture: string
+}
+
+export const usersAPI = {
+  list: async (): Promise<UserSummary[]> => {
+    return apiRequest<UserSummary[]>('/api/users/')
+  },
+}
+
+// ============================================================================
+// SHARES API
+// ============================================================================
+
+export interface ShareSender {
+  user_id: string
+  name: string
+  email: string
+  picture: string
+}
+
+export interface ShareProjectSummary {
+  name: string
+  task_description: string
+  flow_graph?: unknown
+  rendering_mode?: string
+  created_at?: string
+}
+
+export interface ShareInboxItem {
+  share_id: string
+  project_id: string
+  description: string
+  screenshot_urls: string[]
+  created_at: string
+  sender: ShareSender
+  project: ShareProjectSummary | null
+}
+
+export interface ShareSentItem {
+  share_id: string
+  project_id: string
+  description: string
+  created_at: string
+  recipient: ShareSender
+  project: { name: string; task_description: string } | null
+}
+
+export const sharesAPI = {
+  /**
+   * Send a project share to another user (deep-copies the project)
+   */
+  create: async (data: {
+    project_id: string
+    recipient_id: string
+    description?: string
+    screenshots?: File[]
+  }): Promise<{ share_id: string; new_project_id: string }> => {
+    const token = await getAuthToken()
+    const formData = new FormData()
+    formData.append('project_id', data.project_id)
+    formData.append('recipient_id', data.recipient_id)
+    if (data.description) formData.append('description', data.description)
+    if (data.screenshots) {
+      data.screenshots.forEach(f => formData.append('screenshots', f, f.name))
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/shares/`, {
+      method: 'POST',
+      headers: { Authorization: token ? `Bearer ${token}` : '' },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const err = (await response
+        .json()
+        .catch(() => ({ detail: 'Request failed' }))) as {
+        detail: string
+      }
+      throw new Error(err.detail || `HTTP ${response.status}`)
+    }
+
+    return response.json()
+  },
+
+  /**
+   * List all shares received by the current user
+   */
+  inbox: async (): Promise<ShareInboxItem[]> => {
+    return apiRequest<ShareInboxItem[]>('/api/shares/inbox')
+  },
+
+  /**
+   * List all shares sent by the current user
+   */
+  sent: async (): Promise<ShareSentItem[]> => {
+    return apiRequest<ShareSentItem[]>('/api/shares/sent')
+  },
+
+  /**
+   * Delete a share record
+   */
+  delete: async (shareId: string): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(`/api/shares/${shareId}`, {
+      method: 'DELETE',
+    })
+  },
+}
+
+// ============================================================================
 // EXPORT DEFAULT API OBJECT
 // ============================================================================
 
@@ -1464,6 +1580,8 @@ const api = {
   dtm: dtmAPI,
   dtr: dtrAPI,
   mobbin: mobbinAPI,
+  users: usersAPI,
+  shares: sharesAPI,
 }
 
 export default api

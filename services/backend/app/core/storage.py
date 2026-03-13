@@ -861,3 +861,48 @@ def save_flow_version(user_id: str, project_id: str, flow_graph: dict, version: 
     except Exception as e:
         print(f"  ✗ Failed to save flow to S3: {e}")
         raise
+
+# ============================================================================
+# SHARE SCREENSHOT STORAGE
+# ============================================================================
+
+def get_share_screenshot_key(sender_id: str, share_id: str, filename: str) -> str:
+    """S3 key for a screenshot attached to a project share."""
+    return f"shares/{sender_id}/{share_id}/{filename}"
+
+
+def copy_project_flow_for_recipient(
+    sender_id: str,
+    recipient_id: str,
+    original_project_id: str,
+    new_project_id: str,
+) -> int:
+    """
+    Deep-copy all flow_vN.json and conversation_vN.json files from sender's
+    project into the recipient's project namespace.  Returns the number of
+    S3 objects copied.
+    """
+    prefix = f"projects/{sender_id}/{original_project_id}/"
+    new_prefix = f"projects/{recipient_id}/{new_project_id}/"
+    copied = 0
+
+    try:
+        paginator = s3_client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                src_key = obj["Key"]
+                # Rewrite the key under the recipient's namespace
+                rel = src_key[len(prefix):]
+                dst_key = new_prefix + rel
+                s3_client.copy_object(
+                    Bucket=S3_BUCKET,
+                    CopySource={"Bucket": S3_BUCKET, "Key": src_key},
+                    Key=dst_key,
+                )
+                copied += 1
+        print(f"✅ Copied {copied} S3 objects for share {original_project_id} → {new_project_id}")
+    except Exception as e:
+        print(f"❌ Error copying S3 files for share: {e}")
+        raise
+
+    return copied

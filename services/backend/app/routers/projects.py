@@ -407,7 +407,10 @@ async def delete_project(
     
     # Delete project from DB
     db.delete_project(project_id)
-    
+
+    # Clean up any share inbox records pointing to this project
+    db.delete_shares_for_project(project_id)
+
     return {"message": "Project deleted successfully"}
 
 

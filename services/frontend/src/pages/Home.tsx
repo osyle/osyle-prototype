@@ -12,6 +12,8 @@ import {
   FileJson,
   Trash2,
   FlaskConical,
+  Share2,
+  Inbox,
 } from 'lucide-react'
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -37,7 +39,11 @@ import DtrLearningModal, {
   type DtrLearningState,
 } from '../components/modals/DtrLearningModal'
 
+import ShareProjectModal from '../components/modals/ShareProjectModal'
+
 import CreateNewCard from '../components/modular/CreateNewCard'
+
+import SharedWithMeTab from '../components/sharing/SharedWithMeTab'
 
 import TasteStudioTab from '../components/taste_studio/TasteStudioTab'
 
@@ -80,7 +86,7 @@ export default function Home() {
   // UI state
   // const [toggleOn, setToggleOn] = useState(false)
   const [activeTab, setActiveTab] = useState<
-    'left' | 'studio' | 'middle' | 'right'
+    'left' | 'studio' | 'middle' | 'right' | 'shared'
   >(() => {
     // Restore last active tab from localStorage
     const savedTab = localStorage.getItem('home_active_tab')
@@ -88,7 +94,8 @@ export default function Home() {
       savedTab === 'left' ||
       savedTab === 'studio' ||
       savedTab === 'middle' ||
-      savedTab === 'right'
+      savedTab === 'right' ||
+      savedTab === 'shared'
     ) {
       return savedTab
     }
@@ -170,6 +177,10 @@ export default function Home() {
   // Project loading state
   const [isLoadingProject, setIsLoadingProject] = useState(false)
   const [loadingProjectName, setLoadingProjectName] = useState<string>('')
+
+  // Share modal state
+  const [shareModalProject, setShareModalProject] =
+    useState<ProjectDisplay | null>(null)
 
   // ============================================================================
   // COMPUTED VALUES
@@ -2313,6 +2324,7 @@ export default function Home() {
     { id: 'studio' as const, icon: <FlaskConical size={18} /> },
     // { id: 'middle' as const, icon: <Layers size={18} /> },  // Styles gallery — coming back later
     { id: 'right' as const, icon: <Eye size={18} /> },
+    { id: 'shared' as const, icon: <Inbox size={18} /> },
   ]
 
   const galleryItems = [
@@ -2609,6 +2621,13 @@ export default function Home() {
           </div>
         </div>
       )
+    } else if (activeTab === 'shared') {
+      return (
+        <SharedWithMeTab
+          deviceInfo={device_info}
+          renderingMode={rendering_mode}
+        />
+      )
     } else {
       // Projects Gallery View (Projects Tab)
       return (
@@ -2731,6 +2750,22 @@ export default function Home() {
                           <FileJson size={18} />
                         </button>
 
+                        {/* Share Button */}
+                        <button
+                          onClick={e => {
+                            e.stopPropagation()
+                            setShareModalProject(project)
+                          }}
+                          className="ml-2 p-2 rounded-lg transition-all hover:scale-110"
+                          style={{
+                            backgroundColor: '#FEF9EE',
+                            color: '#D97706',
+                          }}
+                          title="Share project"
+                        >
+                          <Share2 size={18} />
+                        </button>
+
                         {/* Delete Button */}
                         <button
                           onClick={e => handleDeleteProject(project, e)}
@@ -2806,6 +2841,13 @@ export default function Home() {
         onClose={() => setIsCreateProjectModalOpen(false)}
         onConfirm={handleCreateProject}
         isLoading={isCreatingProject}
+      />
+
+      {/* Share Project Modal */}
+      <ShareProjectModal
+        isOpen={shareModalProject !== null}
+        project={shareModalProject}
+        onClose={() => setShareModalProject(null)}
       />
 
       {/* Project Loading Modal */}
