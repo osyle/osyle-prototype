@@ -12,24 +12,30 @@ data — no auth tokens or PII — so wildcard CORS is safe here.
 DynamoDB table: OsyleFigmaRelay-Prod
   PK:  token       (string)
   ttl: epoch secs  (number, DynamoDB auto-deletes after 10 min)
+
+Large payloads (>300KB) are offloaded to S3 under relay/<token>.json.
+DynamoDB stores an s3_key reference instead of payload_json in that case.
 """
 import os
 import json
 import time
 import boto3
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
 
 router = APIRouter(prefix="/relay", tags=["relay"])
 
-REGION     = os.getenv("AWS_REGION", "us-east-1")
-ENV        = os.getenv("ENVIRONMENT", "Prod")
-TABLE_NAME = f"OsyleFigmaRelay-{ENV}"
-TTL_SECS   = 10 * 60  # 10 minutes
+REGION       = os.getenv("AWS_REGION", "us-east-1")
+TABLE_NAME   = "OsyleFigmaRelay-Prod"
+S3_BUCKET    = os.getenv("S3_BUCKET", "osyle-shared-assets-prod")
+TTL_SECS     = 10 * 60       # 10 minutes
+S3_THRESHOLD = 300 * 1024    # offload to S3 above 300KB
 
 _table = None
+_s3    = None
+
 
 def get_table():
     global _table
@@ -40,6 +46,14 @@ def get_table():
             kwargs["endpoint_url"] = endpoint
         _table = boto3.resource("dynamodb", **kwargs).Table(TABLE_NAME)
     return _table
+
+
+def get_s3():
+    global _s3
+    if _s3 is None:
+        _s3 = boto3.client("s3", region_name=REGION)
+    return _s3
+
 
 def relay_response(data: dict, status: int = 200) -> JSONResponse:
     """Return JSON with explicit wildcard CORS — required for Figma plugin origin."""
@@ -53,8 +67,40 @@ def relay_response(data: dict, status: int = 200) -> JSONResponse:
         },
     )
 
+
 def ttl_epoch() -> int:
     return int(time.time()) + TTL_SECS
+
+
+def store_payload(token: str, body: dict, direction: str):
+    """Write relay item to DynamoDB, offloading payload to S3 if >300KB."""
+    payload_json = json.dumps(body)
+    item = {
+        "token": token,
+        "direction": direction,
+        "acked": False,
+        "ttl": ttl_epoch(),
+    }
+    if len(payload_json.encode()) > S3_THRESHOLD:
+        s3_key = f"relay/{token}.json"
+        get_s3().put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=payload_json.encode(),
+            ContentType="application/json",
+        )
+        item["s3_key"] = s3_key
+    else:
+        item["payload_json"] = payload_json
+    get_table().put_item(Item=item)
+
+
+def fetch_payload_json(item: dict) -> dict:
+    """Retrieve payload dict from DynamoDB item, fetching from S3 if needed."""
+    if "s3_key" in item:
+        obj = get_s3().get_object(Bucket=S3_BUCKET, Key=item["s3_key"])
+        return json.loads(obj["Body"].read())
+    return json.loads(item["payload_json"])
 
 
 # ── CORS preflight (Figma plugin sends OPTIONS before POST) ───────────────────
@@ -72,7 +118,7 @@ async def ping():
 # ── Osyle → Figma ─────────────────────────────────────────────────────────────
 
 @router.post("/figma-payload")
-async def store_payload(request: Request):
+async def store_o2f_payload(request: Request):
     """Osyle stores an export payload destined for the Figma plugin."""
     try:
         body = await request.json()
@@ -81,13 +127,7 @@ async def store_payload(request: Request):
     token = body.get("token")
     if not token:
         return relay_response({"error": "Missing token"}, 400)
-    get_table().put_item(Item={
-        "token": token,
-        "payload_json": json.dumps(body),
-        "direction": "o2f",
-        "acked": False,
-        "ttl": ttl_epoch(),
-    })
+    store_payload(token, body, "o2f")
     return relay_response({"ok": True, "token": token})
 
 
@@ -105,7 +145,7 @@ async def get_payload_latest():
     if not items:
         return relay_response({})
     latest = max(items, key=lambda i: i.get("ttl", 0))
-    return relay_response(json.loads(latest["payload_json"]))
+    return relay_response(fetch_payload_json(latest))
 
 
 @router.post("/figma-ack/{token}")
@@ -127,6 +167,8 @@ async def check_ack(token: str):
     if not item or not item.get("acked"):
         return relay_response({"error": "No ACK yet"}, 404)
     get_table().delete_item(Key={"token": token})
+    if "s3_key" in item:
+        get_s3().delete_object(Bucket=S3_BUCKET, Key=item["s3_key"])
     return relay_response({"ok": True})
 
 
@@ -142,13 +184,7 @@ async def store_import_payload(request: Request):
     token = body.get("token")
     if not token:
         return relay_response({"error": "Missing token"}, 400)
-    get_table().put_item(Item={
-        "token": token,
-        "payload_json": json.dumps(body),
-        "direction": "f2o",
-        "acked": False,
-        "ttl": ttl_epoch(),
-    })
+    store_payload(token, body, "f2o")
     return relay_response({"ok": True, "token": token})
 
 
@@ -165,11 +201,15 @@ async def get_import_latest():
     if not items:
         return relay_response({"error": "No pending import"}, 404)
     latest = max(items, key=lambda i: i.get("ttl", 0))
-    return relay_response(json.loads(latest["payload_json"]))
+    return relay_response(fetch_payload_json(latest))
 
 
 @router.post("/figma-import-ack/{token}")
 async def ack_import(token: str):
     """Osyle ACKs import receipt — removes from queue."""
+    resp = get_table().get_item(Key={"token": token})
+    item = resp.get("Item", {})
     get_table().delete_item(Key={"token": token})
+    if "s3_key" in item:
+        get_s3().delete_object(Bucket=S3_BUCKET, Key=item["s3_key"])
     return relay_response({"ok": True})
