@@ -641,7 +641,7 @@ export default function SharedWithMeTab({ deviceInfo, renderingMode }: Props) {
               Nothing here yet
             </div>
             <div className="text-sm max-w-xs" style={{ color: '#929397' }}>
-              When a team-mate shares a project with you, it&apos;ll show up
+              When a teammate shares a project with you, it&apos;ll show up
               here.
             </div>
           </div>
