@@ -23,24 +23,31 @@ app = FastAPI(title="Osyle API", version="1.0.0")
 
 @app.on_event("startup")
 async def startup_event():
+    """Initialize services at startup"""
     print("="*70)
     print("STARTUP: Initializing Mobbin scraper...")
     print("="*70)
+
+    # Disable mobbin temporarily
     """
     try:
         from app.integrations.mobbin.service import mobbin_scraper_service
         if mobbin_scraper_service.is_configured():
             await mobbin_scraper_service.get_scraper()
+            print("✓ Mobbin scraper initialized successfully")
         else:
-            print("⚠️ Mobbin credentials not configured")
+            print("⚠️ Mobbin credentials not configured - scraper will not be available")
     except Exception as e:
         print(f"⚠️ Failed to initialize Mobbin scraper: {e}")
+        print("Scraper will be initialized on first request instead")
     """
     print("="*70)
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    """Cleanup on shutdown"""
     print("SHUTDOWN: Closing Mobbin scraper...")
+    # Disable mobbin temporarily
     """
     try:
         from app.integrations.mobbin.service import mobbin_scraper_service
@@ -52,6 +59,7 @@ async def shutdown_event():
 # Get ALLOWED_ORIGINS from environment
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*")
 if ALLOWED_ORIGINS != "*":
+    # Split by comma and strip whitespace
     origins_list = [origin.strip() for origin in ALLOWED_ORIGINS.split(",")]
 else:
     origins_list = ["*"]
@@ -78,43 +86,69 @@ COGNITO_ISSUER = f"https://cognito-idp.{REGION}.amazonaws.com/{USER_POOL_ID}"
 
 @lru_cache()
 def get_jwks():
+    """Fetch and cache JSON Web Key Set from Cognito"""
     url = f"{COGNITO_ISSUER}/.well-known/jwks.json"
     try:
         response = requests.get(url, timeout=5)
         response.raise_for_status()
         return response.json()
-    except Exception:
+    except Exception as e:
         return None
 
 def verify_token(authorization: Optional[str] = Header(None)) -> dict:
+    """Verify JWT token from Cognito"""
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing authorization header")
+    
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid authorization header")
+    
     token = authorization.replace("Bearer ", "")
+    
     try:
         jwks = get_jwks()
         if not jwks:
             raise HTTPException(status_code=500, detail="Failed to fetch JWKS")
+        
         unverified_header = jwt.get_unverified_header(token)
         kid = unverified_header.get("kid")
+        
         key = None
         for jwk in jwks.get("keys", []):
             if jwk.get("kid") == kid:
                 key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
                 break
+        
         if not key:
             raise HTTPException(status_code=401, detail="Invalid token key")
+        
         payload = jwt.decode(
-            token, key, algorithms=["RS256"], issuer=COGNITO_ISSUER,
-            options={"verify_exp": True, "verify_aud": False}
+            token,
+            key,
+            algorithms=["RS256"],
+            issuer=COGNITO_ISSUER,
+            options={
+                "verify_exp": True,
+                "verify_aud": False
+            }
         )
+        
         email = payload.get("email")
+        
         if not email:
-            raise HTTPException(status_code=403, detail="Email not found in token")
+            raise HTTPException(
+                status_code=403,
+                detail="Email not found in token"
+            )
+        
         if not email.endswith("@osyle.com"):
-            raise HTTPException(status_code=403, detail="Only @osyle.com accounts allowed")
+            raise HTTPException(
+                status_code=403,
+                detail="Only @osyle.com accounts allowed"
+            )
+        
         return payload
+        
     except HTTPException:
         raise
     except jwt.ExpiredSignatureError:
@@ -126,18 +160,28 @@ def verify_token(authorization: Optional[str] = Header(None)) -> dict:
 
 @app.get("/")
 async def root():
+    """Root endpoint"""
     return {"message": "Osyle API is running", "version": "1.0.0"}
 
 @app.get("/api/health")
 async def health():
+    """Health check endpoint"""
     return {"status": "healthy", "service": "osyle-api"}
 
 @app.get("/api/protected")
 async def protected_route(user: dict = Depends(verify_token)):
-    return {"message": "Access granted", "user": {"email": user.get("email"), "sub": user.get("sub")}}
+    """Protected endpoint - requires valid JWT"""
+    return {
+        "message": "Access granted to protected resource",
+        "user": {
+            "email": user.get("email"),
+            "sub": user.get("sub"),
+        }
+    }
 
 @app.get("/api/user/profile")
 async def user_profile(user: dict = Depends(verify_token)):
+    """Get user profile"""
     return {
         "email": user.get("email"),
         "email_verified": user.get("email_verified"),
@@ -153,26 +197,29 @@ app.include_router(dtm.router)
 app.include_router(relay_router.router)
 # app.include_router(mobbin_router)  # DISABLED: Uses Playwright
 
+
 # Create Mangum handler for HTTP events
 mangum_handler = Mangum(app)
 
 
 def handler(event, context):
     """
-    Main Lambda handler — routes to HTTP or WebSocket handler.
+    Main Lambda handler - routes to HTTP or WebSocket handler
 
-    Relay CORS: Figma plugin UI runs in a sandboxed iframe with origin 'null'.
-    CORSMiddleware rejects null origins. We stamp Access-Control-Allow-Origin: *
-    directly onto the raw Lambda response dict for /relay/* paths — this runs
-    after all middleware and is guaranteed to survive into the API Gateway response.
+    Detects event type:
+    - WebSocket: routeKey starts with $ but NOT $default ($connect, $disconnect)
+    - HTTP: routeKey is $default, "GET /api/projects", or has 'http' in requestContext
     """
+
     request_context = event.get("requestContext", {})
     route_key = request_context.get("routeKey", "")
 
+    # $default is used by HTTP API Gateway, not WebSocket — exclude it explicitly
     is_websocket = (
-        route_key.startswith("$") or
+        (route_key.startswith("$") and route_key != "$default") or
         "connectionId" in request_context
     )
+
     is_http = "http" in request_context
 
     if is_websocket and not is_http:
@@ -183,8 +230,9 @@ def handler(event, context):
         print(f"Detected HTTP event: {route_key}")
         response = mangum_handler(event, context)
 
-        # Stamp CORS on relay routes at the raw Lambda response level.
-        # Bypasses CORSMiddleware entirely — null origin is allowed here.
+        # Stamp CORS on /relay/* at the raw Lambda response level.
+        # Figma plugin origin is 'null' — rejected by CORSMiddleware.
+        # This runs after all middleware so nothing can strip it.
         path = event.get("rawPath", "")
         if path.startswith("/relay/"):
             if "headers" not in response:
