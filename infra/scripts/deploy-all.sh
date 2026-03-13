@@ -66,32 +66,21 @@ aws lambda update-function-configuration \
 
 echo -e "${GREEN}✓ Lambda environment variables updated${NC}"
 
-# 3. Update HTTP API Gateway CORS (must include app.osyle.com or browser preflight will be blocked)
-echo -e "${BLUE}🔧 Updating HTTP API Gateway CORS...${NC}"
-HTTP_API_ID=$(aws apigatewayv2 get-apis \
-    --region $REGION \
-    --query 'Items[?Name==`osyle-api`].ApiId' \
-    --output text)
+# NOTE: HTTP API Gateway CORS is intentionally NOT configured here.
+# API Gateway CORS management intercepts Lambda responses and strips headers
+# for unrecognized origins (including 'null' from the Figma plugin iframe).
+# FastAPI's CORSMiddleware handles CORS for all app origins (app.osyle.com etc).
+# The Lambda handler() stamps Access-Control-Allow-Origin: * for /relay/* routes.
+# API Gateway CORS must remain cleared — do not re-add it.
 
-if [ -n "$HTTP_API_ID" ]; then
-    aws apigatewayv2 update-api \
-        --api-id $HTTP_API_ID \
-        --region $REGION \
-        --cli-input-json "{\"ApiId\":\"$HTTP_API_ID\",\"CorsConfiguration\":{\"AllowOrigins\":[\"*\"],\"AllowMethods\":[\"GET\",\"POST\",\"PUT\",\"PATCH\",\"DELETE\",\"OPTIONS\"],\"AllowHeaders\":[\"content-type\",\"x-amz-date\",\"authorization\",\"x-api-key\",\"x-amz-security-token\"],\"AllowCredentials\":false,\"MaxAge\":3600}}" \
-        --no-cli-pager > /dev/null
-    echo -e "${GREEN}✓ HTTP API Gateway CORS updated${NC}"
-else
-    echo -e "${YELLOW}⚠️  Could not find HTTP API Gateway 'osyle-api' — skipping CORS update${NC}"
-fi
-
-# 4. Update S3 CORS (direct browser uploads via presigned URLs require this)
+# 3. Update S3 CORS (direct browser uploads via presigned URLs require this)
 echo -e "${BLUE}🔧 Updating S3 CORS policy...${NC}"
 aws s3api put-bucket-cors \
     --bucket osyle-shared-assets-prod \
     --cors-configuration '{"CORSRules":[{"AllowedOrigins":["https://app.osyle.com","https://main.d1z1przwpoqpmu.amplifyapp.com","http://localhost:3000","http://localhost:5173"],"AllowedMethods":["GET","PUT","POST","DELETE","HEAD"],"AllowedHeaders":["*"],"ExposeHeaders":["ETag"],"MaxAgeSeconds":3600}]}'
 echo -e "${GREEN}✓ S3 CORS policy updated${NC}"
 
-# 5. Ensure Amplify SPA rewrite rule exists (routes all paths to index.html for React Router)
+# 4. Ensure Amplify SPA rewrite rule exists (routes all paths to index.html for React Router)
 echo -e "${BLUE}🔧 Configuring Amplify SPA rewrite rule...${NC}"
 aws amplify update-app \
     --app-id $AMPLIFY_APP_ID \
@@ -100,7 +89,7 @@ aws amplify update-app \
     --no-cli-pager > /dev/null
 echo -e "${GREEN}✓ Amplify SPA rewrite rule configured${NC}"
 
-# 6. Update Amplify environment variables
+# 5. Update Amplify environment variables
 echo -e "${BLUE}🔧 Updating Amplify environment variables...${NC}"
 aws amplify update-app \
     --app-id $AMPLIFY_APP_ID \
