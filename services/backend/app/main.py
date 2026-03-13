@@ -15,7 +15,7 @@ load_dotenv()
 # Import routers
 from app.routers import tastes, projects
 from app.routers import dtm
-from app.integrations.figma.relay import relay as relay_router
+from app.integrations.figma import relay as relay_router
 from app.websockets.routes import router as ws_router
 # from app.routers.mobbin import router as mobbin_router  # DISABLED: Uses Playwright
 
