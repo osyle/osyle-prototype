@@ -228,12 +228,29 @@ def handler(event, context):
         return handle_websocket_event(event, context)
     else:
         print(f"Detected HTTP event: {route_key}")
+
+        # Handle OPTIONS preflight for /relay/* directly.
+        # FastAPI's CORSMiddleware returns 400 for null origin before our
+        # stamping runs — browsers require 200 for preflight to pass.
+        path = event.get("rawPath", "")
+        method = request_context.get("http", {}).get("method", "")
+        if path.startswith("/relay/") and method == "OPTIONS":
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "access-control-allow-origin": "*",
+                    "access-control-allow-methods": "GET, POST, OPTIONS",
+                    "access-control-allow-headers": "content-type",
+                    "access-control-max-age": "600",
+                },
+                "body": "",
+            }
+
         response = mangum_handler(event, context)
 
         # Stamp CORS on /relay/* at the raw Lambda response level.
         # Figma plugin origin is 'null' — rejected by CORSMiddleware.
         # This runs after all middleware so nothing can strip it.
-        path = event.get("rawPath", "")
         if path.startswith("/relay/"):
             if "headers" not in response:
                 response["headers"] = {}
