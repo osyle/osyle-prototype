@@ -7,7 +7,10 @@
   "editorType": ["figma"],
   "documentAccess": "dynamic-page",
   "networkAccess": {
-    "allowedDomains": ["https://cdnjs.cloudflare.com", "http://localhost:8765"],
-    "reasoning": "cdnjs.cloudflare.com serves JSZip for ZIP export. localhost:8765 is the figma-relay server — handles all three flows (Osyle→Figma polling, Figma→Osyle POST, ACKs). app.osyle.com is not needed — unlike v2, this plugin's ui.html polls the relay directly instead of loading /figma-bridge as an iframe."
+    "allowedDomains": [
+      "http://localhost:8765",
+      "https://bj7i7munz2.execute-api.us-east-1.amazonaws.com"
+    ],
+    "reasoning": "localhost:8765 is the local figma-relay.mjs for dev. The Lambda URL is the production relay (HTTPS) so the plugin works when loaded via app.osyle.com."
   }
 }

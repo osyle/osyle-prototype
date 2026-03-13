@@ -10,6 +10,9 @@ interface EnvConfig {
   api: {
     url: string
   }
+  relay: {
+    url: string
+  }
   isDevelopment: boolean
   isProduction: boolean
 }
@@ -27,6 +30,9 @@ export const config: EnvConfig = {
   },
   api: {
     url: import.meta.env.VITE_API_URL || '',
+  },
+  relay: {
+    url: import.meta.env.VITE_RELAY_URL || 'http://localhost:8765',
   },
   isDevelopment: import.meta.env.MODE === 'development',
   isProduction: import.meta.env.MODE === 'production',

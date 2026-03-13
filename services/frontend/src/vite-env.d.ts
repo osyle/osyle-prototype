@@ -8,6 +8,7 @@ interface ImportMetaEnv {
   readonly VITE_REDIRECT_SIGNIN: string
   readonly VITE_REDIRECT_SIGNOUT: string
   readonly VITE_API_URL: string
+  readonly VITE_RELAY_URL: string
 }
 
 interface ImportMeta {

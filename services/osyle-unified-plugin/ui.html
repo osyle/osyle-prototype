@@ -599,8 +599,12 @@
         hdr.classList.toggle("open", !open);
       }
 
-      // ── Relay status ───────────────────────────────────────────────────────
-      var RELAY = "http://localhost:8765";
+      // ── Relay auto-detection ───────────────────────────────────────────────
+      // Try localhost first (dev). If unreachable, fall back to Lambda (prod).
+      var RELAY_LOCAL = "http://localhost:8765";
+      var RELAY_PROD =
+        "https://bj7i7munz2.execute-api.us-east-1.amazonaws.com/relay";
+      var RELAY = RELAY_LOCAL; // will be updated after first ping
       var relayUp = false;
       var relayDot = document.getElementById("relayDot");
       var relayLabel = document.getElementById("relayLabel");
@@ -610,12 +614,47 @@
         relayUp = up;
         relayDot.className = "relay-dot " + (up ? "up" : "down");
         relayLabel.textContent = up ? "Relay connected" : "Relay offline";
-        relaySub.textContent = up ? "" : "Run: node figma-relay.mjs";
+        relaySub.textContent = up ? "" : "Contact support or restart the app";
       }
       function setRelayChecking() {
         relayDot.className = "relay-dot checking";
-        relayLabel.textContent = "Checking relay\u2026";
+        relayLabel.textContent = "Connecting\u2026";
         relaySub.textContent = "";
+      }
+
+      // Ping local first, fall back to production Lambda relay.
+      // Runs once on load, then relay URL is fixed for the session.
+      async function detectRelay() {
+        setRelayChecking();
+        // Try localhost
+        try {
+          var r = await fetch(RELAY_LOCAL + "/figma-ping", {
+            signal: AbortSignal.timeout(1200),
+          });
+          if (r.ok) {
+            RELAY = RELAY_LOCAL;
+            setRelayUp(true);
+            return;
+          }
+        } catch (e) {
+          /* local not running */
+        }
+        // Try production Lambda
+        try {
+          var r2 = await fetch(RELAY_PROD + "/figma-ping", {
+            signal: AbortSignal.timeout(3000),
+          });
+          if (r2.ok) {
+            RELAY = RELAY_PROD;
+            setRelayUp(true);
+            return;
+          }
+        } catch (e) {
+          /* prod also unreachable */
+        }
+        // Both failed
+        RELAY = RELAY_PROD; // default to prod so polls go somewhere
+        setRelayUp(false);
       }
 
       // ── Section 1: poll for Osyle → Figma payloads ────────────────────────
@@ -640,7 +679,7 @@
           setRelayUp(false);
           recvArea.className = "recv-area offline";
           recvArea.innerHTML =
-            '<div class="recv-icon">&#9888;&#65039;</div><div class="recv-label">Relay offline</div><div class="recv-sub">Run: node figma-relay.mjs</div>';
+            '<div class="recv-icon">&#9888;&#65039;</div><div class="recv-label">Relay offline</div><div class="recv-sub">Please restart the Osyle app</div>';
         }
       }
 
@@ -675,8 +714,10 @@
         );
       }
 
-      setInterval(fetchLatest, 800);
-      fetchLatest();
+      detectRelay().then(function () {
+        fetchLatest();
+        setInterval(fetchLatest, 800);
+      });
 
       // ── Section 2: Send to Osyle ───────────────────────────────────────────
       var sendBtn = document.getElementById("sendBtn");

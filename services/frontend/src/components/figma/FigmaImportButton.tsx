@@ -15,7 +15,9 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 
-const RELAY_BASE = 'http://localhost:8765'
+import { config } from '../../config/env'
+
+const RELAY_BASE = config.relay.url
 const POLL_MS = 800
 
 type Stage = 'idle' | 'waiting' | 'done' | 'error' | 'relay_offline'
@@ -176,7 +178,11 @@ export default function FigmaImportButton({
       if (!ping.ok) throw new Error()
     } catch {
       setStage('relay_offline')
-      setErrorMsg('Run: node figma-relay.mjs')
+      setErrorMsg(
+        config.isDevelopment
+          ? 'Run: node figma-relay.mjs'
+          : 'Connection failed — please refresh',
+      )
       return
     }
 
@@ -317,6 +323,25 @@ export default function FigmaImportButton({
         )}
 
         <span style={{ letterSpacing: '-0.01em' }}>{labelText}</span>
+
+        {/* Down arrow hint in idle state */}
+        {stage === 'idle' && (
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            fill="none"
+            style={{ flexShrink: 0, opacity: 0.4 }}
+          >
+            <path
+              d="M2 3.5L5 6.5L8 3.5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )}
       </div>
     </>
   )

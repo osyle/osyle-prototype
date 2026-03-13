@@ -13,7 +13,7 @@ help: ## Show this help message
 	@echo 'Usage: make [target]'
 	@echo ''
 	@echo 'Available targets:'
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-28s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 ### DEV
 
@@ -32,6 +32,26 @@ dev-restart: ## Restart development environment
 dev-clean: ## Stop and remove all containers, networks, volumes
 	docker compose -f $(DOCKER_DEV) down -v
 	docker system prune -f
+
+### FIGMA RELAY (LOCAL DEV)
+# In local dev the relay runs as a plain Node.js process (figma-relay.mjs).
+# No DynamoDB needed — all payloads are in-memory with a 10min TTL.
+# In production the relay is hosted on Lambda + DynamoDB (HTTPS required).
+
+relay: ## Start local Figma relay server (run alongside dev server)
+	@echo "🔌 Starting Figma relay on http://localhost:8765"
+	@echo "   Keep this running while using the Figma plugin locally."
+	cd $(FRONTEND_DIR) && node figma-relay.mjs
+
+relay-status: ## Check if local Figma relay is running
+	@echo "Checking local Figma relay (localhost:8765)..."
+	@curl -sf http://localhost:8765/figma-ping \
+		&& echo "✅ Relay is running" \
+		|| echo "❌ Relay is offline — run: make relay"
+
+relay-dev: ## Start Vite dev server + Figma relay together
+	@echo "🚀 Starting Vite + Figma relay..."
+	cd $(FRONTEND_DIR) && npm run dev:figma
 
 ### PROD
 
@@ -91,12 +111,16 @@ aws-setup: ## Initial AWS setup instructions
 	@echo "   make aws-verify"
 	@echo ""
 	@echo "6. Start development:"
-	@echo "   make dev"
+	@echo "   make dev        (backend + frontend in Docker)"
+	@echo "   make relay      (Figma relay — run in a separate terminal)"
+	@echo ""
+	@echo "Note: No relay DynamoDB table needed for local dev."
+	@echo "      figma-relay.mjs is pure in-memory."
 	@echo ""
 
-aws-create-tables: ## Create DynamoDB tables in AWS (run ONCE)
+aws-create-tables: ## Create DEV DynamoDB tables in AWS (run ONCE)
 	@echo "Creating DynamoDB tables in AWS..."
-	@cd $(BACKEND_DIR) && chmod +x ../../infra/scripts/create_dynamodb_tables.sh
+	@chmod +x infra/scripts/create_dynamodb_tables.sh
 	@./infra/scripts/create_dynamodb_tables.sh
 	@echo "✅ Tables created successfully!"
 
@@ -115,7 +139,7 @@ aws-verify: ## Verify AWS connection and setup
 
 ### AWS STATUS
 
-aws-db-status: ## Check DynamoDB tables status
+aws-db-status: ## Check DEV DynamoDB tables status
 	@echo "Checking DynamoDB tables..."
 	@aws dynamodb list-tables --region us-east-1 --query 'TableNames' --output table
 	@echo ""
@@ -159,7 +183,7 @@ aws-deployment-status: ## Check deployment status
 
 ### FIRST TIME SETUP
 
-first-time-setup: ## Complete first-time setup (run ONCE)
+first-time-setup: ## Complete first-time DEV setup (run ONCE)
 	@echo "=============================================="
 	@echo "FIRST TIME SETUP"
 	@echo "=============================================="
@@ -179,7 +203,12 @@ first-time-setup: ## Complete first-time setup (run ONCE)
 	@echo "Step 5: Verifying setup..."
 	@make aws-verify
 	@echo ""
-	@echo "✅ Setup complete! Now run: make dev"
+	@echo "✅ Setup complete!"
+	@echo ""
+	@echo "To start developing:"
+	@echo "  Terminal 1: make dev"
+	@echo "  Terminal 2: make relay   (Figma plugin bridge)"
+	@echo ""
 
 ### QUICK START
 
@@ -188,18 +217,22 @@ start: aws-verify dev ## Verify AWS and start development (use this daily)
 	@echo "🎉 Development environment is ready!"
 	@echo "   Backend:  http://localhost:8000"
 	@echo "   Frontend: http://localhost:3000"
+	@echo ""
+	@echo "💡 Also start the Figma relay in a separate terminal:"
+	@echo "   make relay"
 
 ### CLEANUP
 
-aws-delete-tables: ## Delete all DynamoDB tables (DESTRUCTIVE)
-	@echo "⚠️  WARNING: This will DELETE all DynamoDB tables!"
+aws-delete-tables: ## Delete DEV DynamoDB tables (DESTRUCTIVE)
+	@echo "⚠️  WARNING: This will DELETE all DEV DynamoDB tables!"
 	@read -p "Are you sure? (yes/no): " confirm && [ "$$confirm" = "yes" ] || exit 1
-	aws dynamodb delete-table --table-name OsyleUsers --region us-east-1
-	aws dynamodb delete-table --table-name OsyleTastes --region us-east-1
-	aws dynamodb delete-table --table-name OsyleResources --region us-east-1
-	aws dynamodb delete-table --table-name OsyleProjects --region us-east-1
-	aws dynamodb delete-table --table-name OsyleDesignMutations --region us-east-1
-	@echo "✅ All tables deleted"
+	aws dynamodb delete-table --table-name OsyleUsers --region us-east-1 2>/dev/null || true
+	aws dynamodb delete-table --table-name OsyleTastes --region us-east-1 2>/dev/null || true
+	aws dynamodb delete-table --table-name OsyleResources --region us-east-1 2>/dev/null || true
+	aws dynamodb delete-table --table-name OsyleProjects --region us-east-1 2>/dev/null || true
+	aws dynamodb delete-table --table-name OsyleDesignMutations --region us-east-1 2>/dev/null || true
+	@echo "✅ All DEV tables deleted"
+	@echo "Note: No relay table exists for dev (figma-relay.mjs is in-memory)."
 
 aws-empty-bucket: ## Empty S3 bucket (DESTRUCTIVE)
 	@echo "⚠️  WARNING: This will DELETE all files in S3 bucket!"
@@ -209,7 +242,12 @@ aws-empty-bucket: ## Empty S3 bucket (DESTRUCTIVE)
 
 ### PRODUCTION AWS SETUP (ONE-TIME)
 
-aws-create-tables-prod: ## Create PRODUCTION DynamoDB tables in AWS (run ONCE)
+aws-create-relay-table: ## Create Figma relay DynamoDB table — prod only (idempotent)
+	@echo "Creating Figma relay DynamoDB table..."
+	@chmod +x infra/scripts/create_relay_table.sh
+	@./infra/scripts/create_relay_table.sh
+
+aws-create-tables-prod: ## Create PRODUCTION DynamoDB tables (run ONCE, includes relay table)
 	@echo "Creating PRODUCTION DynamoDB tables in AWS..."
 	@chmod +x infra/scripts/create_dynamodb_tables_prod.sh
 	@./infra/scripts/create_dynamodb_tables_prod.sh
@@ -218,7 +256,7 @@ aws-create-tables-prod: ## Create PRODUCTION DynamoDB tables in AWS (run ONCE)
 aws-create-bucket-prod: ## Create PRODUCTION S3 bucket in AWS (run ONCE)
 	@echo "Creating PRODUCTION S3 bucket..."
 	aws s3 mb s3://osyle-shared-assets-prod --region us-east-1
-	aws s3api put-bucket-cors --bucket osyle-shared-assets-prod --cors-configuration '{"CORSRules":[{"AllowedOrigins":["https://main.d1z1przwpoqpmu.amplifyapp.com"],"AllowedMethods":["GET","PUT","POST","DELETE","HEAD"],"AllowedHeaders":["*"],"MaxAgeSeconds":3600}]}'
+	aws s3api put-bucket-cors --bucket osyle-shared-assets-prod --cors-configuration '{"CORSRules":[{"AllowedOrigins":["https://main.d1z1przwpoqpmu.amplifyapp.com","https://app.osyle.com"],"AllowedMethods":["GET","PUT","POST","DELETE","HEAD"],"AllowedHeaders":["*"],"MaxAgeSeconds":3600}]}'
 	@echo "✅ Production bucket created successfully!"
 
 aws-verify-prod: ## Verify PRODUCTION AWS setup
@@ -229,10 +267,42 @@ aws-verify-prod: ## Verify PRODUCTION AWS setup
 
 aws-db-status-prod: ## Check PRODUCTION DynamoDB tables status
 	@echo "Checking PRODUCTION DynamoDB tables..."
-	@aws dynamodb describe-table --table-name OsyleUsers-Prod --region us-east-1 --query 'Table.[TableName,ItemCount]' --output table 2>/dev/null || echo "OsyleUsers-Prod: Not found"
-	@aws dynamodb describe-table --table-name OsyleTastes-Prod --region us-east-1 --query 'Table.[TableName,ItemCount]' --output table 2>/dev/null || echo "OsyleTastes-Prod: Not found"
-	@aws dynamodb describe-table --table-name OsyleResources-Prod --region us-east-1 --query 'Table.[TableName,ItemCount]' --output table 2>/dev/null || echo "OsyleResources-Prod: Not found"
-	@aws dynamodb describe-table --table-name OsyleProjects-Prod --region us-east-1 --query 'Table.[TableName,ItemCount]' --output table 2>/dev/null || echo "OsyleProjects-Prod: Not found"
+	@aws dynamodb describe-table --table-name OsyleUsers-Prod --region us-east-1 \
+		--query 'Table.[TableName,TableStatus,ItemCount]' --output table 2>/dev/null || echo "  OsyleUsers-Prod: Not found"
+	@aws dynamodb describe-table --table-name OsyleTastes-Prod --region us-east-1 \
+		--query 'Table.[TableName,TableStatus,ItemCount]' --output table 2>/dev/null || echo "  OsyleTastes-Prod: Not found"
+	@aws dynamodb describe-table --table-name OsyleResources-Prod --region us-east-1 \
+		--query 'Table.[TableName,TableStatus,ItemCount]' --output table 2>/dev/null || echo "  OsyleResources-Prod: Not found"
+	@aws dynamodb describe-table --table-name OsyleProjects-Prod --region us-east-1 \
+		--query 'Table.[TableName,TableStatus,ItemCount]' --output table 2>/dev/null || echo "  OsyleProjects-Prod: Not found"
+	@aws dynamodb describe-table --table-name OsyleDesignMutations-Prod --region us-east-1 \
+		--query 'Table.[TableName,TableStatus,ItemCount]' --output table 2>/dev/null || echo "  OsyleDesignMutations-Prod: Not found"
+	@aws dynamodb describe-table --table-name OsyleFigmaRelay-Prod --region us-east-1 \
+		--query 'Table.[TableName,TableStatus,ItemCount]' --output table 2>/dev/null || echo "  OsyleFigmaRelay-Prod: Not found (run: make aws-create-relay-table)"
+
+aws-relay-status: ## Show active Figma relay payloads in PRODUCTION (debugging)
+	@echo "Checking OsyleFigmaRelay-Prod (active payloads)..."
+	@aws dynamodb scan \
+		--table-name OsyleFigmaRelay-Prod \
+		--region us-east-1 \
+		--filter-expression "acked = :f" \
+		--expression-attribute-values '{":f":{"BOOL":false}}' \
+		--query 'Items[*].{token:token.S, direction:direction.S, ttl:ttl.N}' \
+		--output table 2>/dev/null || echo "  Table not found or empty"
+
+aws-relay-flush: ## Delete all active relay payloads in PRODUCTION (unblocks stuck state)
+	@echo "⚠️  Flushing all active Figma relay payloads..."
+	@aws dynamodb scan \
+		--table-name OsyleFigmaRelay-Prod \
+		--region us-east-1 \
+		--query 'Items[*].token.S' \
+		--output text 2>/dev/null | tr '\t' '\n' | while read token; do \
+			[ -n "$$token" ] && aws dynamodb delete-item \
+				--table-name OsyleFigmaRelay-Prod \
+				--region us-east-1 \
+				--key "{\"token\":{\"S\":\"$$token\"}}" 2>/dev/null && echo "  Deleted: $$token"; \
+		done
+	@echo "✅ Relay flushed"
 
 aws-s3-status-prod: ## Check PRODUCTION S3 bucket status
 	@echo "Checking PRODUCTION S3 bucket..."
@@ -246,6 +316,8 @@ aws-status-prod: ## Check all PRODUCTION AWS services status
 	@make aws-db-status-prod
 	@echo ""
 	@make aws-s3-status-prod
+	@echo ""
+	@make relay-status
 
 ### PRODUCTION DEPLOYMENT
 
@@ -258,12 +330,13 @@ deploy-prod: ## Deploy to PRODUCTION (backend + frontend)
 aws-delete-tables-prod: ## Delete PRODUCTION DynamoDB tables (DESTRUCTIVE)
 	@echo "⚠️  WARNING: This will DELETE all PRODUCTION DynamoDB tables!"
 	@echo "⚠️  This will permanently delete production data!"
-	@read -p "Are you sure? (yes/no): " confirm && [ "$$confirm" = "yes" ] || exit 1
-	aws dynamodb delete-table --table-name OsyleUsers-Prod --region us-east-1
-	aws dynamodb delete-table --table-name OsyleTastes-Prod --region us-east-1
-	aws dynamodb delete-table --table-name OsyleResources-Prod --region us-east-1
-	aws dynamodb delete-table --table-name OsyleProjects-Prod --region us-east-1
-	aws dynamodb delete-table --table-name OsyleDesignMutations-Prod --region us-east-1
+	@read -p "Type 'delete-prod' to confirm: " confirm && [ "$$confirm" = "delete-prod" ] || exit 1
+	aws dynamodb delete-table --table-name OsyleUsers-Prod --region us-east-1 2>/dev/null || true
+	aws dynamodb delete-table --table-name OsyleTastes-Prod --region us-east-1 2>/dev/null || true
+	aws dynamodb delete-table --table-name OsyleResources-Prod --region us-east-1 2>/dev/null || true
+	aws dynamodb delete-table --table-name OsyleProjects-Prod --region us-east-1 2>/dev/null || true
+	aws dynamodb delete-table --table-name OsyleDesignMutations-Prod --region us-east-1 2>/dev/null || true
+	aws dynamodb delete-table --table-name OsyleFigmaRelay-Prod --region us-east-1 2>/dev/null || true
 	@echo "✅ All production tables deleted"
 
 aws-empty-bucket-prod: ## Empty PRODUCTION S3 bucket (DESTRUCTIVE)
@@ -273,29 +346,11 @@ aws-empty-bucket-prod: ## Empty PRODUCTION S3 bucket (DESTRUCTIVE)
 	aws s3 rm s3://osyle-shared-assets-prod --recursive
 	@echo "✅ Production bucket emptied"
 
-### PRODUCTION FIRST TIME SETUP
+### DEVELOPMENT BACKUP
+# Note: OsyleFigmaRelay is in-memory for dev — no DynamoDB table, nothing to back up.
 
-first-time-setup-prod: ## Complete PRODUCTION first-time setup (run ONCE)
-	@echo "=============================================="
-	@echo "PRODUCTION FIRST TIME SETUP"
-	@echo "=============================================="
-	@echo ""
-	@echo "Step 1: Creating PRODUCTION DynamoDB tables..."
-	@make aws-create-tables-prod
-	@echo ""
-	@echo "Step 2: Creating PRODUCTION S3 bucket..."
-	@make aws-create-bucket-prod || echo "Bucket may already exist"
-	@echo ""
-	@echo "Step 3: Verifying PRODUCTION setup..."
-	@make aws-verify-prod
-	@echo ""
-	@echo "✅ Production setup complete! Now run: make deploy-prod"
-
-
-### DEVELOPMENT LOCAL BACKUP
-
-aws-backup-tables: ## Create local backup of DynamoDB tables
-	@echo "📦 Backing up DynamoDB tables..."
+aws-backup-tables: ## Backup DEV DynamoDB tables to local JSON files
+	@echo "📦 Backing up DEV DynamoDB tables..."
 	@mkdir -p backups/dynamodb/dev/$$(date +%Y%m%d-%H%M%S)
 	@BACKUP_DIR="backups/dynamodb/dev/$$(date +%Y%m%d-%H%M%S)" && \
 	echo "Exporting OsyleUsers..." && \
@@ -306,26 +361,29 @@ aws-backup-tables: ## Create local backup of DynamoDB tables
 	aws dynamodb scan --table-name OsyleResources --region us-east-1 > $$BACKUP_DIR/OsyleResources.json && \
 	echo "Exporting OsyleProjects..." && \
 	aws dynamodb scan --table-name OsyleProjects --region us-east-1 > $$BACKUP_DIR/OsyleProjects.json && \
-	echo "✅ All tables backed up to $$BACKUP_DIR/"
+	echo "✅ DEV tables backed up to $$BACKUP_DIR/"
 
-aws-backup-bucket: ## Create local backup of S3 bucket
-	@echo "📦 Backing up S3 bucket..."
+aws-backup-bucket: ## Backup DEV S3 bucket to local files
+	@echo "📦 Backing up DEV S3 bucket..."
 	@mkdir -p backups/s3/dev/$$(date +%Y%m%d-%H%M%S)
 	@BACKUP_DIR="backups/s3/dev/$$(date +%Y%m%d-%H%M%S)" && \
 	aws s3 sync s3://osyle-shared-assets $$BACKUP_DIR/ && \
-	echo "✅ Bucket backed up to $$BACKUP_DIR/"
+	echo "✅ DEV bucket backed up to $$BACKUP_DIR/"
 
-aws-backup-all: ## Backup both DynamoDB tables and S3 bucket
-	@echo "📦 Creating full backup..."
+aws-backup-all: ## Backup DEV DynamoDB tables and S3 bucket
+	@echo "📦 Creating full DEV backup..."
 	@$(MAKE) aws-backup-tables
 	@$(MAKE) aws-backup-bucket
-	@echo "✅ Full backup complete"
+	@echo "✅ Full DEV backup complete"
 
+### PRODUCTION BACKUP
+# Note: OsyleFigmaRelay-Prod is intentionally excluded from backups.
+#       Payloads are ephemeral (10min TTL, auto-deleted by DynamoDB).
+#       Backing them up serves no purpose — they are transient bridge data.
 
-### PRODUCTION LOCAL BACKUP
-
-aws-backup-tables-prod: ## Create local backup of PRODUCTION DynamoDB tables
+aws-backup-tables-prod: ## Backup PRODUCTION DynamoDB tables to local JSON files
 	@echo "📦 Backing up PRODUCTION DynamoDB tables..."
+	@echo "   (Skipping OsyleFigmaRelay-Prod — ephemeral, 10min TTL, no value backing up)"
 	@mkdir -p backups/dynamodb/prod/$$(date +%Y%m%d-%H%M%S)
 	@BACKUP_DIR="backups/dynamodb/prod/$$(date +%Y%m%d-%H%M%S)" && \
 	echo "Exporting OsyleUsers-Prod..." && \
@@ -336,17 +394,35 @@ aws-backup-tables-prod: ## Create local backup of PRODUCTION DynamoDB tables
 	aws dynamodb scan --table-name OsyleResources-Prod --region us-east-1 > $$BACKUP_DIR/OsyleResources-Prod.json && \
 	echo "Exporting OsyleProjects-Prod..." && \
 	aws dynamodb scan --table-name OsyleProjects-Prod --region us-east-1 > $$BACKUP_DIR/OsyleProjects-Prod.json && \
-	echo "✅ All production tables backed up to $$BACKUP_DIR/"
+	echo "✅ PRODUCTION tables backed up to $$BACKUP_DIR/"
 
-aws-backup-bucket-prod: ## Create local backup of PRODUCTION S3 bucket
+aws-backup-bucket-prod: ## Backup PRODUCTION S3 bucket to local files
 	@echo "📦 Backing up PRODUCTION S3 bucket..."
 	@mkdir -p backups/s3/prod/$$(date +%Y%m%d-%H%M%S)
 	@BACKUP_DIR="backups/s3/prod/$$(date +%Y%m%d-%H%M%S)" && \
 	aws s3 sync s3://osyle-shared-assets-prod $$BACKUP_DIR/ && \
-	echo "✅ Production bucket backed up to $$BACKUP_DIR/"
+	echo "✅ PRODUCTION bucket backed up to $$BACKUP_DIR/"
 
-aws-backup-all-prod: ## Backup both PRODUCTION DynamoDB tables and S3 bucket
+aws-backup-all-prod: ## Backup PRODUCTION DynamoDB tables and S3 bucket
 	@echo "📦 Creating full PRODUCTION backup..."
 	@$(MAKE) aws-backup-tables-prod
 	@$(MAKE) aws-backup-bucket-prod
-	@echo "✅ Full production backup complete"
+	@echo "✅ Full PRODUCTION backup complete"
+
+### PRODUCTION FIRST TIME SETUP
+
+first-time-setup-prod: ## Complete PRODUCTION first-time setup (run ONCE)
+	@echo "=============================================="
+	@echo "PRODUCTION FIRST TIME SETUP"
+	@echo "=============================================="
+	@echo ""
+	@echo "Step 1: Creating PRODUCTION DynamoDB tables (includes relay table)..."
+	@make aws-create-tables-prod
+	@echo ""
+	@echo "Step 2: Creating PRODUCTION S3 bucket..."
+	@make aws-create-bucket-prod || echo "Bucket may already exist"
+	@echo ""
+	@echo "Step 3: Verifying PRODUCTION setup..."
+	@make aws-verify-prod
+	@echo ""
+	@echo "✅ Production setup complete! Now run: make deploy-prod"

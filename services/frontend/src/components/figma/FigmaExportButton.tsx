@@ -832,6 +832,8 @@ function RelayOfflineModal({
   onClose: () => void
   onRetry: () => void
 }) {
+  const isProd = import.meta.env.PROD
+
   return (
     <>
       <div
@@ -910,65 +912,92 @@ function RelayOfflineModal({
             marginBottom: '8px',
           }}
         >
-          Start the relay server
+          {isProd ? 'Connection failed' : 'Start the relay server'}
         </div>
         <div
           style={{
             fontSize: '13px',
             color: '#6B7280',
             lineHeight: 1.6,
-            marginBottom: '24px',
+            marginBottom: isProd ? '24px' : '24px',
           }}
         >
-          Osyle uses a tiny local server to pass screens to Figma. Run this once
-          in your terminal alongside Vite:
+          {isProd
+            ? 'Could not reach the Figma relay. Please refresh the page and try again. If the problem persists, contact support.'
+            : 'Osyle uses a tiny local server to pass screens to Figma. Run this once in your terminal alongside Vite:'}
         </div>
 
-        <div
-          style={{
-            background: '#1F1F20',
-            borderRadius: '10px',
-            padding: '12px 16px',
-            marginBottom: '20px',
-            fontFamily: 'monospace',
-            fontSize: '13px',
-            color: '#A5F3A5',
-            letterSpacing: '0.02em',
-          }}
-        >
-          node figma-relay.mjs
-        </div>
+        {!isProd && (
+          <>
+            <div
+              style={{
+                background: '#1F1F20',
+                borderRadius: '10px',
+                padding: '12px 16px',
+                marginBottom: '20px',
+                fontFamily: 'monospace',
+                fontSize: '13px',
+                color: '#A5F3A5',
+                letterSpacing: '0.02em',
+              }}
+            >
+              node figma-relay.mjs
+            </div>
 
-        <div
-          style={{
-            fontSize: '12px',
-            color: '#9CA3AF',
-            lineHeight: 1.6,
-            marginBottom: '20px',
-          }}
-        >
-          The file is in your project root. It runs on port 8765 and requires no
-          dependencies — just Node.js.
-        </div>
+            <div
+              style={{
+                fontSize: '12px',
+                color: '#9CA3AF',
+                lineHeight: 1.6,
+                marginBottom: '20px',
+              }}
+            >
+              The file is in your project root. It runs on port 8765 and
+              requires no dependencies — just Node.js.
+            </div>
+          </>
+        )}
 
-        <button
-          onClick={onRetry}
-          style={{
-            width: '100%',
-            padding: '13px',
-            borderRadius: '11px',
-            background: '#1F1F20',
-            color: '#FFFFFF',
-            border: 'none',
-            fontSize: '14px',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
-          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-        >
-          Relay is running — Retry
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {!isProd && (
+            <button
+              onClick={onRetry}
+              style={{
+                width: '100%',
+                padding: '13px',
+                borderRadius: '11px',
+                background: '#1F1F20',
+                color: '#FFFFFF',
+                border: 'none',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+            >
+              Relay is running — Retry
+            </button>
+          )}
+          <button
+            onClick={isProd ? onClose : onClose}
+            style={{
+              width: '100%',
+              padding: '13px',
+              borderRadius: '11px',
+              background: isProd ? '#1F1F20' : 'white',
+              color: isProd ? '#FFFFFF' : '#3B3B3B',
+              border: isProd ? 'none' : '1px solid #E5E7EB',
+              fontSize: '14px',
+              fontWeight: isProd ? 600 : 500,
+              cursor: 'pointer',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
+            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+          >
+            {isProd ? 'Dismiss' : 'Cancel'}
+          </button>
+        </div>
       </div>
     </>
   )
