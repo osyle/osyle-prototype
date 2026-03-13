@@ -630,93 +630,21 @@ export default function Home() {
       // Build DTR via WebSocket (Passes 1-6)
       console.log('Building DTR for resource:', resourceId)
 
-      // WebSocket callbacks to handle both DTR and DTM progress
       await api.llm.buildDtr(resourceId, tasteId, {
-        onProgress: (stage, message, data) => {
-          console.log(`[DTR Progress] ${stage}: ${message}`, data)
-
-          // Handle DTM build trigger (backend starts this after Pass 6)
-          if (stage === 'building_dtm') {
-            console.log(
-              'DTM build started - will transition from DTR to DTM modal',
-            )
-
-            // Cancel the DTR auto-close timeout (we'll handle closing manually)
-            if (dtrCloseTimeoutRef.current) {
-              clearTimeout(dtrCloseTimeoutRef.current)
-              dtrCloseTimeoutRef.current = null
-            }
-
-            // Set DTR to success state immediately
-            setDtrLearningState('success')
-
-            const resourceCount = (data?.['resource_count'] as number) || 0
-
-            // Wait 2s to show DTR success, then transition to DTM
-            setTimeout(() => {
-              console.log('Closing DTR modal, opening DTM modal')
-              setIsDtrLearningModalOpen(false) // Close DTR modal
-
-              // Open DTM modal after short delay for smooth transition
-              setTimeout(() => {
-                setDtmResourceCount(resourceCount)
-                setDtmTrainingState('training')
-                setDtmTrainingError(null)
-                setIsDtmTrainingModalOpen(true)
-              }, 300) // Small delay for visual smoothness
-            }, 2000)
-          } else if (stage === 'dtm_complete') {
-            console.log('DTM build complete')
-            setDtmTrainingState('success')
-
-            // Close DTM modal after 2 seconds
-            setTimeout(() => {
-              setIsDtmTrainingModalOpen(false)
-            }, 2000)
-          } else if (stage === 'dtm_error') {
-            console.error('DTM build error detected via progress stage')
-            setDtmTrainingState('error')
-            setDtmTrainingError(message)
-
-            // Close DTR modal if still open
-            setIsDtrLearningModalOpen(false)
-
-            // DTM modal stays open to show error
-          }
-        },
         onComplete: result => {
           console.log('DTR build complete:', result)
           setDtrLearningState('success')
 
-          // Auto-close DTR modal after 2s (if no DTM build triggers)
-          // This timeout will be cancelled if DTM build starts
           dtrCloseTimeoutRef.current = setTimeout(() => {
-            console.log('Auto-closing DTR modal (no DTM needed)')
             setIsDtrLearningModalOpen(false)
             dtrCloseTimeoutRef.current = null
           }, 2000)
         },
         onError: error => {
           console.error('DTR build error:', error)
+          setDtrLearningState('error')
+          setDtrLearningError(error)
 
-          // Check if this is a DTM error (happens after DTM build started)
-          if (error.includes('DTM build failed') || error.includes('dtm')) {
-            console.error('DTM-specific error detected')
-            setDtmTrainingState('error')
-            setDtmTrainingError(error)
-
-            // Close DTR modal if still open
-            setIsDtrLearningModalOpen(false)
-
-            // DTM modal will stay open to show error
-            // (DtmTrainingModal handles error display)
-          } else {
-            // Regular DTR error
-            setDtrLearningState('error')
-            setDtrLearningError(error)
-          }
-
-          // Cancel any pending close timeout on error
           if (dtrCloseTimeoutRef.current) {
             clearTimeout(dtrCloseTimeoutRef.current)
             dtrCloseTimeoutRef.current = null
