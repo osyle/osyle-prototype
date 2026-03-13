@@ -5,11 +5,7 @@
 // The plugin UI is the Osyle web app's /figma-bridge page, loaded in an
 // iframe. It polls http://localhost:8765/figma-payload-latest (the figma-relay
 // server) for export payloads, then forwards them to code.js via postMessage.
-//
-// Switch between environments by uncommenting the appropriate line:
-const BRIDGE_BASE = "http://localhost:3000"; // local dev
-// const BRIDGE_BASE = "https://app.osyle.com";   // production
-const bridgeUrl = BRIDGE_BASE + "/figma-bridge";
+const bridgeUrl = "https://app.osyle.com/figma-bridge";
 
 figma.showUI(
   `<!DOCTYPE html><html><head><meta charset="utf-8">

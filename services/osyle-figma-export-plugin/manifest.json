@@ -12,9 +12,9 @@
       "https://cdnjs.cloudflare.com",
       "https://unpkg.com",
       "https://cdn.tailwindcss.com",
-      "https://esm.sh"
+      "https://esm.sh",
+      "http://localhost:8765"
     ],
-    "devAllowedDomains": ["http://localhost:3000", "http://localhost:8765"],
-    "reasoning": "localhost:3000 loads the Osyle bridge page UI. localhost:8765 is the local relay server that transfers export payloads from the Osyle browser tab to the Figma plugin, bypassing the Electron storage partition isolation that prevents localStorage from being shared."
+    "reasoning": "app.osyle.com serves the /figma-bridge page loaded in the plugin iframe. localhost:8765 is the relay server — always local to the user's machine regardless of dev or production."
   }
 }

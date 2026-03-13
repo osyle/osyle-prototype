@@ -30,3 +30,12 @@ customHeaders:
         value: "SAMEORIGIN"
       - key: "X-Content-Type-Options"
         value: "nosniff"
+  # /figma-bridge is intentionally embedded inside Figma Desktop's Electron
+  # iframe panel. X-Frame-Options: SAMEORIGIN (set above) would block this.
+  # CSP frame-ancestors takes precedence over X-Frame-Options in Chromium /
+  # Electron, so setting frame-ancestors * here unlocks the embed for Figma
+  # while leaving the global SAMEORIGIN policy intact for all other routes.
+  - pattern: "/figma-bridge"
+    headers:
+      - key: "Content-Security-Policy"
+        value: "frame-ancestors *"
