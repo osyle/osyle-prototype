@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Osyle</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+        background: #f0eeec;
+        color: #3b3b3b;
+        font-size: 13px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      /* ── Header ── */
+      .plugin-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 2px 2px 8px;
+        border-bottom: 1px solid #e2ddd9;
+      }
+      .plugin-logo {
+        width: 24px;
+        height: 24px;
+        background: #f5c563;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 900;
+        color: #1f1f20;
+        flex-shrink: 0;
+      }
+      .plugin-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #1f1f20;
+      }
+
+      /* ── Relay status bar ── */
+      .relay-bar {
+        background: #fff;
+        border-radius: 10px;
+        border: 1px solid #e8e1dd;
+        padding: 9px 14px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .relay-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #d1d5db;
+        flex-shrink: 0;
+        transition: background 0.4s;
+      }
+      .relay-dot.up {
+        background: #10b981;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+      }
+      .relay-dot.down {
+        background: #ef4444;
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+      }
+      .relay-dot.checking {
+        background: #f5c563;
+        animation: pulse 1s ease-in-out infinite;
+      }
+      .relay-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #3b3b3b;
+      }
+      .relay-sub {
+        font-size: 11px;
+        color: #929397;
+        margin-left: auto;
+      }
+
+      /* ── Sections ── */
+      .section {
+        background: #fff;
+        border-radius: 12px;
+        border: 1px solid #e8e1dd;
+        overflow: hidden;
+      }
+      .section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        cursor: pointer;
+        user-select: none;
+        border-bottom: 1px solid transparent;
+        transition: background 0.15s;
+      }
+      .section-header:hover {
+        background: #fafaf9;
+      }
+      .section-header.open {
+        border-bottom-color: #f0eeec;
+      }
+      .section-title {
+        font-size: 11px;
+        font-weight: 700;
+        color: #929397;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .section-chevron {
+        font-size: 10px;
+        color: #929397;
+        transition: transform 0.2s;
+      }
+      .section-chevron.open {
+        transform: rotate(180deg);
+      }
+      .section-body {
+        padding: 12px 14px;
+        display: none;
+      }
+      .section-body.open {
+        display: block;
+      }
+
+      /* ── Recv area (section 1) ── */
+      .recv-area {
+        min-height: 76px;
+        border: 2px dashed #e8e1dd;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 14px;
+        text-align: center;
+        background: #fafaf9;
+        transition: all 0.2s;
+      }
+      .recv-area.listening {
+        border-color: #f5c563;
+        background: rgba(245, 197, 99, 0.05);
+      }
+      .recv-area.receiving {
+        border-color: #6c63ff;
+        background: rgba(108, 99, 255, 0.04);
+        animation: pulse 1s ease-in-out infinite;
+      }
+      .recv-area.success {
+        border-color: #0acf83;
+        background: rgba(10, 207, 131, 0.04);
+      }
+      .recv-area.offline {
+        border-color: #ef4444;
+        background: rgba(239, 68, 68, 0.04);
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.65;
+        }
+      }
+      .recv-icon {
+        font-size: 20px;
+      }
+      .recv-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #3b3b3b;
+      }
+      .recv-sub {
+        font-size: 11px;
+        color: #929397;
+        line-height: 1.4;
+      }
+      .screen-list {
+        margin-top: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .screen-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        background: #f9f9f8;
+        border-radius: 6px;
+        border: 1px solid #eee;
+        font-size: 12px;
+      }
+      .sdot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #d1d5db;
+        flex-shrink: 0;
+        transition: background 0.3s;
+      }
+      .sdot.building {
+        background: #f5c563;
+        animation: pulse 1s ease-in-out infinite;
+      }
+      .sdot.done {
+        background: #0acf83;
+      }
+
+      /* ── Send status (section 2) ── */
+      .status-box {
+        padding: 8px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        margin-bottom: 8px;
+        display: none;
+        line-height: 1.4;
+        align-items: center;
+        gap: 7px;
+      }
+      .status-box.show {
+        display: flex;
+      }
+      .status-box.progress {
+        background: rgba(245, 197, 99, 0.15);
+        border: 1px solid #f5c563;
+        color: #3b3b3b;
+      }
+      .status-box.success {
+        background: rgba(10, 207, 131, 0.1);
+        border: 1px solid #0acf83;
+        color: #0a7050;
+      }
+      .status-box.error {
+        background: rgba(255, 114, 98, 0.1);
+        border: 1px solid #ff7262;
+        color: #c0392b;
+      }
+
+      /* ── Buttons ── */
+      .btn {
+        width: 100%;
+        padding: 10px;
+        border-radius: 8px;
+        border: none;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .btn-primary {
+        background: #f5c563;
+        color: #1f1f20;
+      }
+      .btn-primary:hover:not(:disabled) {
+        background: #f0bd50;
+      }
+      .btn-secondary {
+        background: #fff;
+        color: #3b3b3b;
+        border: 1px solid #e8e1dd;
+      }
+      .btn-secondary:hover:not(:disabled) {
+        background: #f7f5f3;
+      }
+      .btn-row {
+        display: flex;
+        gap: 8px;
+      }
+      .btn-row .btn {
+        flex: 1;
+      }
+
+      /* ── ZIP section ── */
+      .checkbox-item {
+        background: #f9f9f8;
+        padding: 9px 12px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid #eee;
+        margin-bottom: 6px;
+      }
+      .checkbox-item:last-of-type {
+        margin-bottom: 0;
+      }
+      .checkbox-item input {
+        width: 14px;
+        height: 14px;
+        accent-color: #f5c563;
+      }
+      .checkbox-label {
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .divider {
+        height: 1px;
+        background: #f0eeec;
+        margin: 10px 0;
+      }
+      .zip-status {
+        padding: 7px 10px;
+        border-radius: 7px;
+        font-size: 12px;
+        margin-bottom: 8px;
+        display: none;
+      }
+      .zip-status.show {
+        display: block;
+      }
+      .zip-status.progress {
+        background: rgba(245, 197, 99, 0.15);
+        border: 1px solid #f5c563;
+        color: #5a4a00;
+      }
+      .zip-status.success {
+        background: rgba(10, 207, 131, 0.1);
+        border: 1px solid #0acf83;
+        color: #0a7050;
+      }
+      .zip-status.error {
+        background: rgba(255, 114, 98, 0.1);
+        border: 1px solid #ff7262;
+        color: #c0392b;
+      }
+
+      /* ── Misc ── */
+      .spinner {
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        border: 2px solid rgba(108, 99, 255, 0.2);
+        border-top-color: #6c63ff;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .footer {
+        font-size: 11px;
+        color: #bbb;
+        text-align: center;
+        padding-top: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Header -->
+    <div class="plugin-header">
+      <div class="plugin-logo">O</div>
+      <span class="plugin-title">Osyle</span>
+    </div>
+
+    <!-- Relay status bar (always visible) -->
+    <div class="relay-bar">
+      <div class="relay-dot checking" id="relayDot"></div>
+      <span class="relay-label" id="relayLabel">Checking relay…</span>
+      <span class="relay-sub" id="relaySub">localhost:8765</span>
+    </div>
+
+    <!-- Section 1: Osyle → Figma -->
+    <div class="section">
+      <div class="section-header open" onclick="toggleSection(1)">
+        <span class="section-title">Import from Osyle &#8594; Figma</span>
+        <span class="section-chevron open" id="chev1">&#9662;</span>
+      </div>
+      <div class="section-body open" id="body1">
+        <div class="recv-area listening" id="recvArea">
+          <div class="recv-icon">&#128225;</div>
+          <div class="recv-label">Waiting for Osyle</div>
+          <div class="recv-sub">
+            Click the Figma button in the Osyle editor<br />to send screens here
+          </div>
+        </div>
+        <div class="screen-list" id="screenList" style="display: none"></div>
+      </div>
+    </div>
+
+    <!-- Section 2: Figma → Osyle -->
+    <div class="section">
+      <div class="section-header open" onclick="toggleSection(2)">
+        <span class="section-title">Send to Osyle &#8592; Figma</span>
+        <span class="section-chevron open" id="chev2">&#9662;</span>
+      </div>
+      <div class="section-body open" id="body2">
+        <div class="status-box" id="sendStatus"></div>
+        <button class="btn btn-primary" id="sendBtn">
+          Send selected frame to Osyle
+        </button>
+      </div>
+    </div>
+
+    <!-- Section 3: ZIP export -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(3)">
+        <span class="section-title">Export locally (ZIP)</span>
+        <span class="section-chevron" id="chev3">&#9662;</span>
+      </div>
+      <div class="section-body" id="body3">
+        <div class="checkbox-item">
+          <input type="checkbox" id="exportJson" checked />
+          <span class="checkbox-label">figma.json (full node tree)</span>
+        </div>
+        <div class="checkbox-item">
+          <input type="checkbox" id="exportPng" checked />
+          <span class="checkbox-label">image.png (2x render)</span>
+        </div>
+        <div class="divider"></div>
+        <div class="zip-status" id="zipStatus"></div>
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
+          <button class="btn btn-secondary" id="exportBtn">Export ZIP</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">Osyle v3 &middot; osyle.co</div>
+
+    <script>
+      // ── Minimal store-mode ZIP builder (no external library) ───────────────
+      function buildZip(files) {
+        function u16le(n) {
+          return [n & 0xff, (n >> 8) & 0xff];
+        }
+        function u32le(n) {
+          return [
+            n & 0xff,
+            (n >> 8) & 0xff,
+            (n >> 16) & 0xff,
+            (n >> 24) & 0xff,
+          ];
+        }
+        function crc32(data) {
+          var table = [];
+          for (var i = 0; i < 256; i++) {
+            var c = i;
+            for (var j = 0; j < 8; j++)
+              c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+            table[i] = c >>> 0;
+          }
+          var crc = 0xffffffff;
+          for (var k = 0; k < data.length; k++)
+            crc = (table[(crc ^ data[k]) & 0xff] ^ (crc >>> 8)) >>> 0;
+          return (crc ^ 0xffffffff) >>> 0;
+        }
+        function strToBytes(s) {
+          var b = [];
+          for (var i = 0; i < s.length; i++) b.push(s.charCodeAt(i) & 0xff);
+          return b;
+        }
+        function concat(arrays) {
+          var len = 0;
+          for (var i = 0; i < arrays.length; i++) len += arrays[i].length;
+          var out = new Uint8Array(len),
+            pos = 0;
+          for (var i = 0; i < arrays.length; i++) {
+            for (var j = 0; j < arrays[i].length; j++)
+              out[pos++] = arrays[i][j];
+          }
+          return out;
+        }
+
+        var d = new Date();
+        var dosTime =
+          ((d.getHours() << 11) |
+            (d.getMinutes() << 5) |
+            (d.getSeconds() >> 1)) >>>
+          0;
+        var dosDate =
+          (((d.getFullYear() - 1980) << 9) |
+            ((d.getMonth() + 1) << 5) |
+            d.getDate()) >>>
+          0;
+
+        var localParts = [],
+          centralParts = [],
+          offsets = [],
+          totalLocal = 0;
+
+        for (var i = 0; i < files.length; i++) {
+          var nameBytes = strToBytes(files[i].name);
+          var data = files[i].data; // Uint8Array
+          var crc = crc32(data);
+          var sz = data.length;
+
+          // Local file header (30 bytes) + name + data
+          var lhBytes = [
+            0x50,
+            0x4b,
+            0x03,
+            0x04, // signature
+            0x14,
+            0x00, // version needed: 2.0
+            0x00,
+            0x00, // flags
+            0x00,
+            0x00, // compression: stored
+          ].concat(
+            u16le(dosTime),
+            u16le(dosDate),
+            u32le(crc),
+            u32le(sz),
+            u32le(sz),
+            u16le(nameBytes.length),
+            u16le(0)
+          );
+
+          offsets.push(totalLocal);
+          var piece = concat([lhBytes, nameBytes, data]);
+          localParts.push(piece);
+          totalLocal += piece.length;
+
+          // Central directory record (46 bytes) + name
+          var cdBytes = [
+            0x50,
+            0x4b,
+            0x01,
+            0x02, // signature
+            0x14,
+            0x00, // version made by
+            0x14,
+            0x00, // version needed
+            0x00,
+            0x00, // flags
+            0x00,
+            0x00, // compression: stored
+          ].concat(
+            u16le(dosTime),
+            u16le(dosDate),
+            u32le(crc),
+            u32le(sz),
+            u32le(sz),
+            u16le(nameBytes.length),
+            u16le(0),
+            u16le(0),
+            u16le(0),
+            u16le(0),
+            u32le(0),
+            u32le(offsets[i])
+          );
+
+          centralParts.push(concat([cdBytes, nameBytes]));
+        }
+
+        var centralStart = totalLocal;
+        var centralLen = 0;
+        for (var i = 0; i < centralParts.length; i++)
+          centralLen += centralParts[i].length;
+
+        var eocd = [
+          0x50,
+          0x4b,
+          0x05,
+          0x06, // signature
+          0x00,
+          0x00, // disk number
+          0x00,
+          0x00, // start disk
+        ].concat(
+          u16le(files.length),
+          u16le(files.length),
+          u32le(centralLen),
+          u32le(centralStart),
+          u16le(0)
+        );
+
+        return concat(localParts.concat(centralParts, [eocd]));
+      }
+
+      // ── Accordion ──────────────────────────────────────────────────────────
+      function toggleSection(n) {
+        var body = document.getElementById("body" + n);
+        var chev = document.getElementById("chev" + n);
+        var hdr = document.getElementById("body" + n).previousElementSibling;
+        var open = body.classList.contains("open");
+        body.classList.toggle("open", !open);
+        chev.classList.toggle("open", !open);
+        hdr.classList.toggle("open", !open);
+      }
+
+      // ── Relay status ───────────────────────────────────────────────────────
+      var RELAY = "http://localhost:8765";
+      var relayUp = false;
+      var relayDot = document.getElementById("relayDot");
+      var relayLabel = document.getElementById("relayLabel");
+      var relaySub = document.getElementById("relaySub");
+
+      function setRelayUp(up) {
+        relayUp = up;
+        relayDot.className = "relay-dot " + (up ? "up" : "down");
+        relayLabel.textContent = up ? "Relay connected" : "Relay offline";
+        relaySub.textContent = up
+          ? "localhost:8765"
+          : "Run: node figma-relay.mjs";
+      }
+      function setRelayChecking() {
+        relayDot.className = "relay-dot checking";
+        relayLabel.textContent = "Checking relay\u2026";
+        relaySub.textContent = "localhost:8765";
+      }
+
+      // ── Section 1: poll for Osyle → Figma payloads ────────────────────────
+      var recvArea = document.getElementById("recvArea");
+      var screenList = document.getElementById("screenList");
+      var seenTokens = {};
+
+      async function fetchLatest() {
+        try {
+          var res = await fetch(RELAY + "/figma-payload-latest", {
+            signal: AbortSignal.timeout(1500),
+          });
+          setRelayUp(true);
+          if (res.status === 404 || !res.ok) return;
+          var p = await res.json();
+          if (!p || p.type !== "OSYLE_FIGMA_EXPORT" || seenTokens[p.token])
+            return;
+          seenTokens[p.token] = true;
+          onOsylePayload(p);
+        } catch (e) {
+          setRelayUp(false);
+          recvArea.className = "recv-area offline";
+          recvArea.innerHTML =
+            '<div class="recv-icon">&#9888;&#65039;</div><div class="recv-label">Relay offline</div><div class="recv-sub">Run: node figma-relay.mjs</div>';
+        }
+      }
+
+      function onOsylePayload(p) {
+        var screens = p.screens || [];
+        recvArea.className = "recv-area receiving";
+        recvArea.innerHTML =
+          '<div class="recv-icon">&#9889;</div><div class="recv-label">Receiving ' +
+          screens.length +
+          " screen" +
+          (screens.length !== 1 ? "s" : "") +
+          '...</div><div class="recv-sub">' +
+          (p.projectName || "Osyle Project") +
+          "</div>";
+        screenList.style.display = "flex";
+        screenList.innerHTML = "";
+        for (var i = 0; i < screens.length; i++) {
+          var el = document.createElement("div");
+          el.className = "screen-item";
+          el.id = "si-" + screens[i].screenId;
+          el.innerHTML =
+            '<div class="sdot" id="sd-' +
+            screens[i].screenId +
+            '"></div><span>' +
+            (screens[i].screenName || "Screen " + (i + 1)) +
+            "</span>";
+          screenList.appendChild(el);
+        }
+        parent.postMessage({ pluginMessage: p }, "*");
+        fetch(RELAY + "/figma-ack/" + p.token, { method: "POST" }).catch(
+          function () {}
+        );
+      }
+
+      setInterval(fetchLatest, 800);
+      fetchLatest();
+
+      // ── Section 2: Send to Osyle ───────────────────────────────────────────
+      var sendBtn = document.getElementById("sendBtn");
+      var sendStatus = document.getElementById("sendStatus");
+
+      function showSend(type, msg, spinner) {
+        sendStatus.className = "status-box show " + type;
+        sendStatus.innerHTML = spinner
+          ? '<div class="spinner"></div><span>' + msg + "</span>"
+          : msg;
+      }
+      function hideSend() {
+        sendStatus.className = "status-box";
+        sendStatus.innerHTML = "";
+      }
+
+      sendBtn.addEventListener("click", function () {
+        sendBtn.disabled = true;
+        hideSend();
+        parent.postMessage({ pluginMessage: { type: "send-to-osyle" } }, "*");
+      });
+
+      // ── Section 3: ZIP export ──────────────────────────────────────────────
+      var exportBtn = document.getElementById("exportBtn");
+      var cancelBtn = document.getElementById("cancelBtn");
+      var zipStatus = document.getElementById("zipStatus");
+
+      function showZip(type, msg) {
+        zipStatus.className = "zip-status show " + type;
+        zipStatus.textContent = msg;
+      }
+      function hideZip() {
+        zipStatus.className = "zip-status";
+        zipStatus.textContent = "";
+      }
+
+      exportBtn.addEventListener("click", function () {
+        var json = document.getElementById("exportJson").checked;
+        var png = document.getElementById("exportPng").checked;
+        if (!json && !png) {
+          showZip("error", "Select at least one export option.");
+          return;
+        }
+        exportBtn.disabled = true;
+        hideZip();
+        showZip("progress", "Preparing export…");
+        parent.postMessage(
+          {
+            pluginMessage: { type: "export", exportJson: json, exportPng: png },
+          },
+          "*"
+        );
+      });
+
+      cancelBtn.addEventListener("click", function () {
+        parent.postMessage({ pluginMessage: { type: "cancel" } }, "*");
+      });
+
+      // ── Messages from code.js ──────────────────────────────────────────────
+      window.onmessage = async function (event) {
+        var msg =
+          event.data && event.data.pluginMessage
+            ? event.data.pluginMessage
+            : null;
+        if (!msg) return;
+
+        switch (msg.type) {
+          case "progress":
+            // Osyle→Figma build progress — update screen dots
+            if (msg.message) {
+              var m = msg.message.match(/Building "([^"]+)"/);
+              if (m) {
+                document
+                  .querySelectorAll(".sdot.building")
+                  .forEach(function (d) {
+                    d.classList.remove("building");
+                    d.classList.add("done");
+                  });
+                document
+                  .querySelectorAll(".screen-item")
+                  .forEach(function (el) {
+                    if (el.querySelector("span").textContent === m[1])
+                      el.querySelector(".sdot").classList.add("building");
+                  });
+              }
+            }
+            break;
+
+          case "export-complete":
+            // Only used for Osyle→Figma completion (not ZIP)
+            recvArea.className = "recv-area success";
+            recvArea.innerHTML =
+              '<div class="recv-icon">&#9989;</div><div class="recv-label">' +
+              (msg.message || "Import complete!") +
+              '</div><div class="recv-sub">Check your Figma canvas</div>';
+            document.querySelectorAll(".sdot.building").forEach(function (d) {
+              d.classList.remove("building");
+              d.classList.add("done");
+            });
+            setTimeout(function () {
+              recvArea.className = "recv-area listening";
+              recvArea.innerHTML =
+                '<div class="recv-icon">&#128225;</div><div class="recv-label">Waiting for Osyle</div><div class="recv-sub">Click the Figma button in the Osyle editor<br>to send screens here</div>';
+              screenList.style.display = "none";
+              screenList.innerHTML = "";
+            }, 8000);
+            break;
+
+          case "send-to-osyle-progress":
+            showSend("progress", msg.message, true);
+            break;
+
+          case "send-to-osyle-data":
+            await doSendToOsyle(msg);
+            break;
+
+          case "files-ready":
+            doZipDownload(msg);
+            break;
+
+          case "zip-done":
+            // Sent by code.js after files-ready, distinct from export-complete
+            showZip("success", "&#10003; Download started!");
+            exportBtn.disabled = false;
+            setTimeout(hideZip, 4000);
+            break;
+
+          case "error":
+            // Show error wherever relevant
+            var isZipOp = !sendBtn.disabled;
+            if (isZipOp) {
+              showZip("error", msg.message || "An error occurred");
+              exportBtn.disabled = false;
+            } else {
+              showSend("error", msg.message || "An error occurred");
+              sendBtn.disabled = false;
+            }
+            break;
+        }
+      };
+
+      async function doSendToOsyle(msg) {
+        if (!relayUp) {
+          showSend("error", "Relay offline. Run: node figma-relay.mjs");
+          sendBtn.disabled = false;
+          return;
+        }
+        showSend("progress", "Sending to Osyle\u2026", true);
+        try {
+          var res = await fetch(RELAY + "/figma-import-payload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "FIGMA_TO_OSYLE",
+              token: msg.token,
+              frameName: msg.frameName,
+              figmaJson: msg.figmaJson,
+              imagePng: msg.imagePng,
+            }),
+          });
+          if (!res.ok) throw new Error("Relay returned " + res.status);
+          showSend("success", "Sent! Switch to Osyle to complete the import.");
+          setTimeout(function () {
+            hideSend();
+            sendBtn.disabled = false;
+          }, 5000);
+        } catch (e) {
+          showSend("error", "Failed: " + e.message);
+          sendBtn.disabled = false;
+        }
+      }
+
+      function doZipDownload(msg) {
+        showZip("progress", "Building ZIP\u2026");
+        try {
+          var files = (msg.files || []).map(function (f) {
+            return { name: f.name, data: new Uint8Array(f.content) };
+          });
+          if (files.length === 0) throw new Error("No files to export");
+          var zipData = buildZip(files);
+          var blob = new Blob([zipData.buffer], { type: "application/zip" });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement("a");
+          a.href = url;
+          a.download = (msg.nodeName || "export") + ".zip";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function () {
+            URL.revokeObjectURL(url);
+          }, 10000);
+          showZip("success", "\u2713 Download started!");
+          setTimeout(hideZip, 4000);
+        } catch (e) {
+          showZip("error", "ZIP failed: " + (e.message || e));
+        } finally {
+          exportBtn.disabled = false;
+        }
+      }
+    </script>
+  </body>
+</html>

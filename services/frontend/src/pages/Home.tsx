@@ -13,7 +13,7 @@ import {
   Trash2,
   FlaskConical,
 } from 'lucide-react'
-import React, { useState, useMemo, useEffect, useRef } from 'react'
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import ProjectPreviewCard from '../components/cards/ProjectPreviewCard'
@@ -30,6 +30,7 @@ import CreateTasteModal from '../components/modals/CreateTasteModal'
 import DtmTrainingModal, {
   type DtmTrainingState,
 } from '../components/modals/DtmTrainingModal'
+import FigmaImportButton from '../components/figma/FigmaImportButton'
 
 import DtrLearningModal, {
   type DtrLearningState,
@@ -620,6 +621,132 @@ export default function Home() {
       setIsCreatingResource(false)
     }
   }
+
+  // Handler for importing a frame directly from Figma plugin via relay
+  const handleImportFromFigma = useCallback(
+    async (
+      frameName: string,
+      figmaJson: Record<string, unknown>,
+      imagePng: string,
+    ) => {
+      if (!selectedTasteId) return
+
+      try {
+        setIsCreatingResource(true)
+
+        // Convert base64 PNG → File for the existing upload pipeline
+        const binaryStr = atob(imagePng)
+        const bytes = new Uint8Array(binaryStr.length)
+        for (let i = 0; i < binaryStr.length; i++)
+          bytes[i] = binaryStr.charCodeAt(i)
+        const imageFile = new File(
+          [new Blob([bytes], { type: 'image/png' })],
+          'image.png',
+          { type: 'image/png' },
+        )
+
+        const { resource, upload_urls } = await api.resources.create(
+          selectedTasteId,
+          frameName,
+          { source: 'figma_import' },
+        )
+
+        let hasFigma = false
+        let hasImage = false
+        const uploads: Promise<void>[] = []
+
+        if (upload_urls.figma_put_url) {
+          uploads.push(
+            api.resources
+              .uploadFiles(
+                { figma_put_url: upload_urls.figma_put_url },
+                figmaJson,
+                undefined,
+              )
+              .then(() => {
+                hasFigma = true
+              })
+              .catch(err => {
+                console.error('Failed to upload figma json:', err)
+                throw err
+              }),
+          )
+        }
+
+        if (upload_urls.image_put_url) {
+          uploads.push(
+            api.resources
+              .uploadFiles(
+                { image_put_url: upload_urls.image_put_url },
+                undefined,
+                imageFile,
+              )
+              .then(() => {
+                hasImage = true
+              })
+              .catch(err => {
+                console.error('Failed to upload image:', err)
+                throw err
+              }),
+          )
+        }
+
+        await Promise.all(uploads)
+        await api.resources.markUploaded(
+          selectedTasteId,
+          resource.resource_id,
+          hasFigma,
+          hasImage,
+        )
+
+        const imageUrl =
+          hasImage && upload_urls.image_put_url
+            ? await api.resources
+                .get(selectedTasteId, resource.resource_id, true)
+                .then(r => r.download_urls?.image_get_url || null)
+                .catch(() => null)
+            : null
+
+        const displayResource: ResourceDisplay = {
+          resource_id: resource.resource_id,
+          name: frameName,
+          imageUrl,
+          has_image: hasImage,
+          has_figma: hasFigma,
+        }
+
+        const updatedTastes = tastes.map(t =>
+          t.taste_id === selectedTasteId
+            ? { ...t, resources: [...t.resources, displayResource] }
+            : t,
+        )
+        setTastes(updatedTastes)
+        setSelectedResourceIds(prev => [...prev, resource.resource_id])
+
+        const resourceCount =
+          updatedTastes.find(t => t.taste_id === selectedTasteId)?.resources
+            .length || 0
+
+        // Kick off DTR — same flow as manual upload
+        setDtrLearningResourceName(frameName)
+        setPendingResourceData({
+          tasteId: selectedTasteId,
+          resourceId: resource.resource_id,
+          resourceCount,
+        })
+        setDtrLearningState('learning')
+        setDtrLearningError(null)
+        setIsDtrLearningModalOpen(true)
+        buildDtrForResource(selectedTasteId, resource.resource_id)
+      } catch (err) {
+        console.error('Failed to import from Figma:', err)
+        alert('Failed to import from Figma. Please try again.')
+      } finally {
+        setIsCreatingResource(false)
+      }
+    },
+    [selectedTasteId, tastes],
+  )
 
   // ============================================================================
   // DTR LEARNING HANDLERS
@@ -1228,14 +1355,20 @@ export default function Home() {
           <div className="text-center mb-4" style={{ color: '#929397' }}>
             No resources available for this taste
           </div>
-          <button
-            onClick={() => setIsCreateResourceModalOpen(true)}
-            className="px-4 py-2 rounded-lg flex items-center gap-2 transition-all hover:scale-105"
-            style={{ backgroundColor: '#F5C563', color: '#1F1F20' }}
-          >
-            <Plus size={16} />
-            <span className="text-sm font-medium">Add Resource</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsCreateResourceModalOpen(true)}
+              className="px-4 py-2 rounded-lg flex items-center gap-2 transition-all hover:scale-105"
+              style={{ backgroundColor: '#F5C563', color: '#1F1F20' }}
+            >
+              <Plus size={16} />
+              <span className="text-sm font-medium">Add Resource</span>
+            </button>
+            <FigmaImportButton
+              onImport={handleImportFromFigma}
+              disabled={isCreatingResource}
+            />
+          </div>
         </div>
       )
     }
@@ -1372,7 +1505,12 @@ export default function Home() {
         </div>
       </div>
     )
-  }, [selectedTaste, selectedResourceIds])
+  }, [
+    selectedTaste,
+    selectedResourceIds,
+    handleImportFromFigma,
+    isCreatingResource,
+  ])
 
   // ============================================================================
   // STAGE LOGIC
@@ -2257,6 +2395,14 @@ export default function Home() {
                           New
                         </span>
                         <Plus size={16} style={{ color: '#1F1F20' }} />
+                      </div>
+                    )}
+                    {stage.id === 2 && expandedStage === 2 && (
+                      <div onClick={e => e.stopPropagation()}>
+                        <FigmaImportButton
+                          onImport={handleImportFromFigma}
+                          disabled={isCreatingResource}
+                        />
                       </div>
                     )}
                     <div

@@ -21,8 +21,14 @@
 import { createServer } from 'http'
 
 const PORT = 8765
+
+// Osyle → Figma direction
 const payloads = new Map() // token → { payload, createdAt }
 const acks = new Map() // token → timestamp
+
+// Figma → Osyle direction (separate namespace to avoid collision)
+const importPayloads = new Map() // token → { payload, createdAt }
+
 const TTL_MS = 10 * 60 * 1000 // 10 minutes
 
 function evictExpired() {
@@ -32,6 +38,9 @@ function evictExpired() {
       payloads.delete(token)
       acks.delete(token)
     }
+  }
+  for (const [token, entry] of importPayloads) {
+    if (now - entry.createdAt > TTL_MS) importPayloads.delete(token)
   }
 }
 
@@ -142,6 +151,47 @@ const server = createServer(async (req, res) => {
     if (!ackTime) return json(res, 404, { error: 'No ACK yet' })
     acks.delete(token)
     return json(res, 200, { ok: true, ackedAt: ackTime })
+  }
+
+  // POST /figma-import-payload — Figma plugin stores a payload destined for Osyle
+  if (path === '/figma-import-payload' && req.method === 'POST') {
+    try {
+      const payload = await readBody(req)
+      if (!payload?.token) return json(res, 400, { error: 'Missing token' })
+      importPayloads.set(payload.token, { payload, createdAt: Date.now() })
+      console.log(
+        `[relay] Stored import payload token=${payload.token} frame="${payload.frameName}"`,
+      )
+      return json(res, 200, { ok: true, token: payload.token })
+    } catch (e) {
+      return json(res, 400, { error: 'Invalid JSON' })
+    }
+  }
+
+  // GET /figma-import-latest — Osyle polls for any pending Figma→Osyle payload
+  if (path === '/figma-import-latest' && req.method === 'GET') {
+    let latest = null
+    let latestTime = 0
+    for (const [, entry] of importPayloads) {
+      if (entry.createdAt > latestTime) {
+        latest = entry.payload
+        latestTime = entry.createdAt
+      }
+    }
+    if (!latest) return json(res, 404, { error: 'No pending import' })
+    console.log(
+      `[relay] Import poll: found payload token=${latest.token} frame="${latest.frameName}"`,
+    )
+    return json(res, 200, latest)
+  }
+
+  // POST /figma-import-ack — Osyle acknowledges it has picked up the payload
+  const importAckMatch = path.match(/^\/figma-import-ack\/([^/]+)$/)
+  if (importAckMatch && req.method === 'POST') {
+    const token = importAckMatch[1]
+    importPayloads.delete(token)
+    console.log(`[relay] Import ACK token=${token}`)
+    return json(res, 200, { ok: true })
   }
 
   return json(res, 404, { error: 'Not found' })
