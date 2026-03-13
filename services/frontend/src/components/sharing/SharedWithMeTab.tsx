@@ -601,7 +601,7 @@ export default function SharedWithMeTab({ deviceInfo, renderingMode }: Props) {
             Shared with me
           </h2>
           <p className="text-sm" style={{ color: '#929397' }}>
-            Projects your team-mates have shared with you
+            Projects your teammates have shared with you
           </p>
         </div>
 
