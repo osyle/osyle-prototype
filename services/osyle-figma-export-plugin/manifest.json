@@ -1,0 +1,20 @@
+{
+  "name": "Osyle",
+  "id": "1580266048308150079",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": [
+      "https://app.osyle.com",
+      "https://cdnjs.cloudflare.com",
+      "https://unpkg.com",
+      "https://cdn.tailwindcss.com",
+      "https://esm.sh"
+    ],
+    "devAllowedDomains": ["http://localhost:3000", "http://localhost:8765"],
+    "reasoning": "localhost:3000 loads the Osyle bridge page UI. localhost:8765 is the local relay server that transfers export payloads from the Osyle browser tab to the Figma plugin, bypassing the Electron storage partition isolation that prevents localStorage from being shared."
+  }
+}

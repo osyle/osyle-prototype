@@ -23,6 +23,8 @@ import VersionHistory from '../components/editor/concept/VersionHistory'
 import PrototypeCanvas from '../components/editor/prototype/PrototypeCanvas'
 import PrototypeRunner from '../components/editor/prototype/PrototypeRunner'
 
+import FigmaExportButton from '../components/figma/FigmaExportButton'
+
 import AddInspirationModal from '../components/modals/AddInspirationModal'
 
 import DeviceFrame from '../components/ui/DeviceFrame'
@@ -1951,6 +1953,17 @@ export default function Editor() {
                   isReverting={isReverting}
                   isDeleting={isDeleting}
                   viewingVersion={viewingVersion}
+                />
+              </div>
+            )}
+
+            {/* Figma Export Button */}
+            {generationStage === 'complete' && (
+              <div className="mt-4">
+                <FigmaExportButton
+                  flowGraph={flowGraph}
+                  selectedScreenId={selectedScreenId}
+                  disabled={generationStage !== 'complete'}
                 />
               </div>
             )}

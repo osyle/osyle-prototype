@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Osyle Plugin</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+        background: #edebe9;
+        padding: 16px;
+        color: #3b3b3b;
+        margin: 0;
+        font-size: 13px;
+      }
+
+      .title {
+        font-size: 16px;
+        font-weight: 700;
+        text-align: center;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+      .title-logo {
+        width: 22px;
+        height: 22px;
+        background: #f5c563;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 900;
+        font-size: 12px;
+        color: #1f1f20;
+      }
+
+      .section {
+        background: #fff;
+        border-radius: 12px;
+        border: 1px solid #e8e1dd;
+        padding: 14px;
+        margin-bottom: 10px;
+      }
+      .section-title {
+        font-size: 11px;
+        font-weight: 700;
+        color: #929397;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 10px;
+      }
+
+      /* ── Import from Osyle section ── */
+      .import-area {
+        min-height: 80px;
+        border: 2px dashed #e8e1dd;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 14px;
+        text-align: center;
+        transition: all 0.2s;
+        background: #fafaf9;
+      }
+      .import-area.listening {
+        border-color: #f5c563;
+        background: rgba(245, 197, 99, 0.06);
+      }
+      .import-area.receiving {
+        border-color: #6c63ff;
+        background: rgba(108, 99, 255, 0.05);
+        animation: pulse 1s ease-in-out infinite;
+      }
+      .import-area.success {
+        border-color: #0acf83;
+        background: rgba(10, 207, 131, 0.05);
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.7;
+        }
+      }
+
+      .import-icon {
+        font-size: 22px;
+        margin-bottom: 2px;
+      }
+      .import-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #3b3b3b;
+      }
+      .import-sublabel {
+        font-size: 11px;
+        color: #929397;
+        line-height: 1.4;
+      }
+
+      /* ── Status bar ── */
+      .status {
+        padding: 9px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        display: none;
+        margin-bottom: 10px;
+        line-height: 1.4;
+      }
+      .status.show {
+        display: block;
+      }
+      .status.error {
+        background: rgba(255, 114, 98, 0.1);
+        border: 1px solid #ff7262;
+        color: #c0392b;
+      }
+      .status.progress {
+        background: rgba(245, 197, 99, 0.15);
+        border: 1px solid #f5c563;
+        color: #3b3b3b;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .status.success {
+        background: rgba(10, 207, 131, 0.1);
+        border: 1px solid #0acf83;
+        color: #0a7050;
+      }
+
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(108, 99, 255, 0.2);
+        border-top-color: #6c63ff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        flex-shrink: 0;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* ── Buttons ── */
+      .btn {
+        width: 100%;
+        padding: 11px;
+        border-radius: 8px;
+        border: none;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .btn-primary {
+        background: #f5c563;
+        color: #1f1f20;
+      }
+      .btn-primary:hover:not(:disabled) {
+        background: #f0bd50;
+      }
+      .btn-secondary {
+        background: white;
+        color: #3b3b3b;
+        border: 1px solid #e8e1dd;
+      }
+      .btn-secondary:hover:not(:disabled) {
+        background: #f7f5f3;
+      }
+      .btn-danger {
+        background: white;
+        color: #c0392b;
+        border: 1px solid #ffccc7;
+      }
+      .btn-danger:hover:not(:disabled) {
+        background: #fff2f0;
+      }
+
+      .buttons-row {
+        display: flex;
+        gap: 8px;
+      }
+      .buttons-row .btn {
+        flex: 1;
+      }
+
+      /* ── Options ── */
+      .checkbox-item {
+        background: #f9f9f8;
+        padding: 10px 12px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid #eee;
+        margin-bottom: 6px;
+      }
+      .checkbox-item:last-child {
+        margin-bottom: 0;
+      }
+      .checkbox-item input {
+        width: 15px;
+        height: 15px;
+        accent-color: #f5c563;
+      }
+      .checkbox-label {
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      .help-text {
+        font-size: 11px;
+        color: #929397;
+        text-align: center;
+        line-height: 1.4;
+        margin-top: 6px;
+      }
+
+      /* Screen list */
+      .screen-list {
+        margin-top: 6px;
+      }
+      .screen-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        background: #f9f9f8;
+        border-radius: 6px;
+        margin-bottom: 4px;
+        border: 1px solid #eee;
+        font-size: 12px;
+      }
+      .screen-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #0acf83;
+        flex-shrink: 0;
+      }
+      .screen-dot.building {
+        background: #f5c563;
+        animation: pulse 1s ease-in-out infinite;
+      }
+      .screen-dot.pending {
+        background: #d1d5db;
+      }
+
+      .divider {
+        height: 1px;
+        background: #e8e1dd;
+        margin: 10px 0;
+      }
+
+      #screenListContainer {
+        display: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="title">
+      <div class="title-logo">O</div>
+      Osyle Plugin
+    </div>
+
+    <!-- ── Status bar ── -->
+    <div id="status" class="status"></div>
+
+    <!-- ── Import from Osyle (primary action) ── -->
+    <div class="section">
+      <div class="section-title">Import from Osyle</div>
+      <div class="import-area listening" id="importArea">
+        <div class="import-icon">📡</div>
+        <div class="import-label">Waiting for Osyle</div>
+        <div class="import-sublabel">
+          Click "Figma" in the Osyle editor<br />to send your screens here
+        </div>
+      </div>
+
+      <div id="screenListContainer" class="screen-list"></div>
+    </div>
+
+    <!-- ── Send to Osyle ── -->
+    <div class="section">
+      <div class="section-title">Send to Osyle</div>
+      <button id="sendToOsyleBtn" class="btn btn-primary">
+        Send selected frame to Osyle
+      </button>
+    </div>
+
+    <!-- ── Export ZIP ── -->
+    <div class="section">
+      <div class="section-title">Export locally</div>
+      <div class="checkbox-item">
+        <input type="checkbox" id="exportJson" checked />
+        <span class="checkbox-label">figma.json (full node tree)</span>
+      </div>
+      <div class="checkbox-item">
+        <input type="checkbox" id="exportPng" checked />
+        <span class="checkbox-label">image.png (2×)</span>
+      </div>
+      <div class="divider"></div>
+      <div class="buttons-row">
+        <button id="cancelBtn" class="btn btn-secondary">Cancel</button>
+        <button id="exportBtn" class="btn btn-secondary">Export ZIP</button>
+      </div>
+    </div>
+
+    <div class="help-text">Osyle Plugin v2 · osyle.co</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+      // ── DOM refs ─────────────────────────────────────────────────────────
+      const importArea = document.getElementById("importArea");
+      const screenListContainer = document.getElementById(
+        "screenListContainer"
+      );
+      const sendToOsyleBtn = document.getElementById("sendToOsyleBtn");
+      const exportBtn = document.getElementById("exportBtn");
+      const cancelBtn = document.getElementById("cancelBtn");
+      const statusEl = document.getElementById("status");
+
+      // ── Status helpers ───────────────────────────────────────────────────
+      function showStatus(type, message, showSpinner = false) {
+        statusEl.className = "status show " + type;
+        if (showSpinner && type === "progress") {
+          statusEl.innerHTML =
+            '<div class="spinner"></div><span>' + message + "</span>";
+        } else {
+          statusEl.textContent = message;
+        }
+      }
+      function hideStatus() {
+        statusEl.className = "status";
+      }
+
+      // ── HTTP Relay — fetch payload from Osyle backend by token ───────────
+      // BroadcastChannel doesn't work between browser and Figma desktop
+      // (different processes). Instead, Osyle POSTs the payload to the relay
+      // API, and the plugin fetches it here by token.
+      //
+      // The token arrives via figma.command, which code.js forwards as a
+      // postMessage with type OSYLE_LAUNCH_TOKEN.
+
+      const RELAY_BASE =
+        "https://bj7i7munz2.execute-api.us-east-1.amazonaws.com";
+
+      window.addEventListener("message", (event) => {
+        const msg =
+          event.data && event.data.pluginMessage
+            ? event.data.pluginMessage
+            : event.data;
+        if (!msg) return;
+
+        if (msg.type === "OSYLE_LAUNCH_TOKEN" && msg.token) {
+          fetchPayloadFromRelay(msg.token);
+        }
+      });
+
+      function fetchPayloadFromRelay(token) {
+        importArea.className = "import-area listening";
+        importArea.innerHTML =
+          '<div class="import-icon">🔗</div><div class="import-label">Fetching from Osyle…</div><div class="import-sublabel">Token: ' +
+          token.slice(0, 8) +
+          "…</div>";
+
+        fetch(RELAY_BASE + "/api/figma-relay/retrieve/" + token)
+          .then(function (res) {
+            if (!res.ok) throw new Error("Relay returned " + res.status);
+            return res.json();
+          })
+          .then(function (payload) {
+            handleOsylePayload(payload);
+          })
+          .catch(function (err) {
+            console.error("Relay fetch failed:", err);
+            importArea.className = "import-area";
+            importArea.innerHTML =
+              '<div class="import-icon">⚠️</div><div class="import-label">Could not fetch from Osyle</div><div class="import-sublabel">' +
+              err.message +
+              "</div>";
+          });
+      }
+
+      // ── Handle incoming Osyle payload ─────────────────────────────────────
+      function handleOsylePayload(payload) {
+        if (!payload || payload.type !== "OSYLE_FIGMA_EXPORT") return;
+
+        const screens = payload.screens || [];
+        const count = screens.length;
+        const projectName = payload.projectName || "Osyle Project";
+
+        // Update UI
+        importArea.className = "import-area receiving";
+        importArea.innerHTML =
+          '<div class="import-icon">⚡</div><div class="import-label">Receiving ' +
+          count +
+          " screen" +
+          (count !== 1 ? "s" : "") +
+          '…</div><div class="import-sublabel">' +
+          projectName +
+          "</div>";
+
+        // Show screen list
+        screenListContainer.style.display = "block";
+        screenListContainer.innerHTML = "";
+        screens.forEach(function (s, i) {
+          const item = document.createElement("div");
+          item.className = "screen-item";
+          item.id = "screen-" + s.screenId;
+          item.innerHTML =
+            '<div class="screen-dot pending" id="dot-' +
+            s.screenId +
+            '"></div><span>' +
+            (s.screenName || "Screen " + (i + 1)) +
+            "</span>";
+          screenListContainer.appendChild(item);
+        });
+
+        showStatus("progress", "Building screens in Figma…", true);
+
+        // Forward to plugin code (main thread)
+        parent.postMessage({ pluginMessage: payload }, "*");
+      }
+
+      // ── Handle messages from plugin code (main thread) ───────────────────
+      window.onmessage = async (event) => {
+        const msg = event.data.pluginMessage;
+        if (!msg) return;
+
+        switch (msg.type) {
+          case "progress":
+            showStatus("progress", msg.message, true);
+
+            // Update screen dots if message matches "Building X"
+            if (msg.message && msg.message.indexOf('Building "') === 0) {
+              const nameMatch = msg.message.match(/Building "([^"]+)"/);
+              if (nameMatch) {
+                // Mark all previous dots as done, current as building
+                const allDots = document.querySelectorAll(".screen-dot");
+                allDots.forEach((d) => {
+                  if (d.classList.contains("building")) {
+                    d.classList.remove("building");
+                    d.style.background = "#0ACF83";
+                  }
+                });
+              }
+            }
+            break;
+
+          case "export-complete":
+            importArea.className = "import-area success";
+            importArea.innerHTML =
+              '<div class="import-icon">✅</div><div class="import-label">' +
+              (msg.message || "Import complete!") +
+              '</div><div class="import-sublabel">Check your Figma canvas</div>';
+            // Mark all dots as done
+            document.querySelectorAll(".screen-dot").forEach((d) => {
+              d.classList.remove("building", "pending");
+              d.style.background = "#0ACF83";
+            });
+            showStatus("success", msg.message || "Screens added to canvas!");
+            sendToOsyleBtn.disabled = false;
+            exportBtn.disabled = false;
+
+            // Reset after 8 seconds
+            setTimeout(() => {
+              importArea.className = "import-area listening";
+              importArea.innerHTML =
+                '<div class="import-icon">📡</div><div class="import-label">Waiting for Osyle</div><div class="import-sublabel">Click "Figma" in the Osyle editor<br>to send your screens here</div>';
+              screenListContainer.style.display = "none";
+              hideStatus();
+            }, 8000);
+            break;
+
+          case "send-to-osyle-data":
+            handleSendToOsyle(msg);
+            break;
+
+          case "files-ready":
+            await handleFilesReady(msg);
+            break;
+
+          case "error":
+            importArea.className = "import-area";
+            showStatus("error", msg.message);
+            sendToOsyleBtn.disabled = false;
+            exportBtn.disabled = false;
+            break;
+        }
+      };
+
+      // ── Send to Osyle ─────────────────────────────────────────────────────
+      sendToOsyleBtn.addEventListener("click", () => {
+        sendToOsyleBtn.disabled = true;
+        hideStatus();
+        parent.postMessage({ pluginMessage: { type: "send-to-osyle" } }, "*");
+      });
+
+      function handleSendToOsyle(msg) {
+        const { fileKey, nodeId, fileName } = msg;
+        showStatus("success", "Sent to Osyle! Closing plugin…");
+        if (window.opener) {
+          window.opener.postMessage(
+            { type: "FIGMA_EXPORT_DATA", fileKey, nodeId, fileName },
+            "*"
+          );
+          setTimeout(() => {
+            parent.postMessage({ pluginMessage: { type: "cancel" } }, "*");
+          }, 1500);
+        } else {
+          showStatus(
+            "error",
+            "Could not connect to Osyle. Open Figma via the Connect button in Osyle."
+          );
+          sendToOsyleBtn.disabled = false;
+        }
+      }
+
+      // ── Export ZIP ────────────────────────────────────────────────────────
+      exportBtn.addEventListener("click", () => {
+        const exportJson = document.getElementById("exportJson").checked;
+        const exportPng = document.getElementById("exportPng").checked;
+        if (!exportJson && !exportPng) {
+          showStatus("error", "Select at least one export option");
+          return;
+        }
+        exportBtn.disabled = true;
+        hideStatus();
+        parent.postMessage(
+          { pluginMessage: { type: "export", exportJson, exportPng } },
+          "*"
+        );
+      });
+
+      cancelBtn.addEventListener("click", () => {
+        parent.postMessage({ pluginMessage: { type: "cancel" } }, "*");
+      });
+
+      async function handleFilesReady(msg) {
+        const { nodeName, timestamp, files } = msg;
+        try {
+          const zip = new JSZip();
+          const folder = zip.folder(nodeName + "_" + timestamp);
+          for (let i = 0; i < files.length; i++) {
+            folder.file(files[i].name, new Uint8Array(files[i].content));
+          }
+          const blob = await zip.generateAsync({ type: "blob" });
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = nodeName + ".zip";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          showStatus("success", "Download complete!");
+        } catch (e) {
+          showStatus("error", "Failed to create ZIP");
+        } finally {
+          exportBtn.disabled = false;
+        }
+      }
+    </script>
+  </body>
+</html>

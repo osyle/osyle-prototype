@@ -13,6 +13,7 @@ import { config } from './config/env'
 
 import CopyEditor from './pages/CopyEditor'
 import Editor from './pages/Editor'
+import FigmaBridge from './pages/FigmaBridge'
 import Home from './pages/Home'
 import LoginScreen from './pages/Login'
 import MobbinExplorer from './pages/MobbinExplorer'
@@ -132,6 +133,16 @@ function AppContent() {
     }
   }, [navigate])
 
+  // Figma bridge must render before the auth loading gate.
+  // Figma opens this URL directly with no session — must never redirect.
+  if (window.location.pathname === '/figma-bridge') {
+    return (
+      <Routes>
+        <Route path="/figma-bridge" element={<FigmaBridge />} />
+      </Routes>
+    )
+  }
+
   if (loading) {
     return (
       <div
@@ -165,6 +176,8 @@ function AppContent() {
         path="/mobbin"
         element={user ? <MobbinExplorer /> : <Navigate to="/login" replace />}
       />
+      {/* No auth — opened by Figma plugin directly */}
+      <Route path="/figma-bridge" element={<FigmaBridge />} />
     </Routes>
   )
 }
